@@ -1,8 +1,15 @@
 <div align="center">
 
-# 🐶 Bichon
+<h1 align="center">
+  <img width="200" height="175" alt="image" src="https://github.com/user-attachments/assets/06dc3b67-7d55-4a93-a3de-8b90951c575b" />
+  <br>
+  Bichon
+  <br>
+</h1>
 
-**Minimal, High-Performance Email Archiving & Management System in Rust**
+<h3 align="center">
+  A lightweight, high-performance Rust email archiver with WebUI
+</h3>
 
 <p style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
   <a href="https://github.com/rustmailer/bichon/releases">
@@ -18,16 +25,11 @@
     <img src="https://deepwiki.com/badge-maker?url=https%3A%2F%2Fdeepwiki.com%2Frustmailer%2Fbichon" alt="DeepWiki">
   </a>
 </p>
-
 </div>
 
-
-
-
-Bichon is a **minimal, high-performance, standalone Rust email archiver** with a built-in WebUI.  
-It runs as a **single binary**, requires **no external dependencies**, and provides fast, efficient email archiving, management, and search.
-
----
+Bichon is a minimal, high-performance, standalone Rust email archiver with a built-in WebUI.
+Its name is inspired by the puppy my daughter adopted last month.
+It runs as a single binary, requires no external dependencies, and provides fast, efficient email archiving, management, and search.
 
 ## 🚀 Features
 
@@ -69,11 +71,24 @@ It runs as a **single binary**, requires **no external dependencies**, and provi
 - Provides **OpenAPI documentation**.  
 - **Access token authentication** for programmatic access.
 
----
+## 🐾 Why Create Bichon?
 
+A few months ago, I released **rustmailer**, an email API middleware:  
+https://github.com/rustmailer/rustmailer
 
-Bichon is designed for **speed**, **simplicity**, and **efficiency**, letting you manage and archive emails effortlessly.
+Since then, I’ve received many emails asking whether it could also archive emails, perform unified search, and support full-text indexing—not just querying recipients.  
+But rustmailer was designed as a middleware focused on providing API services.  
+Adding archiving and full-text search would complicate its core purpose and go far beyond its original scope.
 
+Meanwhile, I realized that email archiving itself only requires a small portion of rustmailer’s functionality, plus a search engine.  
+With that combination, building a dedicated, efficient archiver becomes much simpler.
+
+Using the experience gained from rustmailer, I designed and built **Bichon** in less than two weeks, followed by another two weeks of testing and optimization.  
+It has now reached a stable, usable state—and I decided to release it publicly.
+
+**Bichon is completely free**.  
+You can download and use it however you like.  
+It’s not perfect, but I hope it brings you value.
 
 ## 🚀 Quick Start
 
