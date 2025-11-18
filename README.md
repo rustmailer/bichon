@@ -61,6 +61,7 @@ It runs as a single binary, requires no external dependencies, and provides fast
 - Bulk cleanup of local archives.  
 - Download emails as **EML** or **attachments separately**.  
 - View and browse emails directly.
+- View the full **conversation thread** of any email.
 
 ### 📊 Dashboard & Analytics
 - Visualize email statistics: **counts**, **time distribution**, **top senders**, **largest emails**, **account rankings**.
@@ -87,6 +88,17 @@ It has now reached a stable, usable state—and I decided to release it publicly
 **Bichon is completely free**.  
 You can download and use it however you like.  
 It’s not perfect, but I hope it brings you value.
+## 📸 Snapshot
+<img width="1914" height="904" alt="image" src="https://github.com/user-attachments/assets/3a456999-e4eb-441e-9052-3a727dea66a0" />
+<img width="1900" height="907" alt="image" src="https://github.com/user-attachments/assets/95db0a05-4b55-4e18-b418-9d40361d6fea" />
+<img width="1912" height="904" alt="image" src="https://github.com/user-attachments/assets/96b0ebc2-4778-452b-891f-dc9acf8e381f" />
+<img width="1909" height="904" alt="image" src="https://github.com/user-attachments/assets/ab4bf6ae-faa6-4b49-ae39-705eb9d4487f" />
+<img width="1910" height="910" alt="image" src="https://github.com/user-attachments/assets/bcf9cca2-d690-4e7b-b2c9-c52a31c7b999" />
+<img width="1915" height="903" alt="image" src="https://github.com/user-attachments/assets/242817d7-3e12-4cbb-afb0-c5ef7366178d" />
+<img width="1920" height="910" alt="image" src="https://github.com/user-attachments/assets/14561b74-ed53-4017-9c5b-a64920ec3526" />
+<img width="1913" height="909" alt="image" src="https://github.com/user-attachments/assets/6fd54cb0-c86f-4ceb-a955-c81107614fc4" />
+
+
 
 ## 🚀 Quick Start
 
