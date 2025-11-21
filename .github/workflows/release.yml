@@ -61,7 +61,13 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y musl-tools
 
       - name: Build Rust backend
-        run: cargo build --release --features vendored-openssl --target=${{ matrix.target }}
+        run: |
+          if [[ "${{ matrix.target }}" == "aarch64-unknown-linux-gnu" ]]; then
+            cargo install cross --force
+            cross build --release --features vendored-openssl --target=${{ matrix.target }}
+          else
+            cargo build --release --features vendored-openssl --target=${{ matrix.target }}
+          fi
 
       - name: Strip binary (Linux and macOS)
         if: matrix.os != 'windows-latest'
