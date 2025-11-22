@@ -167,6 +167,10 @@ Extract and run:
 .\bichon.exe --bichon-root-dir e:\bichon-data
 ```
 
+* --bichon-root-dir argument is required and must be an absolute path.
+
+* If you are accessing Bichon from a proxy domain **mydomain** argument --bichon-cors-origins="https://mydomain" is required.
+
 ## 🔑 Root User Login Information
 
 **Bichon currently supports a single Root user login for system access and management.**
