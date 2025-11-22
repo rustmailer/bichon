@@ -170,6 +170,31 @@ Extract and run:
 * --bichon-root-dir argument is required and must be an absolute path.
 
 * If you are accessing Bichon from a proxy domain **mydomain** argument --bichon-cors-origins="https://mydomain" is required.
+  
+## Setting the Bichon Encryption Password
+
+Bichon uses an encryption password to secure sensitive data. **You must set it before first use**, when no data exists.
+
+Once set, it **cannot be changed**. Changing it later will make all encrypted data unreadable. To start over, you would need to **reinitialize Bichon and clear all emails and metadata**.
+
+### How to Set the Password
+
+You can set the password **via command-line or environment variable**:
+
+### Command-Line
+
+```bash
+bichon --bichon-encrypt-password "your-strong-password"
+```
+
+### Environment Variable
+
+```bash
+export BICHON_ENCRYPT_PASSWORD="your-strong-password"
+bichon
+```
+
+**Tip:** Use a strong, secure password and keep it safe, as it cannot be changed later.
 
 ## 🔑 Root User Login Information
 
@@ -223,7 +248,7 @@ You can change the password via the WebUI:
 ## 📖 Documentation
 
 > Under construction. Documentation will be available soon.
-
+[Bichon Wiki](https://github.com/rustmailer/bichon/wiki).
 
 ## 🛠️ Tech Stack
 
