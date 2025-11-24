@@ -290,7 +290,15 @@
         "folderLimitDescription": "Limita o número de emails a sincronizar por pasta (mínimo 100). Deixe vazio para nenhum limite.",
         "folderLimitPlaceholder": "Ex: 1000",
         "imap": "IMAP",
-        "minutes": "minutos"
+        "minutes": "minutos",
+        "accountHasBeenSuccessfully": "A conta foi {{action}} com sucesso",
+        "enableAccount": "Ativar conta",
+        "disableAccount": "Desativar conta",
+        "areYouSureYouWantTo": "Tem certeza de que deseja {{action}} esta conta?",
+        "enable": "Ativar",
+        "disable": "Desativar",
+        "thisWillPreventTheAccountFromBeingUsed": "Esta conta não sincronizará mais dados do servidor IMAP, mas os dados existentes ainda estarão acessíveis.",
+        "disabled": "Desativado"
     },
     "mailbox": {
         "title": "Caixa de Entrada",

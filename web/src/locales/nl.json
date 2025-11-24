@@ -290,7 +290,15 @@
         "folderLimitDescription": "Beperk het aantal te synchroniseren e-mails per map (minimaal 100). Laat leeg voor geen limiet.",
         "folderLimitPlaceholder": "bv. 1000",
         "imap": "IMAP",
-        "minutes": "minuten"
+        "minutes": "minuten",
+        "accountHasBeenSuccessfully": "Account is succesvol {{action}}",
+        "enableAccount": "Account inschakelen",
+        "disableAccount": "Account uitschakelen",
+        "areYouSureYouWantTo": "Weet je zeker dat je dit account wilt {{action}}?",
+        "enable": "Inschakelen",
+        "disable": "Uitschakelen",
+        "thisWillPreventTheAccountFromBeingUsed": "Dit account zal geen gegevens meer synchroniseren van de IMAP-server, maar bestaande gegevens blijven toegankelijk.",
+        "disabled": "Uitgeschakeld"
     },
     "mailbox": {
         "title": "Postvak In",

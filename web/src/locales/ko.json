@@ -290,7 +290,15 @@
         "folderLimitDescription": "폴더당 동기화할 이메일 수를 제한합니다(최소 100). 제한이 없으면 비워 두십시오.",
         "folderLimitPlaceholder": "예: 1000",
         "imap": "IMAP",
-        "minutes": "분"
+        "minutes": "분",
+        "accountHasBeenSuccessfully": "계정이 성공적으로 {{action}}되었습니다",
+        "enableAccount": "계정 활성화",
+        "disableAccount": "계정 비활성화",
+        "areYouSureYouWantTo": "이 계정을 정말 {{action}}하시겠습니까?",
+        "enable": "활성화",
+        "disable": "비활성화",
+        "thisWillPreventTheAccountFromBeingUsed": "이 계정은 더 이상 IMAP 서버에서 데이터를 동기화하지 않지만, 기존 데이터는 계속 조회할 수 있습니다.",
+        "disabled": "비활성화"
     },
     "mailbox": {
         "title": "받은 편지함",

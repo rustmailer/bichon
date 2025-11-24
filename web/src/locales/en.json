@@ -290,7 +290,15 @@
     "folderLimitDescription": "Limit the number of emails to sync per folder (minimum 100). Leave empty for no limit.",
     "folderLimitPlaceholder": "e.g. 1000",
     "imap": "IMAP",
-    "minutes": "minutes"
+    "minutes": "minutes",
+    "accountHasBeenSuccessfully": "Account has been successfully {{action}}",
+    "enableAccount": "Enable account",
+    "disableAccount": "Disable account",
+    "areYouSureYouWantTo": "Are you sure you want to {{action}} this account?",
+    "enable": "Enable",
+    "disable": "Disable",
+    "thisWillPreventTheAccountFromBeingUsed": "This account will no longer sync data from the IMAP server, but existing data will still be accessible.",
+    "disabled": "Disabled"
   },
   "mailbox": {
     "title": "Mailbox",

@@ -290,7 +290,15 @@
         "folderLimitDescription": "Limita el número de correos a sincronizar por carpeta (mínimo 100). Deja vacío para no tener límite.",
         "folderLimitPlaceholder": "ej. 1000",
         "imap": "IMAP",
-        "minutes": "minutos"
+        "minutes": "minutos",
+        "accountHasBeenSuccessfully": "La cuenta se ha {{action}} correctamente",
+        "enableAccount": "Activar cuenta",
+        "disableAccount": "Desactivar cuenta",
+        "areYouSureYouWantTo": "¿Está seguro de que desea {{action}} esta cuenta?",
+        "enable": "Activar",
+        "disable": "Desactivar",
+        "thisWillPreventTheAccountFromBeingUsed": "Esta cuenta ya no sincronizará datos desde el servidor IMAP, pero los datos existentes seguirán siendo accesibles.",
+        "disabled": "Deshabilitado"
     },
     "mailbox": {
         "title": "Buzón",

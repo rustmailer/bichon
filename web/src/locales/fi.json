@@ -290,7 +290,15 @@
         "folderLimitDescription": "Rajoittaa synkronoitavien sähköpostien määrän kansiota kohden (vähintään 100). Jätä tyhjäksi ilman rajoitusta.",
         "folderLimitPlaceholder": "esim. 1000",
         "imap": "IMAP",
-        "minutes": "minuuttia"
+        "minutes": "minuuttia",
+        "accountHasBeenSuccessfully": "Tili on onnistuneesti {{action}}",
+        "enableAccount": "Ota tili käyttöön",
+        "disableAccount": "Poista tili käytöstä",
+        "areYouSureYouWantTo": "Haluatko varmasti {{action}} tämän tilin?",
+        "enable": "Ota käyttöön",
+        "disable": "Poista käytöstä",
+        "thisWillPreventTheAccountFromBeingUsed": "Tili ei enää synkronoi tietoja IMAP-palvelimelta, mutta olemassa olevat tiedot ovat edelleen käytettävissä.",
+        "disabled": "Poistettu käytöstä"
     },
     "mailbox": {
         "title": "Sähköposti",

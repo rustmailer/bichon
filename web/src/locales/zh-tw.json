@@ -290,7 +290,15 @@
         "folderLimitDescription": "限制每個資料夾要同步的郵件數量（最小 100）。若無限制請留空。",
         "folderLimitPlaceholder": "例如：1000",
         "imap": "IMAP",
-        "minutes": "分鐘"
+        "minutes": "分鐘",
+        "accountHasBeenSuccessfully": "帳戶已成功{{action}}",
+        "enableAccount": "啟用帳戶",
+        "disableAccount": "停用帳戶",
+        "areYouSureYouWantTo": "你確定要{{action}}此帳戶嗎？",
+        "enable": "啟用",
+        "disable": "停用",
+        "thisWillPreventTheAccountFromBeingUsed": "該帳戶將不會繼續從 IMAP 伺服器同步資料，但已有資料仍然可以查詢。",
+        "disabled": "已停用"
     },
     "mailbox": {
         "title": "信箱",

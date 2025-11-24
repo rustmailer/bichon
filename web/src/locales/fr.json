@@ -290,7 +290,15 @@
         "folderLimitDescription": "Limite le nombre d'e-mails à synchroniser par dossier (minimum 100). Laissez vide pour aucune limite.",
         "folderLimitPlaceholder": "ex. 1000",
         "imap": "IMAP",
-        "minutes": "minutes"
+        "minutes": "minutes",
+        "accountHasBeenSuccessfully": "Le compte a été {{action}} avec succès",
+        "enableAccount": "Activer le compte",
+        "disableAccount": "Désactiver le compte",
+        "areYouSureYouWantTo": "Êtes-vous sûr de vouloir {{action}} ce compte ?",
+        "enable": "Activer",
+        "disable": "Désactiver",
+        "thisWillPreventTheAccountFromBeingUsed": "Ce compte ne synchronisera plus les données depuis le serveur IMAP, mais les données existantes resteront accessibles.",
+        "disabled": "Désactivé"
     },
     "mailbox": {
         "title": "Boîte aux lettres",

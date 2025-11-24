@@ -290,7 +290,15 @@
         "folderLimitDescription": "フォルダーごとに同期するメールの数を制限します（最小100）。制限なしにする場合は空欄にしてください。",
         "folderLimitPlaceholder": "例: 1000",
         "imap": "IMAP",
-        "minutes": "分"
+        "minutes": "分",
+        "accountHasBeenSuccessfully": "アカウントは正常に{{action}}されました",
+        "enableAccount": "アカウントを有効化",
+        "disableAccount": "アカウントを無効化",
+        "areYouSureYouWantTo": "本当にこのアカウントを{{action}}しますか？",
+        "enable": "有効化",
+        "disable": "無効化",
+        "thisWillPreventTheAccountFromBeingUsed": "このアカウントはIMAPサーバーからのデータ同期を行わなくなりますが、既存のデータは引き続き参照可能です。",
+        "disabled": "無効"
     },
     "mailbox": {
         "title": "メールボックス",

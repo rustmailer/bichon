@@ -290,7 +290,15 @@
     "folderLimitDescription": "限制每个文件夹同步的邮件数量（最少 100）。留空表示不限制。",
     "folderLimitPlaceholder": "例如 1000",
     "imap": "IMAP",
-    "minutes": "分钟"
+    "minutes": "分钟",
+    "accountHasBeenSuccessfully": "账户已成功{{action}}",
+    "enableAccount": "启用账户",
+    "disableAccount": "禁用账户",
+    "areYouSureYouWantTo": "你确定要{{action}}此账户吗？",
+    "enable": "启用",
+    "disable": "禁用",
+    "thisWillPreventTheAccountFromBeingUsed": "该账户将不会继续从 IMAP 服务器同步数据，但已有数据仍然可以查询。",
+    "disabled": "已禁用"
   },
   "mailbox": {
     "title": "邮箱",

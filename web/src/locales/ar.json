@@ -290,7 +290,15 @@
         "folderLimitDescription": "حدد عدد رسائل البريد الإلكتروني للمزامنة لكل مجلد (الحد الأدنى 100). اتركه فارغًا بلا حدود.",
         "folderLimitPlaceholder": "مثال: 1000",
         "imap": "IMAP",
-        "minutes": "دقائق"
+        "minutes": "دقائق",
+        "accountHasBeenSuccessfully": "تم {{action}} الحساب بنجاح",
+        "enableAccount": "تفعيل الحساب",
+        "disableAccount": "تعطيل الحساب",
+        "areYouSureYouWantTo": "هل أنت متأكد من أنك تريد {{action}} هذا الحساب؟",
+        "enable": "تفعيل",
+        "disable": "تعطيل",
+        "thisWillPreventTheAccountFromBeingUsed": "لن يقوم هذا الحساب بمزامنة البيانات من خادم IMAP بعد الآن، ولكن لا تزال البيانات الموجودة متاحة للعرض.",
+        "disabled": "معطل"
     },
     "mailbox": {
         "title": "صندوق البريد",

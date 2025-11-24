@@ -290,7 +290,15 @@
         "folderLimitDescription": "Ограничить количество писем для синхронизации в папке (минимум 100). Оставьте пустым для снятия ограничений.",
         "folderLimitPlaceholder": "например, 1000",
         "imap": "IMAP",
-        "minutes": "минут"
+        "minutes": "минут",
+        "accountHasBeenSuccessfully": "Аккаунт успешно {{action}}",
+        "enableAccount": "Включить аккаунт",
+        "disableAccount": "Отключить аккаунт",
+        "areYouSureYouWantTo": "Вы уверены, что хотите {{action}} этот аккаунт?",
+        "enable": "Включить",
+        "disable": "Отключить",
+        "thisWillPreventTheAccountFromBeingUsed": "Этот аккаунт больше не будет синхронизировать данные с IMAP-сервера, но существующие данные останутся доступными.",
+        "disabled": "Отключено"
     },
     "mailbox": {
         "title": "Почтовый ящик",
