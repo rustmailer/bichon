@@ -64,12 +64,12 @@ jobs:
         if: matrix.target == 'aarch64-unknown-linux-gnu'
         run: |
           cargo install cross --force
-          cross build --release --features vendored-openssl --target=${{ matrix.target }}
+          cross build --release --target=${{ matrix.target }}
 
       - name: Build Rust backend
         if: matrix.target != 'aarch64-unknown-linux-gnu'
         run: |
-          cargo build --release --features vendored-openssl --target=${{ matrix.target }}  
+          cargo build --release --target=${{ matrix.target }}  
 
       - name: Strip binary (Linux and macOS)
         if: matrix.os != 'windows-latest' && matrix.target != 'aarch64-unknown-linux-gnu'

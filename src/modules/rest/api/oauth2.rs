@@ -195,19 +195,19 @@ impl OAuth2Api {
     /// Configures an external OAuth2 token for a specified account.
     ///
     /// This endpoint allows two usage modes:
-    /// 1. If only an `access_token` is provided, RustMailer will store it directly.
-    ///    - In this mode, RustMailer **cannot refresh** the token, since it has no
+    /// 1. If only an `access_token` is provided, Bichon will store it directly.
+    ///    - In this mode, Bichon **cannot refresh** the token, since it has no
     ///      associated OAuth2 configuration or refresh token.
     ///    - The caller is responsible for periodically updating the access token
     ///      by calling this endpoint again.
     /// 2. If both `oauth2_id` and `refresh_token` are provided, it means the external
-    ///    OAuth2 authorization flow has been completed outside RustMailer.
+    ///    OAuth2 authorization flow has been completed outside Bichon.
     ///    - Since the OAuth2 configuration (including client_id and client_secret)
-    ///      is already stored in RustMailer, the service can use the refresh token
+    ///      is already stored in Bichon, the service can use the refresh token
     ///      to obtain new access tokens automatically.
     ///
     /// Note: The `oauth2_id` must reference a valid OAuth2 configuration
-    /// already created in RustMailer.
+    /// already created in Bichon.
     #[oai(
         path = "/store-external-oauth2-token/:account_id",
         method = "post",
