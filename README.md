@@ -363,10 +363,17 @@ This project is licensed under [AGPLv3](LICENSE).
 - [Discord](https://discord.gg/evFnSpdpaE)
 
 
-## Get Involved
+## 🤝 Contributing
 
-If you enjoy using Bichon, you’re welcome to help spread the word 😄
-Feel free to share your experience on communities like Reddit’s r/selfhosted, r/opensource, or elsewhere—installation tips, challenges you ran into, or cool features you discovered.
-Completely voluntary—just sharing your experience helps more people discover Bichon!
+Contributions of all kinds are welcome!
+Whether you’d like to submit code, report a bug, or share practical suggestions that can help improve the project, your input is highly appreciated.
+Feel free to open an Issue or a Pull Request anytime. You can also reach out on Discord if you’d like to discuss ideas or improvements.
 
+
+## 💖 Support & Promotion
+
+If this project has been helpful to you and you’d like to support its development, you can consider making a small donation or helping spread the word.
+Financial support is optional but deeply appreciated — it helps me dedicate more time and resources to building new features and improving the overall experience.
+
+You can also support the project by sharing it with others, writing about your experience, or recommending it within relevant communities. Every bit of visibility helps more people benefit from the tool!
 
