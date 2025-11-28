@@ -125,14 +125,9 @@ It’s not perfect, but I hope it brings you value.
 <img width="1913" height="909" alt="image" src="https://github.com/user-attachments/assets/6fd54cb0-c86f-4ceb-a955-c81107614fc4" />
 <img width="1916" height="814" alt="image" src="https://github.com/user-attachments/assets/6a079d98-ff6c-46f4-9ec6-e76d320bff5d" />
 
-## 🌟Star History
-<a href="https://www.star-history.com/#rustmailer/bichon&Date">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=rustmailer/bichon&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api/star-history.com/svg?repos=rustmailer/bichon&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=rustmailer/bichon&type=Date" />
- </picture>
-</a>
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=rustmailer/bichon&type=date&legend=top-left)](https://www.star-history.com/#rustmailer/bichon&type=date&legend=top-left)
 
 
 ## 🚀 Quick Start
