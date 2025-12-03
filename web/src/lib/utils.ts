@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-
+import { enUS, zhCN, zhTW, arSA, de, es, fi, fr, it, ja, ko, nl, ptBR, ru, da, sv, nb, Locale } from 'date-fns/locale';
 import { type ClassValue, clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
 
@@ -70,8 +70,12 @@ export function mapToRecordOfArrays(
   );
 }
 
-export function formatNumber(num: number) {
-  return new Intl.NumberFormat('en-US').format(num);
+export function formatNumber(num: number): string {
+  const userLocale = navigator.language;
+
+  return new Intl.NumberFormat(userLocale, {
+    maximumFractionDigits: 2,
+  }).format(num);
 }
 
 
@@ -127,3 +131,44 @@ export function formatTimestamp(milliseconds: number): string {
   const offsetMinutes = String(Math.abs(timezoneOffset) % 60).padStart(2, '0');
   return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${offsetSign}${offsetHours}:${offsetMinutes}`;
 }
+
+
+
+// i18n.language -> date-fns locale
+export const dateFnsLocaleMap: Record<string, Locale> = {
+  en: enUS,
+  'en-us': enUS,
+  zh: zhCN,
+  'zh-cn': zhCN,
+  'zh-tw': zhTW,
+  'zh_hk': zhTW,
+  ar: arSA,
+  'ar-sa': arSA,
+  de: de,
+  'de-de': de,
+  es: es,
+  'es-es': es,
+  fi: fi,
+  'fi-fi': fi,
+  fr: fr,
+  'fr-fr': fr,
+  it: it,
+  'it-it': it,
+  jp: ja,
+  ja: ja,
+  'ja-jp': ja,
+  ko: ko,
+  'ko-kr': ko,
+  nl: nl,
+  'nl-nl': nl,
+  pt: ptBR,
+  'pt-br': ptBR,
+  ru: ru,
+  'ru-ru': ru,
+  da: da,
+  'da-dk': da,
+  sv: sv,
+  'sv-se': sv,
+  no: nb,
+  'no-no': nb,
+};

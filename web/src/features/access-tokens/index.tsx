@@ -38,9 +38,12 @@ import { list_access_tokens } from '@/api/access-tokens/api'
 import { TableSkeleton } from '@/components/table-skeleton'
 import { FixedHeader } from '@/components/layout/fixed-header'
 import { useTranslation } from 'react-i18next'
+import { dateFnsLocaleMap } from '@/lib/utils'
+import { enUS } from 'date-fns/locale'
 
 export default function AccessTokens() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const locale = dateFnsLocaleMap[i18n.language.toLowerCase()] ?? enUS;
   // Dialog states
   const [currentRow, setCurrentRow] = useState<AccessToken | null>(null)
   const [open, setOpen] = useDialogState<AccessTokensDialogType>(null)
@@ -50,7 +53,7 @@ export default function AccessTokens() {
     queryFn: list_access_tokens,
   })
 
-  const columns = getColumns(t)
+  const columns = getColumns(t, locale)
 
   return (
     <AccessTokensProvider value={{ open, setOpen, currentRow, setCurrentRow }}>
@@ -58,43 +61,43 @@ export default function AccessTokens() {
       <FixedHeader />
 
       <Main>
-  <div className="mx-auto mb-2 flex max-w-5xl flex-wrap items-center justify-between gap-x-4 gap-y-2 px-2">
-    <div>
-      <h2 className="text-2xl font-bold tracking-tight">{t('accessTokens.title')}</h2>
-      <p className="text-muted-foreground">
-        {t('accessTokens.description')}
-      </p>
-    </div>
-    <div className="flex gap-2">
-      <Button className="space-x-1" onClick={() => setOpen('add')}>
-        <span>{t('common.add')}</span> <Plus size={18} />
-      </Button>
-    </div>
-  </div>
-
-  <div className="mx-auto flex-1 overflow-auto px-4 py-1 flex-row lg:space-x-12 space-y-0 max-w-5xl">
-    {isLoading ? (
-      <TableSkeleton columns={columns.length} rows={10} />
-    ) : accessTokens?.length ? (
-      <AccessTokensTable data={accessTokens} columns={columns} />
-    ) : (
-      <div className="flex h-[450px] shrink-0 items-center justify-center rounded-md border border-dashed">
-        <div className="mx-auto flex max-w-[420px] flex-col items-center justify-center text-center">
-          <img
-            src={Logo}
-            className="max-h-[100px] w-auto opacity-20 saturate-0 transition-all duration-300 hover:opacity-100 hover:saturate-100 object-contain"
-            alt="Bichon Logo"
-          />
-          <h3 className="mt-4 text-lg font-semibold">{t('accessTokens.noTokens')}</h3>
-          <p className="mb-4 mt-2 text-sm text-muted-foreground">
-            {t('accessTokens.noTokensDesc')}
-          </p>
-          <Button onClick={() => setOpen('add')}>{t('accessTokens.create')}</Button>
+        <div className="mx-auto mb-2 flex max-w-5xl flex-wrap items-center justify-between gap-x-4 gap-y-2 px-2">
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight">{t('accessTokens.title')}</h2>
+            <p className="text-muted-foreground">
+              {t('accessTokens.description')}
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button className="space-x-1" onClick={() => setOpen('add')}>
+              <span>{t('common.add')}</span> <Plus size={18} />
+            </Button>
+          </div>
         </div>
-      </div>
-    )}
-  </div>
-</Main>
+
+        <div className="mx-auto flex-1 overflow-auto px-4 py-1 flex-row lg:space-x-12 space-y-0 max-w-5xl">
+          {isLoading ? (
+            <TableSkeleton columns={columns.length} rows={10} />
+          ) : accessTokens?.length ? (
+            <AccessTokensTable data={accessTokens} columns={columns} />
+          ) : (
+            <div className="flex h-[450px] shrink-0 items-center justify-center rounded-md border border-dashed">
+              <div className="mx-auto flex max-w-[420px] flex-col items-center justify-center text-center">
+                <img
+                  src={Logo}
+                  className="max-h-[100px] w-auto opacity-20 saturate-0 transition-all duration-300 hover:opacity-100 hover:saturate-100 object-contain"
+                  alt="Bichon Logo"
+                />
+                <h3 className="mt-4 text-lg font-semibold">{t('accessTokens.noTokens')}</h3>
+                <p className="mb-4 mt-2 text-sm text-muted-foreground">
+                  {t('accessTokens.noTokensDesc')}
+                </p>
+                <Button onClick={() => setOpen('add')}>{t('accessTokens.create')}</Button>
+              </div>
+            </div>
+          )}
+        </div>
+      </Main>
 
 
       <TokensActionDialog

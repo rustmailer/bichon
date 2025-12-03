@@ -23,11 +23,11 @@ import LongText from '@/components/long-text'
 import { AccessToken } from '../data/schema'
 import { DataTableColumnHeader } from './data-table-column-header'
 import { DataTableRowActions } from './data-table-row-actions'
-import { format, formatDistanceToNow } from 'date-fns'
+import { format, formatDistanceToNow, Locale } from 'date-fns'
 import { AccountCellAction } from './account-action'
 import { AclCellAction } from './acl-action'
 
-export const getColumns = (t: (key: string) => string): ColumnDef<AccessToken>[] => [
+export const getColumns = (t: (key: string) => string, locale: Locale): ColumnDef<AccessToken>[] => [
   {
     accessorKey: 'token',
     header: ({ column }) => (
@@ -114,7 +114,7 @@ export const getColumns = (t: (key: string) => string): ColumnDef<AccessToken>[]
       if (last_access_at === 0) {
         return <LongText className='max-w-40'>{t('accessTokens.notUsedYet')}</LongText>;
       }
-      const result = formatDistanceToNow(new Date(last_access_at), { addSuffix: true });
+      const result = formatDistanceToNow(new Date(last_access_at), { addSuffix: true, locale });
       return <LongText className='max-w-40'>{result}</LongText>;
     },
     meta: { className: 'w-40' },

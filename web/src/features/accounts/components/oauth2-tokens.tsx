@@ -42,6 +42,8 @@ import { IconCopy } from '@tabler/icons-react'
 import { toast } from '@/hooks/use-toast'
 import { ToastAction } from '@/components/ui/toast'
 import { useNavigate } from '@tanstack/react-router'
+import { dateFnsLocaleMap } from '@/lib/utils'
+import { enUS } from 'date-fns/locale'
 
 interface Props {
   currentRow: AccountModel
@@ -50,7 +52,8 @@ interface Props {
 }
 
 export function OAuth2TokensDialog({ currentRow, open, onOpenChange }: Props) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const locale = dateFnsLocaleMap[i18n.language.toLowerCase()] ?? enUS;
   const navigate = useNavigate()
   const { data: oauth2Tokens, isLoading } = useQuery({
     queryKey: ['oauth2-tokens', currentRow.id],
@@ -151,7 +154,7 @@ export function OAuth2TokensDialog({ currentRow, open, onOpenChange }: Props) {
                   <TableRow>
                     <TableCell className='max-w-80'>{t('settings.updatedAt')}</TableCell>
                     <TableCell>
-                      {formatDistanceToNow(new Date(oauth2Tokens.updated_at), { addSuffix: true })}
+                      {formatDistanceToNow(new Date(oauth2Tokens.updated_at), { addSuffix: true, locale })}
                     </TableCell>
                   </TableRow>
                 </TableBody>

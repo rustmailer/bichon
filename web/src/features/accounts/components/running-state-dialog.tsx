@@ -34,6 +34,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { CheckCircle, Clock, Loader2, PlayCircle, FolderSync, FolderCheck } from 'lucide-react'
 import { FolderSyncProgress } from './folder-sync-progress'
 import { useTranslation } from 'react-i18next'
+import { dateFnsLocaleMap } from '@/lib/utils'
+import { enUS } from 'date-fns/locale'
 
 interface Props {
   open: boolean
@@ -42,7 +44,8 @@ interface Props {
 }
 
 export function RunningStateDialog({ currentRow, open, onOpenChange }: Props) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const locale = dateFnsLocaleMap[i18n.language.toLowerCase()] ?? enUS;
   const { data: state, isLoading } = useQuery({
     queryKey: ['running-state', currentRow.id],
     queryFn: () => account_state(currentRow.id),
@@ -124,7 +127,7 @@ export function RunningStateDialog({ currentRow, open, onOpenChange }: Props) {
                       <span className="font-medium">
                         {state.initial_sync_start_time ? (
                           <span className="text-green-600">
-                            {formatDistanceToNow(new Date(state.initial_sync_start_time), { addSuffix: true })}
+                            {formatDistanceToNow(new Date(state.initial_sync_start_time), { addSuffix: true, locale })}
                           </span>
                         ) : (
                           <span className="flex items-center gap-1 text-yellow-600">
@@ -143,7 +146,7 @@ export function RunningStateDialog({ currentRow, open, onOpenChange }: Props) {
                       <span className="font-medium">
                         {state.initial_sync_end_time ? (
                           <span className="text-green-600">
-                            {formatDistanceToNow(new Date(state.initial_sync_end_time), { addSuffix: true })}
+                            {formatDistanceToNow(new Date(state.initial_sync_end_time), { addSuffix: true, locale })}
                           </span>
                         ) : state.initial_sync_start_time ? (
                           <span className="flex items-center gap-1 text-blue-600">
@@ -192,7 +195,7 @@ export function RunningStateDialog({ currentRow, open, onOpenChange }: Props) {
                         <span className="text-muted-foreground">{t('accounts.runningState.startTime')}</span>
                         <span className="font-medium">
                           {state.last_incremental_sync_start ? (
-                            formatDistanceToNow(new Date(state.last_incremental_sync_start), { addSuffix: true })
+                            formatDistanceToNow(new Date(state.last_incremental_sync_start), { addSuffix: true, locale })
                           ) : (
                             <span className="text-yellow-600">{t('accounts.runningState.notStarted')}</span>
                           )}
@@ -202,7 +205,7 @@ export function RunningStateDialog({ currentRow, open, onOpenChange }: Props) {
                         <span className="text-muted-foreground">{t('accounts.runningState.endTime')}</span>
                         <span className="font-medium">
                           {state.last_incremental_sync_end ? (
-                            formatDistanceToNow(new Date(state.last_incremental_sync_end), { addSuffix: true })
+                            formatDistanceToNow(new Date(state.last_incremental_sync_end), { addSuffix: true, locale })
                           ) : state.last_incremental_sync_start ? (
                             <span className="text-blue-600">{t('accounts.runningState.inProgress')}</span>
                           ) : (
@@ -243,7 +246,7 @@ export function RunningStateDialog({ currentRow, open, onOpenChange }: Props) {
                           >
                             <div className="flex w-full flex-col gap-1">
                               <div className="text-xs font-medium text-muted-foreground">
-                                {formatDistanceToNow(new Date(item.at), { addSuffix: true })}
+                                {formatDistanceToNow(new Date(item.at), { addSuffix: true, locale })}
                               </div>
                               <div className="font-medium break-words">{item.error}</div>
                             </div>

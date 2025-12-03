@@ -22,6 +22,7 @@ import useMinimalAccountList from "@/hooks/use-minimal-account-list";
 import { VirtualizedSelect } from "@/components/virtualized-select";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "@tanstack/react-router";
+import { useTranslation } from "react-i18next";
 
 
 interface AccountSwitcherProps {
@@ -35,7 +36,7 @@ export function AccountSwitcher({
 }: AccountSwitcherProps) {
     const { accountsOptions, isLoading } = useMinimalAccountList();
     const navigate = useNavigate()
-
+    const { t } = useTranslation();
     if (isLoading) {
         return <div>Loading...</div>;
     }
@@ -47,7 +48,7 @@ export function AccountSwitcher({
             options={accountsOptions}
             defaultValue={`${defaultAccountId}`}
             onSelectOption={(values) => onAccountSelect(parseInt(values[0], 10))}
-            placeholder="Select an account"
+            placeholder={t('oauth2.selectAnAccount')}
             noItemsComponent={<div className='space-y-2'>
                 <p>No active email account.</p>
                 <Button variant={'outline'} className="py-1 px-3 text-xs" onClick={() => navigate({ to: '/accounts' })}>Add Email Account</Button>

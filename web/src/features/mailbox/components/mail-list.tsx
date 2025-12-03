@@ -17,7 +17,7 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-import { cn, formatBytes } from "@/lib/utils"
+import { cn, dateFnsLocaleMap, formatBytes } from "@/lib/utils"
 import { formatDistanceToNow } from "date-fns"
 import { MailIcon, Paperclip, Trash2 } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -27,6 +27,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { MailBulkActions } from "./bulk-actions"
 import { Badge } from "@/components/ui/badge"
 import { useTranslation } from 'react-i18next'
+import { enUS } from "date-fns/locale"
 
 interface MailListProps {
     items: EmailEnvelope[]
@@ -37,8 +38,9 @@ export function MailList({
     items,
     isLoading,
 }: MailListProps) {
-    const { t } = useTranslation()
+    const { t, i18n } = useTranslation()
     const { currentEnvelope, setCurrentEnvelope, setDeleteIds, setOpen, selected, setSelected } = useMailboxContext()
+    const locale = dateFnsLocaleMap[i18n.language.toLowerCase()] ?? enUS;
 
     const handleDelete = (envelope: EmailEnvelope) => {
         setDeleteIds(new Set([envelope.id]))
@@ -177,7 +179,7 @@ export function MailList({
                                 <span className={cn(
                                     isSelected ? "text-foreground font-medium" : "text-muted-foreground"
                                 )}>
-                                    {item.date && formatDistanceToNow(new Date(item.date), { addSuffix: true })}
+                                    {item.date && formatDistanceToNow(new Date(item.date), { addSuffix: true, locale })}
                                 </span>
 
                                 <button
