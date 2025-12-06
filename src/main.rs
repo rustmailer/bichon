@@ -45,6 +45,7 @@ static LOGO: &str = r#"
 |_.__/ |_| \___||_| |_| \___/ |_| |_|
                                      
 "#;
+#[cfg(not(test))]
 #[tokio::main]
 async fn main() -> BichonResult<()> {
     logger::initialize_logging();

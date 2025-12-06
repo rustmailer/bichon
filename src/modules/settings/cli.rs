@@ -20,7 +20,39 @@
 use clap::{builder::ValueParser, Parser, ValueEnum};
 use std::{collections::HashSet, env, fmt, path::PathBuf, sync::LazyLock};
 
+#[cfg(not(test))]
 pub static SETTINGS: LazyLock<Settings> = LazyLock::new(Settings::parse);
+
+#[cfg(test)]
+pub static SETTINGS: LazyLock<Settings> = LazyLock::new(|| {
+    // Use BICHON_DATA_DIR if set, otherwise use /tmp/bichon_test
+    let root_dir = env::var("BICHON_DATA_DIR")
+        .unwrap_or_else(|_| "/tmp/bichon_test".to_string());
+
+    // Ensure the directory exists
+    std::fs::create_dir_all(&root_dir).ok();
+
+    Settings {
+        bichon_log_level: "info".to_string(),
+        bichon_http_port: 15630,
+        bichon_bind_ip: Some("0.0.0.0".to_string()),
+        bichon_public_url: "http://localhost:15630".to_string(),
+        bichon_cors_origins: HashSet::new(),
+        bichon_cors_max_age: 86400,
+        bichon_ansi_logs: true,
+        bichon_log_to_file: false,
+        bichon_json_logs: false,
+        bichon_max_server_log_files: 5,
+        bichon_encrypt_password: "test-password".to_string(),
+        bichon_root_dir: root_dir,
+        bichon_metadata_cache_size: Some(134217728),
+        bichon_envelope_cache_size: Some(1073741824),
+        bichon_enable_access_token: false,
+        bichon_enable_rest_https: false,
+        bichon_http_compression_enabled: true,
+        bichon_sync_concurrency: None,
+    }
+});
 
 #[derive(Debug, Parser)]
 #[clap(

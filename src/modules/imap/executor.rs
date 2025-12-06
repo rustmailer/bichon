@@ -24,8 +24,10 @@ use crate::modules::envelope::extractor::extract_envelope;
 use crate::modules::error::code::ErrorCode;
 use crate::modules::indexer::manager::{EML_INDEX_MANAGER, ENVELOPE_INDEX_MANAGER};
 use crate::modules::indexer::schema::SchemaTools;
+use crate::modules::settings::dir::DATA_DIR_MANAGER;
 use crate::modules::{error::BichonResult, imap::manager::ImapConnectionManager};
 use crate::raise_error;
+use tokio::fs;
 use async_imap::types::{Mailbox, Name};
 use bb8::Pool;
 use futures::TryStreamExt;
@@ -198,7 +200,12 @@ impl ImapExecutor {
             let body = fetch.body().ok_or_else(|| {
                 raise_error!("missing a body".into(), ErrorCode::ImapUnexpectedResult)
             })?;
-            EML_INDEX_MANAGER.add_document( envelope.id, doc!(fields.f_id => envelope.id, fields.f_account_id => account_id, fields.f_mailbox_id => mailbox_id, fields.f_eml => body)).await;
+
+            // Store EML to disk
+            let eml_path = DATA_DIR_MANAGER.eml_dir.join(format!("{}", envelope.id));
+            fs::write(&eml_path, body).await?;
+
+            EML_INDEX_MANAGER.add_document( envelope.id, doc!(fields.f_id => envelope.id, fields.f_account_id => account_id, fields.f_mailbox_id => mailbox_id, fields.f_mbox_id => 0u64, fields.f_mbox_offset => 0u64, fields.f_mbox_len => body.len() as u64)).await;
             count += 1;
         }
         Ok(count)
@@ -234,7 +241,7 @@ impl ImapExecutor {
             let body = fetch.body().ok_or_else(|| {
                 raise_error!("missing a body".into(), ErrorCode::ImapUnexpectedResult)
             })?;
-            EML_INDEX_MANAGER.add_document( envelope.id, doc!(fields.f_id => envelope.id, fields.f_account_id => account_id, fields.f_mailbox_id => mailbox_id, fields.f_eml => body)).await;
+            EML_INDEX_MANAGER.add_document( envelope.id, doc!(fields.f_id => envelope.id, fields.f_account_id => account_id, fields.f_mailbox_id => mailbox_id, fields.f_mbox_id => 0u64, fields.f_mbox_offset => 0u64, fields.f_mbox_len => body.len() as u64)).await;
         }
         Ok(())
     }

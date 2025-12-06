@@ -64,23 +64,47 @@ pub struct FullMessageContent {
     pub attachments: Option<Vec<AttachmentInfo>>,
 }
 
+use crate::modules::mbox::migration::MboxFileModel as MboxFile;
+use tokio::fs::File;
+use tokio::io::{AsyncReadExt, AsyncSeekExt};
+use std::io::SeekFrom;
+
 pub async fn retrieve_email_content(
     account_id: u64,
     id: u64,
 ) -> BichonResult<FullMessageContent> {
     AccountModel::check_account_exists(account_id).await?;
-    let eml = EML_INDEX_MANAGER
-        .get(account_id, id)
-        .await?
-        .ok_or_else(|| {
+
+    let eml = if let Some((mbox_id, offset, len)) =
+        EML_INDEX_MANAGER.get_eml_location(account_id, id).await?
+    {
+        let mbox_file = MboxFile::find_by_id(mbox_id).await?.ok_or_else(|| {
             raise_error!(
-                format!(
-                    "Email record not found: account_id={} id={}",
-                    account_id, id
-                ),
+                format!("Mbox file with id {} not found", mbox_id),
                 ErrorCode::ResourceNotFound
             )
         })?;
+
+        let mut file = File::open(mbox_file.path).await?;
+        file.seek(SeekFrom::Start(offset)).await?;
+        let mut buffer = vec![0; len as usize];
+        file.read_exact(&mut buffer).await?;
+        buffer
+    } else {
+        EML_INDEX_MANAGER
+            .get(account_id, id)
+            .await?
+            .ok_or_else(|| {
+                raise_error!(
+                    format!(
+                        "Email record not found: account_id={} id={}",
+                        account_id, id
+                    ),
+                    ErrorCode::ResourceNotFound
+                )
+            })?
+    };
+
     let message = MessageParser::default().parse(&eml).ok_or_else(|| {
         raise_error!(
             format!(

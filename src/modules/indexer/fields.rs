@@ -37,6 +37,10 @@ pub const F_ATTACHMENTS: &str = "attachments";
 pub const F_HAS_ATTACHMENT: &str = "has_attachment";
 pub const F_TAGS: &str = "tags";
 
+pub const F_MBOX_ID: &str = "mbox_id";
+pub const F_MBOX_OFFSET: &str = "mbox_offset";
+pub const F_MBOX_LEN: &str = "mbox_len";
+
 pub const F_ID: &str = "id";
 pub struct EnvelopeFields {
     pub f_id: Field,
@@ -59,11 +63,11 @@ pub struct EnvelopeFields {
     pub f_tags: Field,
 }
 
-pub const F_EML: &str = "eml";
-
 pub struct EmlFields {
     pub f_id: Field,
     pub f_account_id: Field,
     pub f_mailbox_id: Field,
-    pub f_eml: Field,
+    pub f_mbox_id: Field,
+    pub f_mbox_offset: Field,
+    pub f_mbox_len: Field,
 }

@@ -120,6 +120,7 @@ impl ResponseError for BichonError {
                 location: _,
                 code,
             } => code.status(),
+            BichonError::IoError { .. } => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 
@@ -142,6 +143,21 @@ impl ResponseError for BichonError {
                 let body = Body::from_json(serde_json::json!({
                     "code": *code as u32,
                     "message": message.to_string(),
+                }))
+                .unwrap();
+
+                Response::builder().status(self.status()).body(body)
+            },
+            BichonError::IoError { source, location } => {
+                error!(
+                    error_code = ErrorCode::IoError as u32,
+                    error_message = %source,
+                    error_location = ?location
+                );
+
+                let body = Body::from_json(serde_json::json!({
+                    "code": ErrorCode::IoError as u32,
+                    "message": source.to_string(),
                 }))
                 .unwrap();
 
