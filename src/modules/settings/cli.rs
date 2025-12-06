@@ -16,7 +16,6 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-
 use clap::{builder::ValueParser, Parser, ValueEnum};
 use std::{collections::HashSet, env, fmt, path::PathBuf, sync::LazyLock};
 
@@ -77,7 +76,6 @@ pub struct Settings {
     /// CORS allowed origins (default: "*")
     #[clap(
         long,
-        default_value = "http://localhost:5173, http://localhost:15630, *",
         env,
         help = "Set the allowed CORS origins (comma-separated list, e.g., \"https://example.com, https://another.com\")",
         value_parser = ValueParser::new(|s: &str| -> Result<HashSet<String>, String> {
@@ -88,7 +86,7 @@ pub struct Settings {
             Ok(set)
         })
     )]
-    pub bichon_cors_origins: HashSet<String>,
+    pub bichon_cors_origins: Option<HashSet<String>>,
 
     /// CORS max age in seconds (default: 86400)
     #[clap(

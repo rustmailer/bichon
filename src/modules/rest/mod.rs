@@ -16,7 +16,6 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-
 use crate::modules::common::error::ErrorCapture;
 use crate::modules::common::log::Tracing;
 use crate::modules::common::tls::rustls_config;
@@ -33,13 +32,14 @@ use crate::modules::common::timeout::{Timeout, TIMEOUT_HEADER};
 use crate::raise_error;
 use api::create_openapi_service;
 use assets::FrontEndAssets;
-use http::HeaderValue;
+use http::{HeaderValue, Method};
 use poem::endpoint::EmbeddedFilesEndpoint;
 use poem::listener::{Listener, TcpListener};
 use poem::middleware::{CatchPanic, Compression, SetHeader};
 use poem::{endpoint::EmbeddedFileEndpoint, middleware::Cors, EndpointExt, Route, Server};
 use poem::{get, post};
 use public::oauth2::oauth2_callback;
+use std::collections::HashSet;
 use std::time::Duration;
 
 pub mod api;
@@ -62,7 +62,7 @@ pub async fn start_http_server() -> BichonResult<()> {
     };
 
     let api_service = create_openapi_service()
-        .summary("A self-hosted IMAP/SMTP middleware designed for developers");
+        .summary("A lightweight, high-performance Rust email archiver with WebUI");
 
     let swagger = api_service.swagger_ui();
     let redoc = api_service.redoc();
@@ -78,10 +78,35 @@ pub async fn start_http_server() -> BichonResult<()> {
         .with(Timeout)
         .with(Tracing);
 
-    let mut cors_origins = SETTINGS.bichon_cors_origins.clone();
-    if cors_origins.is_empty() {
-        cors_origins = ["*".to_string()].into_iter().collect();
-    }
+    let cors_origins: Option<HashSet<String>> =
+        SETTINGS.bichon_cors_origins.clone();
+
+    let cors_origins: Vec<String> = cors_origins.unwrap_or_default().into_iter().collect();
+
+    let cors = Cors::new()
+        .allow_origins_fn(move |origin| {
+            tracing::debug!("CORS: Incoming Origin = {:?}", origin);
+            tracing::debug!("CORS: Configured origins = {:?}", cors_origins);
+            if cors_origins.is_empty() {
+                tracing::debug!("CORS: No origins configured, allowing all");
+                return true;
+            }
+            cors_origins.iter().any(|o| o == origin)
+        })
+        //.allow_origins(cors_origins)
+        .allow_credentials(true)
+        .allow_methods(&[
+            Method::GET,
+            Method::POST,
+            Method::PUT,
+            Method::DELETE,
+            Method::OPTIONS,
+            Method::HEAD,
+            Method::PATCH,
+        ])
+        .allow_headers(vec!["Content-Type", "Authorization", TIMEOUT_HEADER])
+        .expose_headers(vec!["Accept"])
+        .max_age(SETTINGS.bichon_cors_max_age);
 
     let cache_static = || {
         SetHeader::new().overriding(
@@ -89,14 +114,6 @@ pub async fn start_http_server() -> BichonResult<()> {
             HeaderValue::from_static("max-age=86400"),
         )
     };
-
-    let cors = Cors::new()
-        .allow_origins(cors_origins)
-        .allow_credentials(true)
-        .allow_methods(vec!["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"])
-        .allow_headers(vec!["Content-Type", "Authorization", TIMEOUT_HEADER])
-        .expose_headers(vec!["Accept"])
-        .max_age(SETTINGS.bichon_cors_max_age);
 
     let route = Route::new()
         .nest("/api-docs/swagger", swagger)
