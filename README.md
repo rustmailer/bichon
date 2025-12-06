@@ -229,6 +229,39 @@ Or via command-line:
 
 Default is `info`, so CORS logs will not appear unless debug logging is enabled.
 
+---
+
+#### ⚠️ Note on Running Bichon in a Container
+
+> ⚠️ **Note:** If you are running Bichon in a container (via **Docker Compose** or **docker run**), be careful with **quotes in environment variable values**.
+
+For example, **do not** write:
+
+```bash
+-e BICHON_CORS_ORIGINS="http://localhost:15630,http://myserver.local:15630"
+```
+
+* The outer quotes (`"`) will be passed literally into the container and may cause CORS misconfiguration.
+
+**Correct way:**
+
+```bash
+-e BICHON_CORS_ORIGINS=http://localhost:15630,http://myserver.local:15630
+```
+
+Or using YAML literal style for Docker Compose:
+
+```yaml
+environment:
+  BICHON_CORS_ORIGINS: |
+    http://localhost:15630,http://myserver.local:15630
+```
+
+This ensures that the configured origins are interpreted correctly inside the container.
+
+> ⚠️ **Note:** This fucking problem I actually didn’t know about myself; thanks to [gall-1](https://github.com/gall-1) for pointing it out.
+
+
 ### Binary Deployment
 
 Download the appropriate binary for your platform from the [Releases](https://github.com/rustmailer/bichon/releases) page:
