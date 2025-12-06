@@ -1,49 +1,129 @@
-//
-// Copyright (c) 2025 rustmailer.com (https://rustmailer.com)
-//
-// This file is part of the Bichon Email Archiving Project
-//
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <http://www.gnu.org/licenses/>.
+use poem::web::Json;
+use poem_openapi::{payload::Json as OAIJson, ApiResponse, Object, OpenApi};
+use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
+use tokio::task;
 
-use crate::modules::common::auth::ClientContext;
-use crate::modules::import::BatchEmlResult;
-use crate::modules::import::{BatchEmlRequest, ImportEmls};
-use crate::modules::rest::api::ApiTags;
-use crate::modules::rest::ApiResult;
-use poem_openapi::payload::Json;
-use poem_openapi::OpenApi;
+use crate::modules::{
+    error::{code::ErrorCode, BichonResult},
+    import::mbox::import_mbox_from_path,
+    mbox::migration::MboxFileModel,
+    rest::api::ApiTags,
+    settings::dir::DATA_DIR_MANAGER,
+};
 
 pub struct ImportApi;
 
-#[OpenApi(prefix_path = "/api/v1", tag = "ApiTags::Import")]
+#[derive(Debug, Clone, Default, Eq, PartialEq, Serialize, Deserialize, Object)]
+pub struct MboxImportRequest {
+    pub account_id: u64,
+    pub mail_folder: String,
+    pub path: String,
+}
+
+#[derive(Debug, Clone, Default, Eq, PartialEq, Serialize, Deserialize, Object)]
+pub struct MboxFileInfo {
+    pub id: u64,
+    pub path: String,
+    pub account_id: u64,
+}
+
+#[derive(ApiResponse)]
+pub enum MboxImportResponse {
+    #[oai(status = 200)]
+    Ok(OAIJson<String>),
+    #[oai(status = 400)]
+    BadRequest(OAIJson<String>),
+    #[oai(status = 500)]
+    InternalServerError(OAIJson<String>),
+}
+
+#[derive(ApiResponse)]
+pub enum MboxListResponse {
+    #[oai(status = 200)]
+    Ok(OAIJson<Vec<MboxFileInfo>>),
+    #[oai(status = 500)]
+    InternalServerError(OAIJson<String>),
+}
+
+#[derive(ApiResponse)]
+pub enum MboxDeleteResponse {
+    #[oai(status = 200)]
+    Ok(OAIJson<String>),
+    #[oai(status = 404)]
+    NotFound(OAIJson<String>),
+    #[oai(status = 500)]
+    InternalServerError(OAIJson<String>),
+}
+
+#[OpenApi]
 impl ImportApi {
-    /// Batch import one or more EML files into a specified account and mail folder.
-    ///
-    /// This endpoint accepts a JSON payload containing:
-    /// - `account_id`: the target account to import emails into
-    /// - `mail_folder`: the mailbox/folder name
-    /// - `emls`: a list of base64-encoded .eml files
-    ///
-    /// Returns a summary of the import result, including total processed, successful, and failed emails.
-    #[oai(path = "/import", method = "post", operation_id = "do_batch_import")]
-    async fn do_batch_import(
-        &self,
-        /// JSON payload with account info and EML files to import
-        payload: Json<BatchEmlRequest>,
-        context: ClientContext,
-    ) -> ApiResult<Json<BatchEmlResult>> {
-        context.require_root()?;
-        Ok(Json(ImportEmls::do_import(payload.0).await?))
+    #[oai(path = "/import/mbox", method = "post", tag = "ApiTags::Import")]
+    async fn import_mbox(&self, Json(request): Json<MboxImportRequest>) -> MboxImportResponse {
+        let allowed_dir = DATA_DIR_MANAGER.root_dir.join("mbox_import");
+        if !allowed_dir.exists() {
+            if let Err(e) = std::fs::create_dir_all(&allowed_dir) {
+                return MboxImportResponse::InternalServerError(OAIJson(format!(
+                    "Failed to create allowed mbox import directory: {}",
+                    e
+                )));
+            }
+        }
+
+        let path = match PathBuf::from(&request.path).canonicalize() {
+            Ok(path) => path,
+            Err(e) => return MboxImportResponse::BadRequest(OAIJson(format!("Invalid path: {}", e))),
+        };
+
+        if !path.starts_with(&allowed_dir) {
+            return MboxImportResponse::BadRequest(OAIJson(
+                "Path is not within the allowed import directory".to_string(),
+            ));
+        }
+
+        task::spawn(async move {
+            if let Err(e) =
+                import_mbox_from_path(&path, request.account_id, request.mail_folder).await
+            {
+                tracing::error!("Failed to import mbox file: {:?}", e);
+            }
+        });
+
+        MboxImportResponse::Ok(OAIJson("Mbox import started in the background".to_string()))
+    }
+
+    #[oai(path = "/import/mbox/:account_id", method = "get", tag = "ApiTags::Import")]
+    async fn list_mbox_files(&self, account_id: poem::web::Path<u64>) -> MboxListResponse {
+        match MboxFileModel::list_by_account(*account_id).await {
+            Ok(files) => {
+                let infos: Vec<MboxFileInfo> = files
+                    .into_iter()
+                    .map(|f| MboxFileInfo {
+                        id: f.id,
+                        path: f.path,
+                        account_id: f.account_id,
+                    })
+                    .collect();
+                MboxListResponse::Ok(OAIJson(infos))
+            }
+            Err(e) => {
+                MboxListResponse::InternalServerError(OAIJson(format!("Failed to list mbox files: {:?}", e)))
+            }
+        }
+    }
+
+    #[oai(path = "/import/mbox/:id", method = "delete", tag = "ApiTags::Import")]
+    async fn delete_mbox_file(&self, id: poem::web::Path<u64>) -> MboxDeleteResponse {
+        let file_id = *id;
+        match MboxFileModel::delete_by_id(file_id).await {
+            Ok(_) => MboxDeleteResponse::Ok(OAIJson("Mbox file deleted successfully".to_string())),
+            Err(e) => {
+                if e.to_string().contains("not found") {
+                    MboxDeleteResponse::NotFound(OAIJson(format!("Mbox file not found: {}", file_id)))
+                } else {
+                    MboxDeleteResponse::InternalServerError(OAIJson(format!("Failed to delete mbox file: {:?}", e)))
+                }
+            }
+        }
     }
 }

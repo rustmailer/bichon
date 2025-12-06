@@ -39,9 +39,23 @@ pub enum BichonError {
         location: Location,
         code: ErrorCode,
     },
+    IoError {
+        source: std::io::Error,
+        #[snafu(implicit)]
+        location: Location,
+    },
 }
 
 pub type BichonResult<T, E = BichonError> = std::result::Result<T, E>;
+
+impl From<std::io::Error> for BichonError {
+    fn from(source: std::io::Error) -> Self {
+        Self::IoError {
+            source,
+            location: Location::default(),
+        }
+    }
+}
 
 impl From<RunError<BichonError>> for BichonError {
     fn from(e: RunError<BichonError>) -> Self {
@@ -79,6 +93,14 @@ impl From<BichonError> for ApiErrorResponse {
                     code: code as u32,
                 };
                 ApiErrorResponse::Generic(code.status(), Json(api_error))
+            }
+            BichonError::IoError { source, location } => {
+                tracing::error!("I/O error occurred: {} at {:?}", source, location);
+                let api_error = ApiError {
+                    message: source.to_string(),
+                    code: ErrorCode::IoError as u32,
+                };
+                ApiErrorResponse::Generic(ErrorCode::IoError.status(), Json(api_error))
             }
         }
     }

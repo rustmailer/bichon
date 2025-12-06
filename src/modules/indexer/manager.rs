@@ -40,6 +40,7 @@ use crate::{
             },
             schema::SchemaTools,
         },
+        mbox::migration::MboxFileModel as MboxFile,
         message::search::SearchFilter,
         rest::response::DataPage,
         settings::dir::DATA_DIR_MANAGER,
@@ -67,7 +68,7 @@ use tantivy::{
 use tantivy::{indexer::UserOperation, Searcher};
 use tokio::{
     fs::File,
-    io::AsyncWriteExt,
+    io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt, SeekFrom},
     sync::{mpsc, Mutex},
     task,
 };
@@ -199,10 +200,57 @@ impl EnvelopeIndexManager {
         Ok(searcher.num_docs())
     }
 
-    fn account_query(&self, account_id: u64) -> Box<TermQuery> {
+    pub fn account_query(&self, account_id: u64) -> Box<TermQuery> {
         let account_term =
             Term::from_field_u64(SchemaTools::envelope_fields().f_account_id, account_id);
         Box::new(TermQuery::new(account_term, IndexRecordOption::Basic))
+    }
+
+    pub fn text_query(&self, text: &str) -> Box<dyn Query> {
+        let searcher = self.reader.searcher();
+        let index = searcher.index();
+        let parser = QueryParser::for_index(
+            index,
+            vec![
+                SchemaTools::envelope_fields().f_text,
+                SchemaTools::envelope_fields().f_subject,
+            ],
+        );
+        Box::new(parser.parse_query(text).unwrap_or_else(|_| {
+            Box::new(TermQuery::new(
+                Term::from_field_text(SchemaTools::envelope_fields().f_text, text),
+                IndexRecordOption::Basic,
+            ))
+        }))
+    }
+
+    pub fn subject_query(&self, subject: &str) -> Box<dyn Query> {
+        let searcher = self.reader.searcher();
+        let index = searcher.index();
+        let parser = QueryParser::for_index(
+            index,
+            vec![SchemaTools::envelope_fields().f_subject],
+        );
+        Box::new(parser.parse_query(subject).unwrap_or_else(|_| {
+            Box::new(TermQuery::new(
+                Term::from_field_text(SchemaTools::envelope_fields().f_subject, subject),
+                IndexRecordOption::Basic,
+            ))
+        }))
+    }
+
+    pub fn from_query(&self, from: &str) -> Box<dyn Query> {
+        Box::new(TermQuery::new(
+            Term::from_field_text(SchemaTools::envelope_fields().f_from, from),
+            IndexRecordOption::Basic,
+        ))
+    }
+
+    pub fn has_attachment_query(&self, has_attachment: bool) -> Box<dyn Query> {
+        Box::new(TermQuery::new(
+            Term::from_field_bool(SchemaTools::envelope_fields().f_has_attachment, has_attachment),
+            IndexRecordOption::Basic,
+        ))
     }
 
     fn mailbox_query(&self, account_id: u64, mailbox_id: u64) -> Box<dyn Query> {
@@ -898,7 +946,7 @@ impl EnvelopeIndexManager {
         }
     }
 
-    fn create_searcher(&self) -> BichonResult<Searcher> {
+    pub fn create_searcher(&self) -> BichonResult<Searcher> {
         self.reader
             .reload()
             .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;
@@ -1149,6 +1197,66 @@ impl EmlIndexManager {
     }
 
     pub async fn get(&self, account_id: u64, eid: u64) -> BichonResult<Option<Vec<u8>>> {
+        let doc = match self.get_doc(account_id, eid).await? {
+            Some(doc) => doc,
+            None => return Ok(None),
+        };
+
+        if let Some((mbox_id, offset, len)) = self.get_eml_location_from_doc(&doc)? {
+            if mbox_id == 0 {
+                // This is a non-mbox email, read from EML directory
+                use crate::modules::settings::dir::DATA_DIR_MANAGER;
+                let eml_path = DATA_DIR_MANAGER.eml_dir.join(format!("{}", eid));
+                let data = tokio::fs::read(&eml_path).await?;
+                return Ok(Some(data));
+            }
+
+            let mbox_file = MboxFile::find_by_id(mbox_id).await?.ok_or_else(|| {
+                raise_error!(
+                    format!("Mbox file with id {} not found", mbox_id),
+                    ErrorCode::ResourceNotFound
+                )
+            })?;
+            let mut file = File::open(mbox_file.path).await?;
+            file.seek(SeekFrom::Start(offset)).await?;
+            let mut buffer = vec![0; len as usize];
+            file.read_exact(&mut buffer).await?;
+            return Ok(Some(buffer));
+        }
+
+        Ok(None)
+    }
+
+    fn get_eml_location_from_doc(
+        &self,
+        doc: &TantivyDocument,
+    ) -> BichonResult<Option<(u64, u64, u64)>> {
+        let fields = SchemaTools::eml_fields();
+        if let (Some(mbox_id), Some(offset), Some(len)) = (
+            doc.get_first(fields.f_mbox_id).and_then(|v| v.as_u64()),
+            doc.get_first(fields.f_mbox_offset)
+                .and_then(|v| v.as_u64()),
+            doc.get_first(fields.f_mbox_len).and_then(|v| v.as_u64()),
+        ) {
+            Ok(Some((mbox_id, offset, len)))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub async fn get_eml_location(
+        &self,
+        account_id: u64,
+        eid: u64,
+    ) -> BichonResult<Option<(u64, u64, u64)>> {
+        let doc = match self.get_doc(account_id, eid).await? {
+            Some(doc) => doc,
+            None => return Ok(None),
+        };
+        self.get_eml_location_from_doc(&doc)
+    }
+
+    async fn get_doc(&self, account_id: u64, eid: u64) -> BichonResult<Option<TantivyDocument>> {
         let searcher = self.reader.searcher();
         let query = self.envelope_query(account_id, eid);
         let docs = searcher
@@ -1164,22 +1272,9 @@ impl EmlIndexManager {
             .doc_async(*doc_address)
             .await
             .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;
-        let fields = SchemaTools::eml_fields();
-        let value = doc.get_first(fields.f_eml).ok_or_else(|| {
-            raise_error!(
-                format!("miss '{}' field in tantivy document", stringify!(field)),
-                ErrorCode::InternalError
-            )
-        })?;
-        let bytes = value.as_bytes().ok_or_else(|| {
-            raise_error!(
-                format!("'{}' field is not a bytes", stringify!(field)),
-                ErrorCode::InternalError
-            )
-        })?;
-
-        Ok(Some(bytes.to_vec()))
+        Ok(Some(doc))
     }
+
 
     pub async fn get_reader(&self, account_id: u64, eid: u64) -> BichonResult<File> {
         let data = self.get(account_id, eid).await?.ok_or_else(|| {
