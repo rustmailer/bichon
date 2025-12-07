@@ -30,6 +30,7 @@ pub mod import;
 pub mod indexer;
 pub mod logger;
 pub mod mailbox;
+pub mod mbox;
 pub mod message;
 pub mod oauth2;
 pub mod rest;

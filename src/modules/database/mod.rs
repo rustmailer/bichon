@@ -20,6 +20,7 @@ use crate::modules::account::migration::{AccountV1, AccountV2};
 use crate::modules::autoconfig::CachedMailSettings;
 use crate::modules::error::code::ErrorCode;
 use crate::modules::error::BichonResult;
+use crate::modules::mbox::migration::MboxFile;
 use crate::modules::oauth2::entity::OAuth2;
 use crate::modules::oauth2::pending::OAuth2PendingEntity;
 use crate::modules::oauth2::token::OAuth2AccessToken;
@@ -67,6 +68,7 @@ impl ModelsAdapter {
         self.register_model::<OAuth2PendingEntity>();
         self.register_model::<OAuth2AccessToken>();
         self.register_model::<Proxy>();
+        self.register_model::<MboxFile>();
     }
 }
 

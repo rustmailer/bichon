@@ -116,12 +116,16 @@ impl SchemaTools {
         let f_id = builder.add_u64_field(F_ID, INDEXED | FAST);
         let f_account_id = builder.add_u64_field(F_ACCOUNT_ID, INDEXED | STORED | FAST);
         let f_mailbox_id = builder.add_u64_field(F_MAILBOX_ID, INDEXED | STORED | FAST);
-        let f_eml = builder.add_bytes_field(F_EML, STORED);
+        let f_mbox_id = builder.add_u64_field(F_MBOX_ID, STORED | FAST);
+        let f_mbox_offset = builder.add_u64_field(F_MBOX_OFFSET, STORED | FAST);
+        let f_mbox_len = builder.add_u64_field(F_MBOX_LEN, STORED | FAST);
         let fields = EmlFields {
             f_id,
             f_account_id,
             f_mailbox_id,
-            f_eml,
+            f_mbox_id,
+            f_mbox_offset,
+            f_mbox_len,
         };
         (builder.build(), fields)
     }

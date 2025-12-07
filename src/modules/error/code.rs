@@ -55,6 +55,7 @@ pub enum ErrorCode {
     // Internal system errors (70000–70999)
     InternalError = 70000,
     UnhandledPoemError = 70010,
+    IoError = 70020,
 }
 
 impl ErrorCode {
@@ -79,7 +80,8 @@ impl ErrorCode {
             | ErrorCode::NetworkError
             | ErrorCode::ConnectionTimeout
             | ErrorCode::ConnectionPoolTimeout
-            | ErrorCode::UnhandledPoemError => StatusCode::INTERNAL_SERVER_ERROR,
+            | ErrorCode::UnhandledPoemError
+            | ErrorCode::IoError => StatusCode::INTERNAL_SERVER_ERROR,
             ErrorCode::MethodNotAllowed => StatusCode::METHOD_NOT_ALLOWED,
         }
     }
