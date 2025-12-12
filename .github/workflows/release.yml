@@ -50,6 +50,44 @@ jobs:
       - name: Install pnpm
         run: npm install -g pnpm
 
+      - name: Get latest tag
+        id: latest_tag
+        run: |
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          echo "latest_tag=$LATEST_TAG" >> $GITHUB_ENV
+
+      - name: Extract Cargo version
+        id: cargo_version
+        run: |
+          CARGO_VERSION=$(grep -E "^version\s*=" Cargo.toml | cut -d'"' -f2)
+          echo "cargo_version=$CARGO_VERSION" >> $GITHUB_ENV
+
+      - name: Extract package.json version
+        id: package_version
+        run: |
+          PACKAGE_VERSION=$(node -e "console.log(require('./web/package.json').version)")
+          echo "package_version=$PACKAGE_VERSION" >> $GITHUB_ENV
+
+      - name: Validate versions match
+        if: env.latest_tag != ''
+        run: |
+          echo "Latest tag: ${{ env.latest_tag }}"
+          echo "Cargo version: ${{ env.cargo_version }}"
+          echo "Package version: ${{ env.package_version }}"
+
+          TAG_CLEAN="${{ env.latest_tag }}"
+          TAG_CLEAN="${TAG_CLEAN#v}"
+
+          if [ "$TAG_CLEAN" = "${{ env.cargo_version }}" ] && [ "$TAG_CLEAN" = "${{ env.package_version }}" ]; then
+            echo "✓ All versions match"
+          else
+            echo "✗ Version mismatch detected"
+            echo "  Tag: ${{ env.latest_tag }}"
+            echo "  Cargo version: ${{ env.cargo_version }}"
+            echo "  Package version: ${{ env.package_version }}"
+            exit 1
+          fi
+
       - name: Build frontend (web)
         working-directory: ./web
         run: |
