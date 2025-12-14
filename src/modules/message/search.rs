@@ -40,6 +40,7 @@ pub struct SearchFilter {
     pub before: Option<i64>,
     pub account_id: Option<u64>,
     pub mailbox_id: Option<u64>,
+    pub thread_id: Option<u64>,
     pub min_size: Option<u64>,
     pub max_size: Option<u64>,
     pub message_id: Option<String>,

@@ -324,6 +324,14 @@ impl EnvelopeIndexManager {
             ));
         }
 
+        if let Some(thread_id) = filter.thread_id {
+            let term = Term::from_field_u64(f.f_thread_id, thread_id);
+            subqueries.push((
+                Occur::Must,
+                Box::new(TermQuery::new(term, IndexRecordOption::Basic)),
+            ));
+        }
+
         let start_bound = if let Some(from) = filter.min_size {
             Bound::Included(Term::from_field_u64(f.f_size, from))
         } else {
