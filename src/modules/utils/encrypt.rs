@@ -16,17 +16,29 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-
 use base64::{engine::general_purpose, Engine as _};
 use ring::aead::{Aad, BoundKey, Nonce, NonceSequence, OpeningKey, SealingKey, AES_256_GCM};
 use ring::pbkdf2::{self, derive};
 use ring::rand::{SecureRandom, SystemRandom};
+use std::fs;
 use std::num::NonZeroU32;
+use std::sync::LazyLock;
 
 use crate::modules::error::code::ErrorCode;
 use crate::modules::error::BichonResult;
 use crate::modules::settings::cli::SETTINGS;
 use crate::raise_error;
+
+static ENCRYPT_PASSWORD: LazyLock<String> =
+    LazyLock::new(|| match &SETTINGS.bichon_encrypt_password {
+        Some(p) => p.clone(),
+        None => {
+            // unwrap() is safe here, because SETTINGS validates that at least one of the encrypt_password
+            // fields is set.
+            fs::read_to_string(SETTINGS.bichon_encrypt_password_file.as_ref().unwrap())
+                .expect("failed to read the file with the encrypt password")
+        }
+    });
 
 struct SingleNonceSequence([u8; 12]);
 
@@ -43,12 +55,12 @@ impl NonceSequence for SingleNonceSequence {
 }
 
 pub fn encrypt_string(plaintext: &str) -> BichonResult<String> {
-    internal_encrypt_string(&SETTINGS.bichon_encrypt_password, plaintext)
+    internal_encrypt_string(&ENCRYPT_PASSWORD, plaintext)
         .map_err(|_| raise_error!("Failed to encrypt string.".into(), ErrorCode::InternalError))
 }
 
 pub fn decrypt_string(data: &str) -> BichonResult<String> {
-    internal_decrypt_string(&SETTINGS.bichon_encrypt_password, data).map_err(|_| {
+    internal_decrypt_string(&ENCRYPT_PASSWORD, data).map_err(|_| {
         raise_error!(
             "Decryption failed, likely due to incorrect encryption key or corrupted data".into(),
             ErrorCode::InternalError
