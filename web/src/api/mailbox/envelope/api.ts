@@ -48,7 +48,7 @@ export const get_thread_messages = async (accountId: number, thread_id: number, 
 }
 
 export const download_attachment = async (accountId: number, id: number, attachmentFileName: string) => {
-    const response = await axiosInstance.get(`/api/v1/download-attachment/${accountId}?id=${id}&name=${attachmentFileName}`, { responseType: 'blob' });
+    const response = await axiosInstance.get(`/api/v1/download-attachment/${accountId}/${id}?name=${attachmentFileName}`, { responseType: 'blob' });
     const blob = new Blob([response.data]);
     saveAs(blob, attachmentFileName);
 };
@@ -83,7 +83,7 @@ export const getContent = (messageContent: MessageContentResponse): string | nul
 };
 
 export const load_message = async (accountId: number, id: number) => {
-    const response = await axiosInstance.get<MessageContentResponse>(`/api/v1/message-content/${accountId}?id=${id}`);
+    const response = await axiosInstance.get<MessageContentResponse>(`/api/v1/message-content/${accountId}/${id}`);
     return response.data;
 };
 
@@ -93,7 +93,7 @@ export const delete_messages = async (payload: Record<string, number[]>) => {
 };
 
 export const download_message = async (accountId: number, id: number) => {
-    const response = await axiosInstance.get(`/api/v1/download-message/${accountId}?id=${id}`, { responseType: 'blob' });
+    const response = await axiosInstance.get(`/api/v1/download-message/${accountId}/${id}`, { responseType: 'blob' });
     const blob = new Blob([response.data]);
     saveAs(blob, `${id}.eml`);
 };

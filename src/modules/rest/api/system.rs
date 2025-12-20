@@ -78,7 +78,7 @@ impl SystemApi {
     #[oai(path = "/proxy/:id", method = "delete", operation_id = "remove_proxy")]
     async fn remove_proxy(
         &self,
-        /// The name of the OAuth2 configuration to retrieve
+        /// The ID of the proxy configuration to delete.
         id: Path<u64>,
         context: ClientContext,
     ) -> ApiResult<()> {
@@ -86,11 +86,11 @@ impl SystemApi {
         Ok(Proxy::delete(id.0).await?)
     }
 
-    /// Retrieve a specific proxy configuration by ID
+    /// Retrieve a specific proxy configuration by ID. Requires root permission.
     #[oai(path = "/proxy/:id", method = "get", operation_id = "get_proxy")]
     async fn get_proxy(
         &self,
-        /// The name of the OAuth2 configuration to retrieve
+        /// The ID of the proxy configuration to retrieve.
         id: Path<u64>,
         context: ClientContext,
     ) -> ApiResult<Json<Proxy>> {

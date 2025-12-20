@@ -32,9 +32,8 @@ use crate::modules::rest::response::DataPage;
 use crate::modules::rest::ApiResult;
 use crate::modules::rest::ErrorCode;
 use crate::raise_error;
-use poem::web::Path;
 use poem::Body;
-use poem_openapi::param::Query;
+use poem_openapi::param::{Path, Query};
 use poem_openapi::payload::{Attachment, AttachmentType, Json};
 use poem_openapi::OpenApi;
 use std::collections::HashMap;
@@ -63,7 +62,7 @@ impl MessageApi {
         Ok(delete_messages_impl(request).await?)
     }
 
-    /// Lists messages in a specified mailbox for the given account.
+    /// Lists messages in a mailbox. Requires `mailbox_id`, `page`, and `page_size` query parameters.
     #[oai(
         path = "/list-messages/:account_id",
         method = "get",
@@ -71,7 +70,9 @@ impl MessageApi {
     )]
     async fn list_messages(
         &self,
+        /// The ID of the account.
         account_id: Path<u64>,
+        /// The ID of the mailbox to list messages from.
         mailbox_id: Query<u64>,
         page: Query<u64>,
         page_size: Query<u64>,
@@ -85,7 +86,8 @@ impl MessageApi {
         ))
     }
 
-    /// Lists messages in a specified mailbox for the given account.
+    /// Searches messages across all mailboxes using various filter criteria.
+    /// The search filters are provided in the request body.
     #[oai(
         path = "/search-messages",
         method = "post",
@@ -100,7 +102,7 @@ impl MessageApi {
         Ok(Json(search_messages_impl(payload.0).await?))
     }
 
-    /// Get thread's envelopes in a specified mailbox for the given account.
+    /// Retrieves all messages belonging to a specific thread. Requires `thread_id`, `page`, and `page_size` query parameters.
     #[oai(
         path = "/get-thread-messages/:account_id",
         method = "get",
@@ -126,67 +128,105 @@ impl MessageApi {
         ))
     }
 
-    /// Fetches the content of a specific email for the given account.
+    /// Fetches the content of a specific email.
     #[oai(
-        path = "/message-content/:account_id",
+        path = "/message-content/:account_id/:message_id",
         method = "get",
         operation_id = "fetch_message_content"
     )]
     async fn fetch_message_content(
         &self,
+        /// The ID of the account.
         account_id: Path<u64>,
-        id: Query<u64>,
+        /// The ID of the message to fetch.
+        message_id: Path<u64>,
         context: ClientContext,
     ) -> ApiResult<Json<FullMessageContent>> {
         let account_id = account_id.0;
         context.require_account_access(account_id)?;
-        Ok(Json(retrieve_email_content(account_id, id.0).await?))
+        Ok(Json(retrieve_email_content(account_id, message_id.0).await?))
     }
 
-    /// Fetches the full content of a specific email for the given account.
+    /// Retrieves the envelope (metadata) of a specific message.
     #[oai(
-        path = "/download-message/:account_id",
+        path = "/envelope/:account_id/:message_id",
+        method = "get",
+        operation_id = "get_envelope"
+    )]
+    async fn get_envelope(
+        &self,
+        /// The ID of the account.
+        account_id: Path<u64>,
+        /// The ID of the message.
+        message_id: Path<u64>,
+        context: ClientContext,
+    ) -> ApiResult<Json<Envelope>> {
+        let account_id = account_id.0;
+        context.require_account_access(account_id)?;
+        let envelope = ENVELOPE_INDEX_MANAGER
+            .get_envelope_by_id(account_id, message_id.0)
+            .await?
+            .ok_or_else(|| {
+                raise_error!(
+                    format!(
+                        "Envelope not found: account_id={} message_id={}",
+                        account_id, message_id.0
+                    ),
+                    ErrorCode::ResourceNotFound
+                )
+            })?;
+        Ok(Json(envelope))
+    }
+
+    /// Downloads the raw EML file of a specific email.
+    #[oai(
+        path = "/download-message/:account_id/:message_id",
         method = "get",
         operation_id = "download_message"
     )]
     async fn download_message(
         &self,
+        /// The ID of the account.
         account_id: Path<u64>,
-        id: Query<u64>,
+        /// The ID of the message to download.
+        message_id: Path<u64>,
         context: ClientContext,
     ) -> ApiResult<Attachment<Body>> {
         let account_id = account_id.0;
         AccountModel::check_account_exists(account_id).await?;
         context.require_account_access(account_id)?;
-        let id = id.0;
-        let reader = EML_INDEX_MANAGER.get_reader(account_id, id).await?;
+        let message_id = message_id.0;
+        let reader = EML_INDEX_MANAGER.get_reader(account_id, message_id).await?;
         let body = Body::from_async_read(reader);
         let attachment = Attachment::new(body)
             .attachment_type(AttachmentType::Attachment)
-            .filename(format!("{id}.eml"));
+            .filename(format!("{message_id}.eml"));
         Ok(attachment)
     }
 
-    /// Downloads a specific attachment by filename.
+    /// Downloads a specific attachment from an email. Requires `name` query parameter.
     #[oai(
-        path = "/download-attachment/:account_id",
+        path = "/download-attachment/:account_id/:message_id",
         method = "get",
         operation_id = "download_attachment"
     )]
     async fn download_attachment(
         &self,
+        /// The ID of the account.
         account_id: Path<u64>,
-        id: Query<u64>,
+        /// The ID of the message containing the attachment.
+        message_id: Path<u64>,
+        /// The filename of the attachment to download.
         name: Query<String>,
         context: ClientContext,
     ) -> ApiResult<Attachment<Body>> {
         let account_id = account_id.0;
         AccountModel::check_account_exists(account_id).await?;
         context.require_account_access(account_id)?;
-        let email_id = id.0;
+        let message_id = message_id.0;
         let name = name.0.trim();
         let reader = EML_INDEX_MANAGER
-            .get_attachment(account_id, email_id, name)
+            .get_attachment(account_id, message_id, name)
             .await?;
         let body = Body::from_async_read(reader);
         let attachment = Attachment::new(body)

@@ -741,6 +741,47 @@ impl EnvelopeIndexManager {
         })
     }
 
+    pub async fn get_envelope_by_id(
+        &self,
+        account_id: u64,
+        message_id: u64,
+    ) -> BichonResult<Option<Envelope>> {
+        let searcher = self.create_searcher()?;
+        let f = SchemaTools::envelope_fields();
+
+        let query = BooleanQuery::new(vec![
+            (
+                Occur::Must,
+                Box::new(TermQuery::new(
+                    Term::from_field_u64(f.f_account_id, account_id),
+                    IndexRecordOption::Basic,
+                )),
+            ),
+            (
+                Occur::Must,
+                Box::new(TermQuery::new(
+                    Term::from_field_u64(f.f_id, message_id),
+                    IndexRecordOption::Basic,
+                )),
+            ),
+        ]);
+
+        let docs: Vec<(f32, DocAddress)> = searcher
+            .search(&query, &TopDocs::with_limit(1))
+            .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;
+
+        if let Some((_, doc_address)) = docs.first() {
+            let doc: TantivyDocument = searcher
+                .doc_async(*doc_address)
+                .await
+                .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;
+            let envelope = Envelope::from_tantivy_doc(&doc).await?;
+            Ok(Some(envelope))
+        } else {
+            Ok(None)
+        }
+    }
+
     pub async fn top_10_largest_emails(&self) -> BichonResult<Vec<LargestEmail>> {
         self.reader
             .reload()
