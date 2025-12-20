@@ -19,7 +19,7 @@
 use clap::{builder::ValueParser, Parser, ValueEnum};
 use std::{collections::HashSet, env, fmt, path::PathBuf, sync::LazyLock};
 
-pub static SETTINGS: LazyLock<Settings> = LazyLock::new(Settings::parse);
+pub static SETTINGS: LazyLock<Settings> = LazyLock::new(Settings::init);
 
 #[derive(Debug, Parser)]
 #[clap(
@@ -132,11 +132,17 @@ pub struct Settings {
     /// bichon encryption password
     #[clap(
         long,
-        default_value = "change-this-default-password-now",
         env,
-        help = "Set the encryption password for bichon. ⚠️ Change this default in production!"
+        help = "Set the encryption password for bichon. Alternatively, you can use --bichon-encrypt-password-file. If both are set, this parameter takes precedence over the file."
     )]
-    pub bichon_encrypt_password: String,
+    pub bichon_encrypt_password: Option<String>,
+
+    #[clap(
+        long,
+        env,
+        help = "The file containing the encryption password. An alternative to --bichon-encrypt-password."
+    )]
+    pub bichon_encrypt_password_file: Option<String>,
 
     #[clap(
         long,
@@ -215,6 +221,18 @@ pub struct Settings {
         value_parser = clap::value_parser!(u16).range(1..)
     )]
     pub bichon_sync_concurrency: Option<u16>,
+}
+
+impl Settings {
+    pub fn init() -> Self {
+        let s = Self::parse();
+        if s.bichon_encrypt_password.is_none() && s.bichon_encrypt_password_file.is_none() {
+            panic!(
+                "One of --bichon_encrypt_password or --bichon_encrypt_password_file has to be set"
+            );
+        }
+        s
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, ValueEnum)]

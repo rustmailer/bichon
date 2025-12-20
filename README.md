@@ -484,9 +484,12 @@ cargo build
 Or run directly:
 
 ```bash
+export BICHON_ENCRYPT_PASSWORD=dummy-password-for-testing
 cargo run -- --bichon-root-dir e:\bichon-data
 ```
+
 `--bichon-root-dir` specifies the directory where **all Bichon data** will be stored.
+`BICHON_ENCRYPT_PASSWORD` is the password used to encrypt the sensitive data (see `cargo run -- --help` for alternative ways to specify this).
 
 ### WebUI Access
 
