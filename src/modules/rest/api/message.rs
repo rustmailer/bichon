@@ -33,9 +33,8 @@ use crate::modules::rest::ApiResult;
 use crate::modules::rest::ErrorCode;
 use crate::modules::users::permissions::Permission;
 use crate::raise_error;
-use poem::web::Path;
 use poem::Body;
-use poem_openapi::param::Query;
+use poem_openapi::param::{Path, Query};
 use poem_openapi::payload::{Attachment, AttachmentType, Json};
 use poem_openapi::OpenApi;
 use std::collections::HashMap;
@@ -149,15 +148,17 @@ impl MessageApi {
     )]
     async fn fetch_message_content(
         &self,
+        /// The ID of the account.
         account_id: Path<u64>,
-        id: Query<u64>,
+        /// The ID of the message to fetch.
+        message_id: Query<u64>,
         context: ClientContext,
     ) -> ApiResult<Json<FullMessageContent>> {
         let account_id = account_id.0;
         context
             .require_permission(Some(account_id), Permission::DATA_READ)
             .await?;
-        Ok(Json(retrieve_email_content(account_id, id.0).await?))
+        Ok(Json(retrieve_email_content(account_id, message_id.0).await?))
     }
 
     /// Fetches the full content of a specific email for the given account.
@@ -168,8 +169,10 @@ impl MessageApi {
     )]
     async fn download_message(
         &self,
+        /// The ID of the account.
         account_id: Path<u64>,
-        id: Query<u64>,
+        /// The ID of the message to download.
+        message_id: Query<u64>,
         context: ClientContext,
     ) -> ApiResult<Attachment<Body>> {
         let account_id = account_id.0;
@@ -177,12 +180,12 @@ impl MessageApi {
         context
             .require_permission(Some(account_id), Permission::DATA_RAW_DOWNLOAD)
             .await?;
-        let id = id.0;
-        let reader = EML_INDEX_MANAGER.get_reader(account_id, id).await?;
+        let message_id = message_id.0;
+        let reader = EML_INDEX_MANAGER.get_reader(account_id, message_id).await?;
         let body = Body::from_async_read(reader);
         let attachment = Attachment::new(body)
             .attachment_type(AttachmentType::Attachment)
-            .filename(format!("{id}.eml"));
+            .filename(format!("{message_id}.eml"));
         Ok(attachment)
     }
 
@@ -194,8 +197,11 @@ impl MessageApi {
     )]
     async fn download_attachment(
         &self,
+        /// The ID of the account.
         account_id: Path<u64>,
-        id: Query<u64>,
+        /// The ID of the message containing the attachment.
+        message_id: Query<u64>,
+        /// The filename of the attachment to download.
         name: Query<String>,
         context: ClientContext,
     ) -> ApiResult<Attachment<Body>> {
@@ -204,10 +210,10 @@ impl MessageApi {
         context
             .require_permission(Some(account_id), Permission::DATA_READ)
             .await?;
-        let email_id = id.0;
+        let message_id = message_id.0;
         let name = name.0.trim();
         let reader = EML_INDEX_MANAGER
-            .get_attachment(account_id, email_id, name)
+            .get_attachment(account_id, message_id, name)
             .await?;
         let body = Body::from_async_read(reader);
         let attachment = Attachment::new(body)

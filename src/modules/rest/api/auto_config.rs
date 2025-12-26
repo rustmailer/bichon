@@ -24,7 +24,7 @@ use crate::modules::rest::api::ApiTags;
 use crate::modules::rest::ApiResult;
 use crate::modules::users::permissions::Permission;
 use crate::raise_error;
-use poem::web::Path;
+use poem_openapi::param::Path;
 use poem_openapi::payload::Json;
 use poem_openapi::OpenApi;
 

@@ -27,8 +27,7 @@ use crate::modules::rest::response::DataPage;
 use crate::modules::rest::ApiResult;
 use crate::modules::users::permissions::Permission;
 use crate::raise_error;
-use poem::web::Path;
-use poem_openapi::param::Query;
+use poem_openapi::param::{Path, Query};
 use poem_openapi::payload::{Json, PlainText};
 use poem_openapi::OpenApi;
 
