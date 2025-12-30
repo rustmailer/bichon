@@ -718,6 +718,31 @@
         "interval": "Интервал"
     },
     "settings": {
+        "appearance": {
+            "title": "Внешний вид",
+            "field": {
+                "language": "Язык интерфейса",
+                "theme": "Тема интерфейса"
+            },
+            "description": {
+                "language": "Выберите язык веб-интерфейса.",
+                "theme": "Выберите светлый или темный режим."
+            },
+            "placeholder": {
+                "select_language": "Выберите язык"
+            },
+            "command": {
+                "search": "Поиск языка...",
+                "no_results": "Язык не найден."
+            },
+            "theme": {
+                "light": "Светлая",
+                "dark": "Темная"
+            },
+            "button": {
+                "update": "Обновить настройки"
+            }
+        },
         "title": "Настройки",
         "general": "Общие",
         "proxy": "Прокси",

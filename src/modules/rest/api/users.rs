@@ -29,7 +29,7 @@ use crate::modules::users::payload::{
 use crate::modules::users::permissions::Permission;
 use crate::modules::users::role::UserRole;
 use crate::modules::users::view::UserView;
-use crate::modules::users::BichonUser;
+use crate::modules::users::UserModel;
 use poem::web::Path;
 use poem_openapi::payload::Json;
 use poem_openapi::OpenApi;
@@ -100,10 +100,10 @@ impl UsersApi {
             .await?;
         let roles = UserRole::list_all().await?;
         let role_lookup: BTreeMap<u64, UserRole> = roles.into_iter().map(|r| (r.id, r)).collect();
-        let users = BichonUser::list_all().await?;
+        let users = UserModel::list_all().await?;
         let users = users
             .into_iter()
-            .map(|u| u.to_current_user(&role_lookup))
+            .map(|u| u.to_view(&role_lookup))
             .collect();
         Ok(Json(users))
     }
@@ -140,7 +140,7 @@ impl UsersApi {
         context
             .require_permission(None, Permission::USER_MANAGE)
             .await?;
-        Ok(BichonUser::remove(id).await?)
+        Ok(UserModel::remove(id).await?)
     }
 
     #[oai(path = "/users", method = "post", operation_id = "create_user")]
@@ -152,10 +152,10 @@ impl UsersApi {
         context
             .require_permission(None, Permission::USER_MANAGE)
             .await?;
-        let user = BichonUser::create(payload.0).await?;
+        let user = UserModel::create(payload.0).await?;
         let roles = UserRole::list_all().await?;
         let role_lookup: BTreeMap<u64, UserRole> = roles.into_iter().map(|r| (r.id, r)).collect();
-        Ok(Json(user.to_current_user(&role_lookup)))
+        Ok(Json(user.to_view(&role_lookup)))
     }
 
     #[oai(path = "/users/:id", method = "post", operation_id = "update_user")]
@@ -180,7 +180,7 @@ impl UsersApi {
             update_data.account_access_map = None;
             update_data.acl = None;
         }
-        Ok(BichonUser::update(target_id, update_data).await?)
+        Ok(UserModel::update(target_id, update_data).await?)
     }
 
     #[oai(
@@ -191,7 +191,7 @@ impl UsersApi {
     async fn get_current_user(&self, context: ClientContext) -> ApiResult<Json<UserView>> {
         let roles = UserRole::list_all().await?;
         let role_lookup: BTreeMap<u64, UserRole> = roles.into_iter().map(|r| (r.id, r)).collect();
-        Ok(Json(context.user.to_current_user(&role_lookup)))
+        Ok(Json(context.user.to_view(&role_lookup)))
     }
 
     #[oai(

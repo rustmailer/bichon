@@ -49,4 +49,6 @@ pub struct UserView {
     pub updated_at: i64,
     /// Optional access control settings
     pub acl: Option<AccessControl>,
+    pub theme: Option<String>,
+    pub language: Option<String>,
 }

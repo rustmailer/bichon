@@ -21,6 +21,7 @@ use crate::modules::cache::imap::MAILBOX_MODELS;
 use crate::modules::error::{code::ErrorCode, BichonError};
 use crate::modules::settings::cli::SETTINGS;
 use crate::modules::settings::dir::DATA_DIR_MANAGER;
+use crate::modules::users::UserModel;
 use crate::modules::{database::META_MODELS, error::BichonResult};
 use crate::raise_error;
 use native_db::{Builder, Database};
@@ -72,6 +73,8 @@ impl DatabaseManager {
             .rw_transaction()
             .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;
         rw.migrate::<AccountModel>()
+            .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;
+        rw.migrate::<UserModel>()
             .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;
         rw.commit()
             .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;

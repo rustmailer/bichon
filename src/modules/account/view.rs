@@ -27,7 +27,7 @@ use crate::modules::{
         migration::{AccountModel, AccountType},
         since::{DateSince, RelativeDate},
     },
-    users::BichonUser,
+    users::UserModel,
 };
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Deserialize, Serialize, Object)]
@@ -57,7 +57,7 @@ pub struct AccountResp {
 }
 
 impl AccountResp {
-    pub fn from_model(account: AccountModel, user_map: &HashMap<u64, BichonUser>) -> AccountResp {
+    pub fn from_model(account: AccountModel, user_map: &HashMap<u64, UserModel>) -> AccountResp {
         let user = user_map.get(&account.created_by);
         AccountResp {
             id: account.id,

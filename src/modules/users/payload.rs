@@ -31,7 +31,44 @@ use crate::{
 };
 use poem_openapi::Object;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+
+fn allowed_themes() -> HashSet<&'static str> {
+    ["light", "dark"].into_iter().collect()
+}
+
+fn allowed_languages() -> HashSet<&'static str> {
+    [
+        "ar", "da", "de", "en", "es", "fi", "fr", "it", "jp", "ko", "nl", "no", "pl", "pt", "ru",
+        "sv", "zh", "zh-tw",
+    ]
+    .into_iter()
+    .collect()
+}
+
+fn validate_option_in_set(
+    value: &Option<String>,
+    allowed: &std::collections::HashSet<&'static str>,
+    field_name: &str,
+) -> BichonResult<()> {
+    if let Some(v) = value {
+        if !allowed.contains(v.as_str()) {
+            return Err(raise_error!(
+                format!("invalid {} value: '{}'", field_name, v),
+                ErrorCode::InvalidParameter
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn validate_theme(theme: &Option<String>) -> BichonResult<()> {
+    validate_option_in_set(theme, &allowed_themes(), "theme")
+}
+
+fn validate_language(language: &Option<String>) -> BichonResult<()> {
+    validate_option_in_set(language, &allowed_languages(), "language")
+}
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Deserialize, Serialize, Object)]
 pub struct RoleCreateRequest {
@@ -176,6 +213,8 @@ pub struct UserCreateRequest {
     pub acl: Option<AccessControl>,
     pub avatar_base64: Option<String>,
     pub description: Option<String>,
+    pub theme: Option<String>,
+    pub language: Option<String>,
 }
 
 impl UserCreateRequest {
@@ -218,6 +257,9 @@ impl UserCreateRequest {
                 ErrorCode::InvalidParameter
             ));
         }
+
+        validate_theme(&self.theme)?;
+        validate_language(&self.language)?;
 
         let all_roles = UserRole::list_all().await?;
         let role_type_map: HashMap<u64, RoleType> =
@@ -301,6 +343,8 @@ pub struct UserUpdateRequest {
     pub account_access_map: Option<BTreeMap<u64, u64>>,
     pub acl: Option<AccessControl>,
     pub description: Option<String>,
+    pub theme: Option<String>,
+    pub language: Option<String>,
 }
 
 impl UserUpdateRequest {
@@ -324,6 +368,9 @@ impl UserUpdateRequest {
                 ));
             }
         }
+
+        validate_theme(&self.theme)?;
+        validate_language(&self.language)?;
 
         let all_roles = UserRole::list_all().await?;
         let role_type_map: HashMap<u64, RoleType> =

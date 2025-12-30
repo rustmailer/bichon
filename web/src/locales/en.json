@@ -718,6 +718,39 @@
     "interval": "Interval"
   },
   "settings": {
+    "appearance": {
+      "title": "Appearance",
+      "field": {
+        "language": "Language",
+        "theme": "Interface Theme"
+      },
+      "description": {
+        "language": "Select the language used in the Web UI.",
+        "theme": "Choose between light or dark mode for the interface."
+      },
+      "placeholder": {
+        "select_language": "Select language"
+      },
+      "command": {
+        "search": "Search language...",
+        "no_results": "No language found."
+      },
+      "theme": {
+        "light": "Light",
+        "dark": "Dark"
+      },
+      "button": {
+        "update": "Update preferences"
+      },
+      "validation": {
+        "language": {
+          "required": "Please select a language."
+        },
+        "theme": {
+          "required": "Please select a theme."
+        }
+      }
+    },
     "title": "Settings",
     "general": "General",
     "proxy": "Proxy",

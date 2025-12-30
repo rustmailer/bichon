@@ -20,7 +20,7 @@
 import { Outlet } from '@tanstack/react-router'
 import { Main } from '@/components/layout/main'
 import SidebarNav from './components/sidebar-nav'
-import { KeyRound, SettingsIcon, UserCog, Waypoints } from 'lucide-react'
+import { KeyRound, Palette, SettingsIcon, UserCog, Waypoints } from 'lucide-react'
 import { FixedHeader } from '@/components/layout/fixed-header'
 import { useCurrentUser } from '@/hooks/use-current-user'
 import { useTranslation } from 'react-i18next'
@@ -35,6 +35,11 @@ export default function Settings() {
       title: t('settings.sidebar.profile'),
       href: '/settings/profile',
       icon: <UserCog size={18} />,
+    },
+    {
+      title: t('settings.appearance.title'),
+      href: '/settings/appearance',
+      icon: <Palette size={18} />,
     },
     {
       title: t('settings.sidebar.apiTokens'),

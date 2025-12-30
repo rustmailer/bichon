@@ -718,6 +718,31 @@
         "interval": "Intervall"
     },
     "settings": {
+        "appearance": {
+            "title": "Erscheinungsbild",
+            "field": {
+                "language": "Sprache der Benutzeroberfläche",
+                "theme": "Design"
+            },
+            "description": {
+                "language": "Wählen Sie die Sprache für die Web-Oberfläche.",
+                "theme": "Wählen Sie zwischen hellem oder dunklem Modus."
+            },
+            "placeholder": {
+                "select_language": "Sprache wählen"
+            },
+            "command": {
+                "search": "Sprache suchen...",
+                "no_results": "Keine Sprache gefunden."
+            },
+            "theme": {
+                "light": "Hell",
+                "dark": "Dunkel"
+            },
+            "button": {
+                "update": "Einstellungen aktualisieren"
+            }
+        },
         "title": "Einstellungen",
         "general": "Allgemein",
         "proxy": "Proxy",

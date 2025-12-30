@@ -16,17 +16,12 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::modules::{
-    context::Initialize,
-    error::BichonResult,
-    users::{role::UserRole, UserModel},
-};
 
-pub struct UserManager;
+import { createLazyFileRoute } from '@tanstack/react-router'
+import { SettingsAppearance } from '@/features/settings/appearance'
 
-impl Initialize for UserManager {
-    async fn initialize() -> BichonResult<()> {
-        UserRole::ensure_default_roles_exists().await?;
-        UserModel::ensure_default_admin_exists().await
-    }
-}
+export const Route = createLazyFileRoute('/_authenticated/settings/appearance')(
+  {
+    component: SettingsAppearance,
+  },
+)

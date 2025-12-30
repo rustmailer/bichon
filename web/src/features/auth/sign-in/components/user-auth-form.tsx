@@ -43,6 +43,7 @@ import { useTranslation } from 'react-i18next'
 import i18n from '@/i18n'
 import { Loader2, LogIn } from 'lucide-react'
 import { login } from '@/api/users/api'
+import { useTheme } from '@/context/theme-context'
 
 type UserAuthFormProps = HTMLAttributes<HTMLDivElement>
 
@@ -59,6 +60,7 @@ const getFormSchema = (t: (key: string, options?: Record<string, any>) => string
 
 export function UserAuthForm({ className, ...props }: UserAuthFormProps) {
   const [isLoading, setIsLoading] = useState(false)
+  const { setTheme } = useTheme();
   const navigate = useNavigate()
   const { t } = useTranslation()
 
@@ -86,6 +88,15 @@ export function UserAuthForm({ className, ...props }: UserAuthFormProps) {
       onSuccess: (result) => {
         if (result.success) {
           setToken(result);
+
+          if (result.theme) {
+            setTheme(result.theme);
+          }
+          
+          if (result.language) {
+            i18n.changeLanguage(result.language);
+          }
+          
           navigate({ to: redirect });
         } else {
           toast({

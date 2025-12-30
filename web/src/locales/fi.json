@@ -718,6 +718,39 @@
         "interval": "Väli"
     },
     "settings": {
+        "appearance": {
+            "title": "Ulkoasu",
+            "field": {
+                "language": "Käyttöliittymän kieli",
+                "theme": "Käyttöliittymän teema"
+            },
+            "description": {
+                "language": "Valitse Web-käyttöliittymässä käytettävä kieli.",
+                "theme": "Valitse käyttöliittymän vaalea tai tumma tila."
+            },
+            "placeholder": {
+                "select_language": "Valitse kieli"
+            },
+            "command": {
+                "search": "Hae kieltä...",
+                "no_results": "Kieltä ei löytynyt."
+            },
+            "theme": {
+                "light": "Vaalea",
+                "dark": "Tumma"
+            },
+            "button": {
+                "update": "Päivitä asetukset"
+            },
+            "validation": {
+                "language": {
+                    "required": "Valitse kieli."
+                },
+                "theme": {
+                    "required": "Valitse teema."
+                }
+            }
+        },
         "title": "Asetukset",
         "general": "Yleinen",
         "proxy": "Välityspalvelin",

@@ -718,6 +718,39 @@
         "interval": "Interval"
     },
     "settings": {
+        "appearance": {
+            "title": "Uiterlijk",
+            "field": {
+                "language": "Interfacetaal",
+                "theme": "Interfacethema"
+            },
+            "description": {
+                "language": "Selecteer de taal voor de webinterface.",
+                "theme": "Kies tussen de lichte of donkere modus voor de interface."
+            },
+            "placeholder": {
+                "select_language": "Selecteer taal"
+            },
+            "command": {
+                "search": "Taal zoeken...",
+                "no_results": "Geen taal gevonden."
+            },
+            "theme": {
+                "light": "Licht",
+                "dark": "Donker"
+            },
+            "button": {
+                "update": "Voorkeuren bijwerken"
+            },
+            "validation": {
+                "language": {
+                    "required": "Selecteer een taal."
+                },
+                "theme": {
+                    "required": "Selecteer een thema."
+                }
+            }
+        },
         "title": "Instellingen",
         "general": "Algemeen",
         "proxy": "Proxy",

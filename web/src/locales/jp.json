@@ -718,6 +718,31 @@
         "interval": "間隔"
     },
     "settings": {
+        "appearance": {
+            "title": "外観",
+            "field": {
+                "language": "表示言語",
+                "theme": "インターフェーステーマ"
+            },
+            "description": {
+                "language": "Web UIで使用する言語を選択します。",
+                "theme": "ライトモードまたはダークモードを選択します。"
+            },
+            "placeholder": {
+                "select_language": "言語を選択"
+            },
+            "command": {
+                "search": "言語を検索...",
+                "no_results": "言語が見つかりません。"
+            },
+            "theme": {
+                "light": "ライト",
+                "dark": "ダーク"
+            },
+            "button": {
+                "update": "設定を更新"
+            }
+        },
         "title": "設定",
         "general": "一般",
         "proxy": "プロキシ",

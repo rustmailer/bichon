@@ -718,6 +718,31 @@
         "interval": "Intervalo"
     },
     "settings": {
+        "appearance": {
+            "title": "Aparência",
+            "field": {
+                "language": "Idioma da interface",
+                "theme": "Tema da interface"
+            },
+            "description": {
+                "language": "Selecione o idioma da interface web.",
+                "theme": "Escolha entre o modo claro ou escuro."
+            },
+            "placeholder": {
+                "select_language": "Selecionar idioma"
+            },
+            "command": {
+                "search": "Pesquisar idioma...",
+                "no_results": "Nenhum idioma encontrado."
+            },
+            "theme": {
+                "light": "Claro",
+                "dark": "Escuro"
+            },
+            "button": {
+                "update": "Atualizar preferências"
+            }
+        },
         "title": "Configurações",
         "general": "Geral",
         "proxy": "Proxy",

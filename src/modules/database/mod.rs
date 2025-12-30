@@ -27,7 +27,7 @@ use crate::modules::settings::proxy::Proxy;
 use crate::modules::settings::system::SystemSetting;
 use crate::modules::token::AccessTokenModel;
 use crate::modules::users::role::UserRole;
-use crate::modules::users::BichonUser;
+use crate::modules::users::{BichonUser, BichonUserV2};
 use crate::raise_error;
 use db_type::{KeyOptions, ToKeyDefinition};
 use itertools::Itertools;
@@ -73,6 +73,7 @@ impl ModelsAdapter {
         self.register_model::<Proxy>();
         self.register_model::<UserRole>();
         self.register_model::<BichonUser>();
+        self.register_model::<BichonUserV2>();
         self.register_model::<AccessTokenModel>();
     }
 }

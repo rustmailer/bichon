@@ -28,7 +28,7 @@ use crate::{
         users::{
             permissions::Permission,
             role::{RoleType, UserRole},
-            BichonUser,
+            UserModel,
         },
     },
     raise_error, utc_now,
@@ -68,7 +68,7 @@ impl BatchAccountRoleRequest {
         }
 
         for id in &self.user_ids {
-            let exists = BichonUser::find(*id).await?; // Assuming an exists helper
+            let exists = UserModel::find(*id).await?; // Assuming an exists helper
             if exists.is_none() {
                 return Err(raise_error!(
                     format!("User ID {} not found", id),
@@ -90,7 +90,7 @@ impl BatchAccountRoleRequest {
                 // Fetch the current user record from the database
                 let user = rw
                     .get()
-                    .primary::<BichonUser>(uid)
+                    .primary::<UserModel>(uid)
                     .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?
                     .ok_or_else(|| {
                         raise_error!(

@@ -51,11 +51,15 @@ pub mod permissions;
 pub mod role;
 pub mod view;
 
+pub type UserModel = BichonUserV2;
+
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize, Object)]
 pub struct LoginResult {
     pub success: bool,
     pub error_message: Option<String>,
     pub access_token: Option<String>,
+    pub theme: Option<String>,
+    pub language: Option<String>,
 }
 
 pub const DEFAULT_ADMIN_USER_ID: u64 = 100000000000000;
@@ -92,9 +96,44 @@ pub struct BichonUser {
     pub acl: Option<AccessControl>,
 }
 
-impl BichonUser {
-    pub async fn list_all() -> BichonResult<Vec<BichonUser>> {
-        Ok(list_all_impl::<BichonUser>(DB_MANAGER.meta_db()).await?)
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize, Object)]
+#[native_model(id = 10, version = 2, from = BichonUser)]
+#[native_db]
+pub struct BichonUserV2 {
+    #[primary_key]
+    pub id: u64,
+    #[secondary_key(unique)]
+    pub username: String,
+    #[secondary_key(unique)]
+    pub email: String,
+
+    pub password: Option<String>,
+
+    /// Scoped Access: Defines per-account permissions.
+    /// Example:
+    /// { account_id: 1, role_id: role_manager_id } -> Manager on Account 1
+    /// { account_id: 2, role_id: role_viewer_id }  -> Viewer on Account 2
+    pub account_access_map: BTreeMap<u64, u64>,
+
+    pub description: Option<String>,
+
+    /// System Roles: Permissions that apply to the whole system
+    /// (e.g., system settings, creating new users).
+    pub global_roles: Vec<u64>,
+
+    pub avatar: Option<String>,
+    pub created_at: i64,
+    pub updated_at: i64,
+    /// Optional access control settings
+    pub acl: Option<AccessControl>,
+
+    pub theme: Option<String>,
+    pub language: Option<String>,
+}
+
+impl BichonUserV2 {
+    pub async fn list_all() -> BichonResult<Vec<UserModel>> {
+        Ok(list_all_impl::<UserModel>(DB_MANAGER.meta_db()).await?)
     }
 
     async fn get_all_permissions(&self) -> HashSet<String> {
@@ -111,7 +150,7 @@ impl BichonUser {
         all_perms
     }
 
-    pub fn to_current_user(self, role_lookup: &BTreeMap<u64, UserRole>) -> UserView {
+    pub fn to_view(self, role_lookup: &BTreeMap<u64, UserRole>) -> UserView {
         let global_roles_names = self
             .global_roles
             .iter()
@@ -173,6 +212,8 @@ impl BichonUser {
             acl: self.acl,
             account_permissions,
             global_permissions,
+            theme: self.theme,
+            language: self.language,
         }
     }
 
@@ -187,12 +228,12 @@ impl BichonUser {
             // 1. Try to get the existing admin user
             let admin = rw
                 .get()
-                .primary::<BichonUser>(DEFAULT_ADMIN_USER_ID)
+                .primary::<UserModel>(DEFAULT_ADMIN_USER_ID)
                 .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;
 
             if admin.is_none() {
                 // 2. Insert the BichonUser with the updated schema
-                rw.insert(BichonUser {
+                rw.insert(UserModel {
                     id: DEFAULT_ADMIN_USER_ID,
                     username: "admin".into(),
                     email: "placeholder@example.com".into(),
@@ -209,6 +250,8 @@ impl BichonUser {
                     updated_at: now,
                     description: Some("System default administrator".into()),
                     acl: None,
+                    theme: None,
+                    language: None,
                 })
                 .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;
 
@@ -239,9 +282,9 @@ impl BichonUser {
         username: String,
         password: String,
     ) -> BichonResult<LoginResult> {
-        let user_option = secondary_find_impl::<BichonUser>(
+        let user_option = secondary_find_impl::<UserModel>(
             DB_MANAGER.meta_db(),
-            BichonUserKey::username,
+            BichonUserV2Key::username,
             username.clone(),
         )
         .await?;
@@ -249,9 +292,9 @@ impl BichonUser {
         let user = match user_option {
             Some(u) => u,
             None => {
-                match secondary_find_impl::<BichonUser>(
+                match secondary_find_impl::<UserModel>(
                     DB_MANAGER.meta_db(),
-                    BichonUserKey::email,
+                    BichonUserV2Key::email,
                     username,
                 )
                 .await?
@@ -262,6 +305,8 @@ impl BichonUser {
                             success: false,
                             error_message: Some("User or email not found.".to_string()),
                             access_token: None,
+                            theme: None,
+                            language: None,
                         });
                     }
                 }
@@ -277,6 +322,8 @@ impl BichonUser {
                         success: true,
                         error_message: None,
                         access_token: Some(new_token),
+                        theme: user.theme,
+                        language: user.language,
                     })
                 } else {
                     warn!(
@@ -287,6 +334,8 @@ impl BichonUser {
                         success: false,
                         error_message: Some("Incorrect password.".to_string()),
                         access_token: None,
+                        theme: None,
+                        language: None,
                     })
                 }
             }
@@ -304,20 +353,22 @@ impl BichonUser {
                         )
                     ),
                     access_token: None,
+                    theme: None,
+                    language: None,
                 })
             }
         }
     }
 
-    pub async fn find(user_id: u64) -> BichonResult<Option<BichonUser>> {
+    pub async fn find(user_id: u64) -> BichonResult<Option<UserModel>> {
         async_find_impl(DB_MANAGER.meta_db(), user_id).await
     }
 
     pub async fn check_username_conflict(username: &str) -> BichonResult<()> {
         // Check username duplicate
-        if secondary_find_impl::<BichonUser>(
+        if secondary_find_impl::<UserModel>(
             DB_MANAGER.meta_db(),
-            BichonUserKey::username,
+            BichonUserV2Key::username,
             username.to_string(),
         )
         .await?
@@ -334,9 +385,9 @@ impl BichonUser {
 
     pub async fn check_email_conflict(email: &str) -> BichonResult<()> {
         // Check email duplicate
-        if secondary_find_impl::<BichonUser>(
+        if secondary_find_impl::<UserModel>(
             DB_MANAGER.meta_db(),
-            BichonUserKey::email,
+            BichonUserV2Key::email,
             email.to_string(),
         )
         .await?
@@ -351,7 +402,7 @@ impl BichonUser {
         Ok(())
     }
 
-    pub async fn create(request: UserCreateRequest) -> BichonResult<BichonUser> {
+    pub async fn create(request: UserCreateRequest) -> BichonResult<UserModel> {
         request.validate().await?;
         Self::check_username_conflict(&request.username).await?;
         Self::check_email_conflict(&request.email).await?;
@@ -359,7 +410,7 @@ impl BichonUser {
         let password_hash = Some(encrypt!(&request.password)?);
         let now = utc_now!();
 
-        let user = BichonUser {
+        let user = UserModel {
             id: id!(96),
             username: request.username,
             email: request.email,
@@ -371,6 +422,8 @@ impl BichonUser {
             created_at: now,
             updated_at: now,
             account_access_map: request.account_access_map,
+            theme: request.theme,
+            language: request.language,
         };
 
         let user_clone = user.clone();
@@ -454,9 +507,9 @@ impl BichonUser {
         }
 
         if let Some(username) = &request.username {
-            let user_option = secondary_find_impl::<BichonUser>(
+            let user_option = secondary_find_impl::<UserModel>(
                 DB_MANAGER.meta_db(),
-                BichonUserKey::username,
+                BichonUserV2Key::username,
                 username.to_string(),
             )
             .await?;
@@ -472,9 +525,9 @@ impl BichonUser {
         }
 
         if let Some(email) = &request.email {
-            let user_option = secondary_find_impl::<BichonUser>(
+            let user_option = secondary_find_impl::<UserModel>(
                 DB_MANAGER.meta_db(),
-                BichonUserKey::email,
+                BichonUserV2Key::email,
                 email.to_string(),
             )
             .await?;
@@ -493,7 +546,7 @@ impl BichonUser {
             DB_MANAGER.meta_db(),
             move |rw| {
                 rw.get()
-                    .primary::<BichonUser>(id)
+                    .primary::<UserModel>(id)
                     .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?
                     .ok_or_else(|| {
                         raise_error!(
@@ -532,6 +585,15 @@ impl BichonUser {
                 if let Some(avatar_base64) = request.avatar_base64 {
                     updated.avatar = Some(avatar_base64);
                 }
+
+                if let Some(theme) = request.theme {
+                    updated.theme = Some(theme);
+                }
+
+                if let Some(language) = request.language {
+                    updated.language = Some(language);
+                }
+
                 updated.updated_at = utc_now!();
 
                 Ok(updated)
@@ -542,13 +604,13 @@ impl BichonUser {
         if password_changed {
             AccessTokenModel::reset_webui_token(id).await?;
         }
-        
+
         Ok(())
     }
 
-    async fn list_authorized_users(account_id: u64) -> BichonResult<Vec<BichonUser>> {
+    async fn list_authorized_users(account_id: u64) -> BichonResult<Vec<UserModel>> {
         let all = Self::list_all().await?;
-        let result: Vec<BichonUser> = all
+        let result: Vec<UserModel> = all
             .into_iter()
             .filter(|e| e.account_access_map.contains_key(&account_id))
             .collect();
@@ -566,7 +628,7 @@ impl BichonUser {
             for user in users {
                 let current = rw
                     .get()
-                    .primary::<BichonUser>(user.id)
+                    .primary::<UserModel>(user.id)
                     .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?
                     .ok_or_else(|| {
                         raise_error!(
@@ -588,5 +650,43 @@ impl BichonUser {
         .await?;
 
         Ok(())
+    }
+}
+
+impl From<BichonUserV2> for BichonUser {
+    fn from(value: BichonUserV2) -> Self {
+        BichonUser {
+            id: value.id,
+            username: value.username,
+            email: value.email,
+            password: value.password,
+            account_access_map: value.account_access_map,
+            description: value.description,
+            global_roles: value.global_roles,
+            avatar: value.avatar,
+            created_at: value.created_at,
+            updated_at: value.updated_at,
+            acl: value.acl,
+        }
+    }
+}
+
+impl From<BichonUser> for BichonUserV2 {
+    fn from(value: BichonUser) -> Self {
+        BichonUserV2 {
+            id: value.id,
+            username: value.username,
+            email: value.email,
+            password: value.password,
+            account_access_map: value.account_access_map,
+            description: value.description,
+            global_roles: value.global_roles,
+            avatar: value.avatar,
+            created_at: value.created_at,
+            updated_at: value.updated_at,
+            acl: value.acl,
+            theme: None,
+            language: None,
+        }
     }
 }

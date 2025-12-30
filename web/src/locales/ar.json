@@ -718,6 +718,31 @@
         "interval": "الفاصل الزمني"
     },
     "settings": {
+        "appearance": {
+            "title": "المظهر",
+            "field": {
+                "language": "لغة الواجهة",
+                "theme": "سمة الواجهة"
+            },
+            "description": {
+                "language": "اختر اللغة المستخدمة في واجهة الويب.",
+                "theme": "اختر بين الوضع الفاتح أو الداكن."
+            },
+            "placeholder": {
+                "select_language": "اختر اللغة"
+            },
+            "command": {
+                "search": "بحث عن لغة...",
+                "no_results": "لم يتم العثور على لغة."
+            },
+            "theme": {
+                "light": "فاتح",
+                "dark": "داكن"
+            },
+            "button": {
+                "update": "تحديث التفضيلات"
+            }
+        },
         "title": "الإعدادات",
         "general": "عام",
         "proxy": "وكيل",

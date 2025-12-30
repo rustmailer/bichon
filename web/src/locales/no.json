@@ -718,6 +718,39 @@
         "interval": "Intervall"
     },
     "settings": {
+        "appearance": {
+            "title": "Utseende",
+            "field": {
+                "language": "Grensesnittspråk",
+                "theme": "Grensesnittema"
+            },
+            "description": {
+                "language": "Velg språket som skal brukes i webgrensesnittet.",
+                "theme": "Velg mellom lys eller mørk modus for grensesnittet."
+            },
+            "placeholder": {
+                "select_language": "Velg språk"
+            },
+            "command": {
+                "search": "Søk etter språk...",
+                "no_results": "Fant ingen språk."
+            },
+            "theme": {
+                "light": "Lys",
+                "dark": "Mørk"
+            },
+            "button": {
+                "update": "Oppdater innstillinger"
+            },
+            "validation": {
+                "language": {
+                    "required": "Vennligst velg et språk."
+                },
+                "theme": {
+                    "required": "Vennligst velg et tema."
+                }
+            }
+        },
         "title": "Innstillinger",
         "general": "Generelt",
         "proxy": "Proxy",

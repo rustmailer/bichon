@@ -711,6 +711,39 @@
         "interval": "間隔"
     },
     "settings": {
+        "appearance": {
+            "title": "外觀設置",
+            "field": {
+                "language": "介面语言",
+                "theme": "介面主題"
+            },
+            "description": {
+                "language": "選擇網頁介面顯示的语言。",
+                "theme": "為介面選擇淺色或深色顯示模式。"
+            },
+            "placeholder": {
+                "select_language": "選擇語言"
+            },
+            "command": {
+                "search": "搜尋語言...",
+                "no_results": "未找到相關語言。"
+            },
+            "theme": {
+                "light": "淺色",
+                "dark": "深色"
+            },
+            "button": {
+                "update": "更新偏好設置"
+            },
+            "validation": {
+                "language": {
+                    "required": "請選擇一種語言。"
+                },
+                "theme": {
+                    "required": "請選擇一個主題。"
+                }
+            }
+        },
         "title": "設定",
         "general": "一般",
         "proxy": "代理",

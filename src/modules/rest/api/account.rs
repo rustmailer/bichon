@@ -32,7 +32,7 @@ use crate::modules::rest::api::ApiTags;
 use crate::modules::rest::response::DataPage;
 use crate::modules::rest::ApiResult;
 use crate::modules::users::permissions::Permission;
-use crate::modules::users::BichonUser;
+use crate::modules::users::UserModel;
 use crate::raise_error;
 use poem_openapi::param::{Path, Query};
 use poem_openapi::payload::Json;
@@ -131,7 +131,7 @@ impl AccountApi {
         let is_admin = context.user.is_admin().await;
         let sort_desc = desc.0.unwrap_or(true);
 
-        let user_map: HashMap<u64, BichonUser> = BichonUser::list_all()
+        let user_map: HashMap<u64, UserModel> = UserModel::list_all()
             .await?
             .into_iter()
             .map(|u| (u.id, u))

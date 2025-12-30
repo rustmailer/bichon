@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::modules::users::BichonUser;
+use crate::modules::users::UserModel;
 use poem::{handler, web::Json, IntoResponse, Response};
 use serde::Deserialize;
 use tracing::error;
@@ -34,7 +34,7 @@ pub struct LoginPayload {
 #[handler]
 pub async fn login(payload: Json<LoginPayload>) -> Response {
     let payload = payload.0;
-    match BichonUser::authenticate_user(payload.username, payload.password).await {
+    match UserModel::authenticate_user(payload.username, payload.password).await {
         Ok(result) => match serde_json::to_string(&result) {
             Ok(json_string) => Response::builder()
                 .status(http::StatusCode::OK)

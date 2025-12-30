@@ -36,7 +36,7 @@ use crate::{
         database::{list_all_impl, with_transaction},
         error::BichonResult,
         indexer::manager::{EML_INDEX_MANAGER, ENVELOPE_INDEX_MANAGER},
-        users::{role::DEFAULT_ACCOUNT_MANAGER_ROLE_ID, BichonUser, DEFAULT_ADMIN_USER_ID},
+        users::{role::DEFAULT_ACCOUNT_MANAGER_ROLE_ID, UserModel, DEFAULT_ADMIN_USER_ID},
     },
     utc_now,
 };
@@ -238,7 +238,7 @@ impl AccountV3 {
                 .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;
             let user = rw
                 .get()
-                .primary::<BichonUser>(user_id)
+                .primary::<UserModel>(user_id)
                 .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?
                 .ok_or_else(|| {
                     raise_error!(
@@ -312,7 +312,7 @@ impl AccountV3 {
             MAIL_CONTEXT.clean_account(account.id).await?;
         }
         OAuth2AccessToken::try_delete(account.id).await?;
-        BichonUser::cleanup_account(account.id).await?;
+        UserModel::cleanup_account(account.id).await?;
         MailBox::clean(account.id).await?;
         ENVELOPE_INDEX_MANAGER
             .delete_account_envelopes(account.id)

@@ -718,6 +718,39 @@
     "interval": "间隔"
   },
   "settings": {
+    "appearance": {
+      "title": "外观设置",
+      "field": {
+        "language": "语言",
+        "theme": "界面主题"
+      },
+      "description": {
+        "language": "选择 Web 界面显示的语言。",
+        "theme": "为界面选择浅色或深色显示模式。"
+      },
+      "placeholder": {
+        "select_language": "选择语言"
+      },
+      "command": {
+        "search": "搜索语言...",
+        "no_results": "未找到相关语言。"
+      },
+      "theme": {
+        "light": "浅色",
+        "dark": "深色"
+      },
+      "button": {
+        "update": "更新偏好设置"
+      },
+      "validation": {
+        "language": {
+          "required": "请选择一种语言。"
+        },
+        "theme": {
+          "required": "请选择一个主题。"
+        }
+      }
+    },
     "title": "设置",
     "general": "常规",
     "proxy": "网络代理",

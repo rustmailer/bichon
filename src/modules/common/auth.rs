@@ -20,7 +20,7 @@ use crate::{
     modules::{
         error::{code::ErrorCode, BichonResult},
         token::AccessTokenModel,
-        users::{permissions::Permission, role::UserRole, BichonUser},
+        users::{permissions::Permission, role::UserRole, UserModel},
         utils::rate_limit::RATE_LIMITER_MANAGER,
     },
     raise_error,
@@ -74,7 +74,7 @@ impl<E: Endpoint> Endpoint for ApiGuardEndpoint<E> {
 #[derive(Clone, Debug)]
 pub struct ClientContext {
     pub ip_addr: Option<IpAddr>,
-    pub user: BichonUser,
+    pub user: UserModel,
 }
 
 impl ClientContext {

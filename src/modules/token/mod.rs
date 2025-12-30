@@ -26,7 +26,7 @@ use crate::modules::database::{
 use crate::modules::database::{insert_impl, list_all_impl, update_impl};
 use crate::modules::settings::cli::SETTINGS;
 use crate::modules::token::view::AccessTokenResp;
-use crate::modules::users::BichonUser;
+use crate::modules::users::UserModel;
 use crate::raise_error;
 use crate::{
     generate_token, modules::error::BichonResult,
@@ -180,7 +180,7 @@ impl AccessTokenModel {
             .collect())
     }
 
-    pub async fn resolve_user_from_token(token: &str) -> BichonResult<BichonUser> {
+    pub async fn resolve_user_from_token(token: &str) -> BichonResult<UserModel> {
         let token = token.to_string();
         let token_option = async_find_impl::<AccessTokenModel>(DB_MANAGER.meta_db(), token).await?;
         let token = match token_option {
@@ -237,7 +237,7 @@ impl AccessTokenModel {
             .await?;
         }
 
-        let user = BichonUser::find(token.user_id)
+        let user = UserModel::find(token.user_id)
             .await?
             .ok_or_else(|| raise_error!("The user associated with this access token does not exist or may have been deleted.".into(), ErrorCode::ResourceNotFound))?;
         Ok(user)
@@ -287,11 +287,11 @@ impl AccessTokenModel {
     }
 
     pub async fn list_all_api_tokens() -> BichonResult<Vec<AccessTokenResp>> {
-        let users = BichonUser::list_all().await?;
+        let users = UserModel::list_all().await?;
         let mut all = list_all_impl::<AccessTokenModel>(DB_MANAGER.meta_db()).await?;
 
         all.retain(|t| t.token_type == TokenType::Api);
-        let user_map: HashMap<u64, BichonUser> = users.into_iter().map(|u| (u.id, u)).collect();
+        let user_map: HashMap<u64, UserModel> = users.into_iter().map(|u| (u.id, u)).collect();
 
         let resp = all
             .into_iter()

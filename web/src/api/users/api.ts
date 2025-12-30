@@ -14,33 +14,33 @@ export interface UserRole {
 }
 
 export function getPermissions(t: (key: string) => string) {
-  return [
-    // 1. Global Management
-    { label: t('permission.system.access'), value: 'system:access' },
-    { label: t('permission.system.root'), value: 'system:root' },
-    { label: t('permission.user.manage'), value: 'user:manage' },
-    { label: t('permission.user.view'), value: 'user:view' },
-    { label: t('permission.token.manage'), value: 'token:manage' },
-    { label: t('permission.account.create'), value: 'account:create' },
+    return [
+        // 1. Global Management
+        { label: t('permission.system.access'), value: 'system:access' },
+        { label: t('permission.system.root'), value: 'system:root' },
+        { label: t('permission.user.manage'), value: 'user:manage' },
+        { label: t('permission.user.view'), value: 'user:view' },
+        { label: t('permission.token.manage'), value: 'token:manage' },
+        { label: t('permission.account.create'), value: 'account:create' },
 
-    // 2. Global "ALL" Scoped (Admin)
-    { label: t('permission.account.manage_all'), value: 'account:manage:all' },
-    { label: t('permission.data.read_all'), value: 'data:read:all' },
-    { label: t('permission.data.manage_all'), value: 'data:manage:all' },
-    { label: t('permission.data.raw_download_all'), value: 'data:raw:download:all' },
-    { label: t('permission.data.delete_all'), value: 'data:delete:all' },
-    { label: t('permission.data.export_batch_all'), value: 'data:export:batch:all' },
+        // 2. Global "ALL" Scoped (Admin)
+        { label: t('permission.account.manage_all'), value: 'account:manage:all' },
+        { label: t('permission.data.read_all'), value: 'data:read:all' },
+        { label: t('permission.data.manage_all'), value: 'data:manage:all' },
+        { label: t('permission.data.raw_download_all'), value: 'data:raw:download:all' },
+        { label: t('permission.data.delete_all'), value: 'data:delete:all' },
+        { label: t('permission.data.export_batch_all'), value: 'data:export:batch:all' },
 
-    // 3. Scoped / Limited
-    { label: t('permission.account.manage'), value: 'account:manage' },
-    { label: t('permission.account.read_details'), value: 'account:read_details' },
-    { label: t('permission.data.read'), value: 'data:read' },
-    { label: t('permission.data.manage'), value: 'data:manage' },
-    { label: t('permission.data.raw_download'), value: 'data:raw:download' },
-    { label: t('permission.data.delete'), value: 'data:delete' },
-    { label: t('permission.data.export_batch'), value: 'data:export:batch' },
-    { label: t('permission.data.import_batch'), value: 'data:import:batch' },
-  ]
+        // 3. Scoped / Limited
+        { label: t('permission.account.manage'), value: 'account:manage' },
+        { label: t('permission.account.read_details'), value: 'account:read_details' },
+        { label: t('permission.data.read'), value: 'data:read' },
+        { label: t('permission.data.manage'), value: 'data:manage' },
+        { label: t('permission.data.raw_download'), value: 'data:raw:download' },
+        { label: t('permission.data.delete'), value: 'data:delete' },
+        { label: t('permission.data.export_batch'), value: 'data:export:batch' },
+        { label: t('permission.data.import_batch'), value: 'data:import:batch' },
+    ]
 }
 
 export interface RateLimit {
@@ -85,10 +85,16 @@ export interface User {
     created_at: number;
     updated_at: number;
 }
+
+type Theme = 'dark' | 'light'
+
+
 export interface LoginResult {
     success: boolean;
     error_message?: string | null;
     access_token?: string | null;
+    theme?: Theme,
+    language?: string,
 }
 
 
