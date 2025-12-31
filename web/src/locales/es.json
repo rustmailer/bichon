@@ -1439,5 +1439,15 @@
         "title": "Cerrar sesión",
         "desc": "¿Está seguro de que desea cerrar sesión? Necesitará iniciar sesión nuevamente para acceder a su cuenta.",
         "confirm": "Cerrar sesión"
+    },
+    "restore_message": {
+        "title": "Restaurar mensajes",
+        "desc": "Esta acción volverá a cargar los mensajes seleccionados de Bichon y los restaurará en sus carpetas correspondientes en el servidor IMAP.",
+        "confirm": "Restaurar",
+        "restore_to_imap": "Restaurar correo",
+        "success": "Mensajes restaurados",
+        "successDesc": "Los mensajes seleccionados se han restaurado correctamente en el servidor IMAP.",
+        "failed": "Error al restaurar los mensajes",
+        "failedTitle": "Error de restauración"
     }
 }

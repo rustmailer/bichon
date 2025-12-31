@@ -20,7 +20,7 @@
 import React from 'react'
 import { EmailEnvelope } from '@/api'
 
-export type SearchDialogType = 'mailbox' | 'display' | 'delete' | 'filters' | 'tags' | 'edit-tags' | 'search-form'
+export type SearchDialogType = 'mailbox' | 'display' | 'delete' | 'filters' | 'tags' | 'edit-tags' | 'search-form' | 'restore'
 
 interface SearchContextType {
   open: SearchDialogType | null

@@ -21,7 +21,7 @@ import React from 'react'
 import { MailboxData } from '@/api/mailbox/api'
 import { EmailEnvelope } from '@/api'
 
-export type MailboxDialogType = 'mailbox' | 'display' | 'move-to-trash' | 'filters'
+export type MailboxDialogType = 'mailbox' | 'display' | 'move-to-trash' | 'filters' | 'restore'
 
 interface MailboxContextType {
   open: MailboxDialogType | null

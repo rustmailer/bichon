@@ -25,18 +25,17 @@ import { useState, useEffect } from 'react';
 import { useAvailableTags } from '@/hooks/use-available-tags';
 import { useUpdateTags } from '@/hooks/use-update-tags';
 import { toast } from '@/hooks/use-toast';
-import { EmailEnvelope } from '@/api';
 import { validateTag } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
+import { useSearchContext } from './context';
 
 interface Props {
     open: boolean
     onOpenChange: (open: boolean) => void
-    currentEnvelope: EmailEnvelope | undefined
 }
 
-export function EditTagsDialog({ open, onOpenChange, currentEnvelope }: Props) {
+export function EditTagsDialog({ open, onOpenChange }: Props) {
     const { tags: availableTags } = useAvailableTags();
     const queryClient = useQueryClient();
     const { mutate, isPending } = useUpdateTags();
@@ -44,6 +43,8 @@ export function EditTagsDialog({ open, onOpenChange, currentEnvelope }: Props) {
     const [inputValue, setInputValue] = useState('');
     const [commandOpen, setCommandOpen] = useState(false);
     const { t } = useTranslation();
+
+    const { currentEnvelope } = useSearchContext()
 
     useEffect(() => {
         if (open && currentEnvelope) {

@@ -1439,5 +1439,15 @@
     "title": "退出登录",
     "desc": "您确定要退出登录吗？您需要重新登录才能访问账户。",
     "confirm": "退出登录"
+  },
+  "restore_message": {
+    "title": "还原邮件",
+    "desc": "此操作将把选定的邮件从 Bichon 系统重新上传并恢复到其在 IMAP 服务器上对应的邮箱中。",
+    "confirm": "执行还原",
+    "restore_to_imap": "还原邮件",
+    "success": "邮件还原成功",
+    "successDesc": "选定的邮件已成功恢复到 IMAP 服务器。",
+    "failed": "还原邮件失败",
+    "failedTitle": "还原失败"
   }
 }

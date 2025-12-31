@@ -1439,5 +1439,15 @@
         "title": "Logg ut",
         "desc": "Er du sikker på at du vil logge ut? Du må logge inn igjen for å få tilgang til kontoen din.",
         "confirm": "Logg ut"
+    },
+    "restore_message": {
+        "title": "Gjenopprett meldinger",
+        "desc": "Denne handlingen vil laste opp de valgte meldingene fra Bichon og gjenopprette dem til deres tilsvarende postbokser på IMAP-serveren.",
+        "confirm": "Gjenopprett",
+        "restore_to_imap": "Gjenopprett e-post",
+        "success": "Meldinger gjenopprettet",
+        "successDesc": "De valgte meldingene har blitt gjenopprettet til IMAP-serveren.",
+        "failed": "Kunne ikke gjenopprette meldinger",
+        "failedTitle": "Gjenoppretting mislyktes"
     }
 }

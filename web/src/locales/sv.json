@@ -1439,5 +1439,15 @@
         "title": "Logga ut",
         "desc": "Är du säker på att du vill logga ut? Du måste logga in igen för att få åtkomst till ditt konto.",
         "confirm": "Logga ut"
+    },
+    "restore_message": {
+        "title": "Återställ meddelanden",
+        "desc": "Denna åtgärd kommer att ladda upp de valda meddelandena från Bichon och återställa dem till deras motsvarande brevlådor på IMAP-servern.",
+        "confirm": "Återställ",
+        "restore_to_imap": "Återställ e-post",
+        "success": "Meddelanden återställda",
+        "successDesc": "De valda meddelandena har återställts till IMAP-servern.",
+        "failed": "Misslyckades med att återställa meddelanden",
+        "failedTitle": "Återställning misslyckades"
     }
 }

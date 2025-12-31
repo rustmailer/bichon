@@ -1439,5 +1439,15 @@
         "title": "Kirjaudu ulos",
         "desc": "Haluatko varmasti kirjautua ulos? Sinun täytyy kirjautua uudelleen päästäksesi tilillesi.",
         "confirm": "Kirjaudu ulos"
+    },
+    "restore_message": {
+        "title": "Palauta viestit",
+        "desc": "Tämä toiminto lataa valitut viestit Bichonista ja palauttaa ne vastaaviin postilaatikoihin IMAP-palvelimella.",
+        "confirm": "Palauta",
+        "restore_to_imap": "Palauta sähköposti",
+        "success": "Viestit palautettu",
+        "successDesc": "Valitut viestit on palautettu onnistuneesti IMAP-palvelimelle.",
+        "failed": "Viestien palautus epäonnistui",
+        "failedTitle": "Palautus epäonnistui"
     }
 }

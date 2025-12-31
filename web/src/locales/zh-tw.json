@@ -1439,5 +1439,15 @@
         "title": "登出",
         "desc": "您確定要登出嗎？您需要重新登入才能存取帳戶。",
         "confirm": "登出"
+    },
+    "restore_message": {
+        "title": "還原郵件",
+        "desc": "此操作將把選定的郵件從 Bichon 系統重新上傳並還原到其在 IMAP 伺服器上對應的信箱中。",
+        "confirm": "執行還原",
+        "restore_to_imap": "還原郵件",
+        "success": "郵件還原成功",
+        "successDesc": "選定的郵件已成功還原到 IMAP 伺服器。",
+        "failed": "還原郵件失敗",
+        "failedTitle": "還原失敗"
     }
 }

@@ -1439,5 +1439,15 @@
         "title": "Disconnetti",
         "desc": "Sei sicuro di voler disconnetterti? Dovrai accedere di nuovo per usare il tuo account.",
         "confirm": "Disconnetti"
+    },
+    "restore_message": {
+        "title": "Ripristina messaggi",
+        "desc": "Questa azione caricherà i messaggi selezionati da Bichon e li ripristinerà nelle rispettive caselle di posta sul server IMAP.",
+        "confirm": "Ripristina",
+        "restore_to_imap": "Ripristina posta",
+        "success": "Messaggi ripristinati",
+        "successDesc": "I messaggi selezionati sono stati ripristinati con successo sul server IMAP.",
+        "failed": "Impossibile ripristinare i messaggi",
+        "failedTitle": "Ripristino fallito"
     }
 }

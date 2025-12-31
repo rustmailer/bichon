@@ -1439,5 +1439,15 @@
         "title": "Déconnexion",
         "desc": "Êtes-vous sûr de vouloir vous déconnecter ? Vous devrez vous reconnecter pour accéder à votre compte.",
         "confirm": "Déconnexion"
+    },
+    "restore_message": {
+        "title": "Restaurer les messages",
+        "desc": "Cette action téléchargera les messages sélectionnés depuis Bichon et les restaurera dans leurs boîtes aux lettres correspondantes sur le serveur IMAP.",
+        "confirm": "Restaurer",
+        "restore_to_imap": "Restaurer le courrier",
+        "success": "Messages restaurés",
+        "successDesc": "Les messages sélectionnés ont été restaurés avec succès sur le serveur IMAP.",
+        "failed": "Échec de la restauration des messages",
+        "failedTitle": "Échec de la restauration"
     }
 }

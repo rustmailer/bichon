@@ -50,6 +50,7 @@ import { animated, useSpring } from "@react-spring/web"
 import { TransitionProps } from "@mui/material/transitions"
 import Collapse from "@mui/material/Collapse"
 import { FolderIcon } from "lucide-react"
+import { RestoreMessageDialog } from "./restore-message-dialog"
 
 
 interface MailProps {
@@ -402,6 +403,13 @@ export function Mail({
                 open={open === 'move-to-trash'}
                 onOpenChange={() => setOpen('move-to-trash')}
             />
+
+            <RestoreMessageDialog
+                key='envelope-restore'
+                open={open === 'restore'}
+                onOpenChange={() => setOpen('restore')}
+            />
+
         </MailboxProvider >
     )
 }

@@ -1439,5 +1439,15 @@
         "title": "Sair",
         "desc": "Tem certeza de que deseja sair? Você precisará entrar novamente para acessar sua conta.",
         "confirm": "Sair"
+    },
+    "restore_message": {
+        "title": "Restaurar mensagens",
+        "desc": "Esta ação irá carregar as mensagens selecionadas do Bichon e restaurá-las nas respetivas caixas de correio no servidor IMAP.",
+        "confirm": "Restaurar",
+        "restore_to_imap": "Restaurar e-mail",
+        "success": "Mensagens restauradas",
+        "successDesc": "As mensagens selecionadas foram restauradas com sucesso para o servidor IMAP.",
+        "failed": "Falha ao restaurar mensagens",
+        "failedTitle": "Falha na restauração"
     }
 }

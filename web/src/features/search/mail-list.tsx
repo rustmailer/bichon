@@ -243,7 +243,17 @@ export function MailList({
                                             <TagIcon className="ml-2 h-3.5 w-3.5" />
                                             {t('search.editTag')}
                                         </DropdownMenuItem>
-
+                                        <DropdownMenuItem
+                                            onClick={(e) => e.stopPropagation()}
+                                            onSelect={(e) => {
+                                                e.stopPropagation();
+                                                setCurrentEnvelope(item);
+                                                setOpen("restore");
+                                            }}
+                                        >
+                                            <TagIcon className="ml-2 h-3.5 w-3.5" />
+                                            {t('restore_message.restore_to_imap', 'Restore Mail')}
+                                        </DropdownMenuItem>
                                         <DropdownMenuItem
                                             className="text-destructive focus:text-destructive"
                                             onClick={(e) => e.stopPropagation()}

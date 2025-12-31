@@ -38,6 +38,7 @@ import { EnvelopeTags } from './tag-facet';
 import { EditTagsDialog } from './add-tag-dialog';
 import { useTranslation } from 'react-i18next';
 import Logo from '@/assets/logo.svg'
+import { RestoreMessageDialog } from './restore-message-dialog';
 
 export default function Search() {
   const { t } = useTranslation()
@@ -187,7 +188,7 @@ export default function Search() {
           <EditTagsDialog
             key='edit-tags-dialog'
             open={open === 'edit-tags'}
-            onOpenChange={() => setOpen('edit-tags')} currentEnvelope={selectedEnvelope}
+            onOpenChange={() => setOpen('edit-tags')}
           />
 
           <SearchFormDialog
@@ -195,6 +196,12 @@ export default function Search() {
             onSubmit={onSubmit} isLoading={isLoading || isFetching} reset={handleReset}
             open={open === 'search-form'}
             onOpenChange={() => setOpen('search-form')}
+          />
+
+          <RestoreMessageDialog
+            key='restore-mail-dialog'
+            open={open === 'restore'}
+            onOpenChange={() => setOpen('restore')}
           />
         </SearchProvider>
       </Main>

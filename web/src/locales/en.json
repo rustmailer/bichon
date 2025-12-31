@@ -1439,5 +1439,15 @@
     "title": "Sign out",
     "desc": "Are you sure you want to sign out? You will need to sign in again to access your account.",
     "confirm": "Sign out"
+  },
+  "restore_message": {
+    "title": "Restore Messages",
+    "desc": "This action will append the selected messages from Bichon back to their corresponding mailboxes on the IMAP server.",
+    "confirm": "Restore",
+    "restore_to_imap": "Restore Mail",
+    "success": "Messages Restored",
+    "successDesc": "The selected messages have been successfully restored to the IMAP server.",
+    "failed": "Failed to restore messages",
+    "failedTitle": "Restore Failed"
   }
 }

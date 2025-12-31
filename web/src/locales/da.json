@@ -1439,5 +1439,15 @@
         "title": "Log ud",
         "desc": "Er du sikker på, at du vil logge ud? Du skal logge ind igen for at få adgang til din konto.",
         "confirm": "Log ud"
+    },
+    "restore_message": {
+        "title": "Gendan meddelelser",
+        "desc": "Denne handling vil uploade de valgte meddelelser fra Bichon og gendanne dem til deres tilsvarende postkasser på IMAP-serveren.",
+        "confirm": "Gendan",
+        "restore_to_imap": "Gendan e-mail",
+        "success": "Meddelelser gendannet",
+        "successDesc": "De valgte meddelelser er blevet gendannet til IMAP-serveren.",
+        "failed": "Kunne ikke gendanne meddelelser",
+        "failedTitle": "Gendannelse mislykkedes"
     }
 }

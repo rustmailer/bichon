@@ -1439,5 +1439,15 @@
         "title": "로그아웃",
         "desc": "로그아웃하시겠습니까? 계정에 접근하려면 다시 로그인해야 합니다.",
         "confirm": "로그아웃"
+    },
+    "restore_message": {
+        "title": "메시지 복원",
+        "desc": "이 작업은 선택한 메시지를 Bichon에서 다시 업로드하여 IMAP 서버의 해당 사서함으로 복원합니다.",
+        "confirm": "복원 실행",
+        "restore_to_imap": "메일 복원",
+        "success": "메시지 복원 완료",
+        "successDesc": "선택한 메시지가 IMAP 서버로 성공적으로 복원되었습니다.",
+        "failed": "메시지 복원 실패",
+        "failedTitle": "복원 실패"
     }
 }

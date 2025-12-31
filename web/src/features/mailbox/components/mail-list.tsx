@@ -19,7 +19,7 @@
 
 import { cn, dateFnsLocaleMap, formatBytes } from "@/lib/utils"
 import { formatDistanceToNow } from "date-fns"
-import { MailIcon, Paperclip, Trash2 } from "lucide-react"
+import { MailIcon, MoreVertical, Paperclip, TagIcon, Trash2 } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { EmailEnvelope } from "@/api"
 import { useMailboxContext } from "../context"
@@ -28,6 +28,8 @@ import { MailBulkActions } from "./bulk-actions"
 import { Badge } from "@/components/ui/badge"
 import { useTranslation } from 'react-i18next'
 import { enUS } from "date-fns/locale"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Button } from "@/components/ui/button"
 
 interface MailListProps {
     items: EmailEnvelope[]
@@ -179,15 +181,44 @@ export function MailList({
                                     {item.date && formatDistanceToNow(new Date(item.date), { addSuffix: true, locale })}
                                 </span>
 
-                                <button
-                                    onClick={(e) => {
-                                        e.stopPropagation()
-                                        handleDelete(item)
-                                    }}
-                                    className="p-1 rounded hover:bg-destructive/10 hover:text-destructive transition-all"
-                                >
-                                    <Trash2 className="h-3 w-3" />
-                                </button>
+
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-6 w-6 p-0 hover:bg-muted rounded-md"
+                                            onClick={(e) => e.stopPropagation()}
+                                        >
+                                            <MoreVertical className="h-3 w-3" />
+                                        </Button>
+                                    </DropdownMenuTrigger>
+
+                                    <DropdownMenuContent align="end" className="w-44">
+                                        <DropdownMenuItem
+                                            onClick={(e) => e.stopPropagation()}
+                                            onSelect={(e) => {
+                                                e.stopPropagation();
+                                                setSelected(new Set([item.id]));
+                                                setOpen("restore");
+                                            }}
+                                        >
+                                            <TagIcon className="ml-2 h-3.5 w-3.5" />
+                                            {t('restore_message.restore_to_imap', 'Restore Mail')}
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                            className="text-destructive focus:text-destructive"
+                                            onClick={(e) => e.stopPropagation()}
+                                            onSelect={(e) => {
+                                                e.stopPropagation();
+                                                handleDelete(item);
+                                            }}
+                                        >
+                                            <Trash2 className="ml-2 h-3.5 w-3.5" />
+                                            {t('common.delete')}
+                                        </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
                             </div>
                         </div>
                     </div>

@@ -1439,5 +1439,15 @@
         "title": "Abmelden",
         "desc": "Möchten Sie sich wirklich abmelden? Sie müssen sich erneut anmelden, um auf Ihr Konto zuzugreifen.",
         "confirm": "Abmelden"
+    },
+    "restore_message": {
+        "title": "Nachrichten wiederherstellen",
+        "desc": "Diese Aktion lädt die ausgewählten Nachrichten von Bichon hoch und stellt sie in den entsprechenden Postfächern auf dem IMAP-Server wieder her.",
+        "confirm": "Wiederherstellen",
+        "restore_to_imap": "E-Mail wiederherstellen",
+        "success": "Nachrichten wiederhergestellt",
+        "successDesc": "Die ausgewählten Nachrichten wurden erfolgreich auf dem IMAP-Server wiederhergestellt.",
+        "failed": "Wiederherstellung fehlgeschlagen",
+        "failedTitle": "Fehler bei der Wiederherstellung"
     }
 }

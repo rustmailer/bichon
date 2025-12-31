@@ -21,6 +21,8 @@ use crate::modules::common::auth::ClientContext;
 use crate::modules::indexer::envelope::Envelope;
 use crate::modules::indexer::manager::EML_INDEX_MANAGER;
 use crate::modules::indexer::manager::ENVELOPE_INDEX_MANAGER;
+use crate::modules::message::append::restore_emails;
+use crate::modules::message::append::RestoreMessagesRequest;
 use crate::modules::message::content::{retrieve_email_content, FullMessageContent};
 use crate::modules::message::delete::delete_messages_impl;
 use crate::modules::message::list::{get_thread_messages, list_messages_impl};
@@ -225,6 +227,25 @@ impl MessageApi {
             .attachment_type(AttachmentType::Attachment)
             .filename(format!("{message_id}.eml"));
         Ok(attachment)
+    }
+
+    #[oai(
+        path = "/restore-messages/:account_id",
+        method = "post",
+        operation_id = "restore_messages"
+    )]
+    async fn restore_messages(
+        &self,
+        account_id: Path<u64>,
+        /// Message IDs to restore.
+        payload: Json<RestoreMessagesRequest>,
+        context: ClientContext,
+    ) -> ApiResult<()> {
+        let account_id = account_id.0;
+        context
+            .require_permission(Some(account_id), Permission::DATA_EXPORT_BATCH)
+            .await?;
+        Ok(restore_emails(account_id, payload.0.message_ids).await?)
     }
 
     /// Downloads a specific attachment from an email. Requires `name` query parameter.

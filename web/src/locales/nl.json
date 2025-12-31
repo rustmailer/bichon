@@ -1439,5 +1439,15 @@
         "title": "Uitloggen",
         "desc": "Weet je zeker dat je wilt uitloggen? Je moet opnieuw inloggen om toegang te krijgen tot je account.",
         "confirm": "Uitloggen"
+    },
+    "restore_message": {
+        "title": "Berichten herstellen",
+        "desc": "Deze actie uploadt de geselecteerde berichten van Bichon en herstelt ze in de bijbehorende mailboxen op de IMAP-server.",
+        "confirm": "Herstellen",
+        "restore_to_imap": "E-mail herstellen",
+        "success": "Berichten hersteld",
+        "successDesc": "De geselecteerde berichten zijn succesvol hersteld op de IMAP-server.",
+        "failed": "Herstellen van berichten mislukt",
+        "failedTitle": "Herstel mislukt"
     }
 }

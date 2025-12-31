@@ -97,3 +97,12 @@ export const download_message = async (accountId: number, id: number) => {
     const blob = new Blob([response.data]);
     saveAs(blob, `${id}.eml`);
 };
+
+
+
+export const restore_message = async (accountId: number, messageIds: number[]) => {
+    const response = await axiosInstance.post(`/api/v1/restore-messages/${accountId}`, {
+        message_ids: messageIds,
+    });
+    return response.data;
+};

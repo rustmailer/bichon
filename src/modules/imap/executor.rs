@@ -79,12 +79,26 @@ impl ImapExecutor {
         Ok(result)
     }
 
+    pub async fn append(
+        &self,
+        mailbox_name: impl AsRef<str>,
+        flags: Option<&str>,
+        internaldate: Option<&str>,
+        content: impl AsRef<[u8]>,
+    ) -> BichonResult<()> {
+        let mut session = self.get_connection().await?;
+        session
+            .append(mailbox_name, flags, internaldate, content)
+            .await
+            .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::ImapCommandFailed))
+    }
+
     pub async fn fetch_new_mail(
         &self,
         account: &AccountModel,
         mailbox: &MailBox,
         start_uid: u64,
-        before: Option<&str>
+        before: Option<&str>,
     ) -> BichonResult<()> {
         assert!(start_uid > 0, "start_uid must be greater than 0");
 
@@ -93,12 +107,7 @@ impl ImapExecutor {
             None => format!("UID {start_uid}:*"),
         };
 
-        let uid_list = self
-            .uid_search(
-                &mailbox.encoded_name(),
-                &query,
-            )
-            .await?;
+        let uid_list = self.uid_search(&mailbox.encoded_name(), &query).await?;
 
         let len = uid_list.len();
         if len == 0 {

@@ -1439,5 +1439,15 @@
     "title": "Wyloguj się",
     "desc": "Czy na pewno chcesz się wylogować? Aby uzyskać dostęp do konta, będziesz musiał zalogować się ponownie.",
     "confirm": "Wyloguj się"
+  },
+  "restore_message": {
+    "title": "Przywróć wiadomości",
+    "desc": "Ta operacja prześle wybrane wiadomości z Bichon i przywróci je do odpowiednich skrzynek pocztowych na serwerze IMAP.",
+    "confirm": "Przywróć",
+    "restore_to_imap": "Przywróć pocztę",
+    "success": "Wiadomości przywrócone",
+    "successDesc": "Wybrane wiadomości zostały pomyślnie przywrócone na serwer IMAP.",
+    "failed": "Nie udało się przywrócić wiadomości",
+    "failedTitle": "Przywracanie nie powiodło się"
   }
 }
