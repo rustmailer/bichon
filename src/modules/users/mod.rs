@@ -500,13 +500,24 @@ impl BichonUserV2 {
         let password_changed = request.password.is_some();
         //
         let is_default_admin = id == DEFAULT_ADMIN_USER_ID;
-        let is_valid_admin_roles = matches!(
-            request.global_roles.as_deref(),
-            Some([role]) if *role == DEFAULT_ADMIN_ROLE_ID
-        );
 
-        if is_default_admin && !is_valid_admin_roles {
-            return Err(raise_error!(format!("The role assignments for default admin (id={}) are immutable to ensure system accessibility.", id), ErrorCode::Forbidden));
+        if is_default_admin {
+            if let Some(roles) = request.global_roles.as_deref() {
+                let is_valid = matches!(
+                    roles,
+                    [role] if *role == DEFAULT_ADMIN_ROLE_ID
+                );
+
+                if !is_valid {
+                    return Err(raise_error!(
+                        format!(
+                            "The role assignments for default admin (id={}) are immutable to ensure system accessibility.",
+                            id
+                        ),
+                        ErrorCode::Forbidden
+                    ));
+                }
+            }
         }
 
         if let Some(username) = &request.username {
