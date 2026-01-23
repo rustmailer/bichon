@@ -23,6 +23,8 @@ RUN chmod +x /usr/local/bin/entrypoint.sh
 
 # Install ca-certificates to ensure HTTPS certificate verification works correctly
 RUN apt update && apt install -y ca-certificates curl && rm -rf /var/lib/apt/lists/*
+# The ubuntu user takes up the commonly used 1000 PUID, so we need to delete it
+RUN userdel ubuntu
 # Create data directory
 RUN mkdir -p /data
 
