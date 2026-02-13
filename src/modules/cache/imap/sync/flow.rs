@@ -420,7 +420,7 @@ pub async fn reconcile_mailboxes(
 }
 
 //only check new emails and sync
-async fn perform_incremental_sync(
+pub async fn perform_incremental_sync(
     account: &AccountModel,
     local_mailbox: &MailBox,
     remote_mailbox: &MailBox,

@@ -89,6 +89,7 @@ const MAX_BUFFER_DURATION: Duration = Duration::from_secs(30);
 
 pub enum WriteMessage {
     Document((u64, TantivyDocument)),
+    Flush(tokio::sync::oneshot::Sender<()>),
     Shutdown,
 }
 
@@ -138,6 +139,10 @@ impl EnvelopeIndexManager {
                                     ENVELOPE_INDEX_MANAGER.drain_and_commit(&mut buffer).await;
                                 }
                             }
+                            Some(WriteMessage::Flush(tx)) => {
+                                ENVELOPE_INDEX_MANAGER.drain_and_commit(&mut buffer).await;
+                                let _ = tx.send(());
+                            }
                             Some(WriteMessage::Shutdown) => {
                                 ENVELOPE_INDEX_MANAGER.drain_and_commit(&mut buffer).await;
                                 break;
@@ -166,6 +171,13 @@ impl EnvelopeIndexManager {
 
     pub async fn add_document(&self, eid: u64, doc: TantivyDocument) {
         let _ = self.sender.send(WriteMessage::Document((eid, doc))).await;
+    }
+
+    /// Flush the write buffer and commit all pending documents to the index.
+    pub async fn flush(&self) {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        let _ = self.sender.send(WriteMessage::Flush(tx)).await;
+        let _ = rx.await;
     }
 
     async fn drain_and_commit(&self, buffer: &mut HashMap<u64, TantivyDocument>) {
@@ -1116,6 +1128,39 @@ impl EnvelopeIndexManager {
         Ok(self.reader.searcher())
     }
 
+    pub async fn count_messages_in_mailbox(
+        &self,
+        account_id: u64,
+        mailbox_id: u64,
+    ) -> BichonResult<u64> {
+        let searcher = self.create_searcher()?;
+        self.num_messages_in_mailbox(&searcher, account_id, mailbox_id)
+            .await
+    }
+
+    /// Return all UIDs stored locally for a given mailbox.
+    pub fn get_all_uids(
+        &self,
+        account_id: u64,
+        mailbox_id: u64,
+    ) -> BichonResult<HashSet<u32>> {
+        let searcher = self.create_searcher()?;
+        let query = self.mailbox_query(account_id, mailbox_id);
+        let count = searcher
+            .search(query.as_ref(), &Count)
+            .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;
+        if count == 0 {
+            return Ok(HashSet::new());
+        }
+        let results: Vec<(u64, DocAddress)> = searcher
+            .search(
+                query.as_ref(),
+                &TopDocs::with_limit(count).order_by_fast_field(F_UID, Order::Asc),
+            )
+            .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;
+        Ok(results.into_iter().map(|(uid, _)| uid as u32).collect())
+    }
+
     pub async fn get_dashboard_stats(
         &self,
         accounts: &Option<HashSet<u64>>,
@@ -1345,6 +1390,10 @@ impl EmlIndexManager {
                                     EML_INDEX_MANAGER.drain_and_commit(&mut buffer).await;
                                 }
                             }
+                            Some(WriteMessage::Flush(tx)) => {
+                                EML_INDEX_MANAGER.drain_and_commit(&mut buffer).await;
+                                let _ = tx.send(());
+                            }
                             Some(WriteMessage::Shutdown) => {
                                 EML_INDEX_MANAGER.drain_and_commit(&mut buffer).await;
                                 break;
@@ -1372,6 +1421,13 @@ impl EmlIndexManager {
 
     pub async fn add_document(&self, eid: u64, doc: TantivyDocument) {
         let _ = self.sender.send(WriteMessage::Document((eid, doc))).await;
+    }
+
+    /// Flush the write buffer and commit all pending documents to the index.
+    pub async fn flush(&self) {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        let _ = self.sender.send(WriteMessage::Flush(tx)).await;
+        let _ = rx.await;
     }
 
     fn open_or_create_index(index_dir: &PathBuf) -> Index {
