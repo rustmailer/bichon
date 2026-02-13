@@ -196,7 +196,14 @@ impl Envelope {
             to: extract_vec_string_field(doc, fields.f_to)?,
             cc: extract_vec_string_field(doc, fields.f_cc)?,
             bcc: extract_vec_string_field(doc, fields.f_bcc)?,
-            date: extract_i64_field(doc, fields.f_date)?,
+            date: {
+                let d = extract_i64_field(doc, fields.f_date)?;
+                if d == 0 {
+                    extract_i64_field(doc, fields.f_internal_date)?
+                } else {
+                    d
+                }
+            },
             internal_date: extract_i64_field(doc, fields.f_internal_date)?,
             size: extract_u64_field(doc, fields.f_size)? as u32,
             thread_id: extract_u64_field(doc, fields.f_thread_id)?,

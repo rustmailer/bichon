@@ -37,8 +37,8 @@ use crate::{
         indexer::{
             envelope::Envelope,
             fields::{
-                F_ACCOUNT_ID, F_DATE, F_FROM, F_HAS_ATTACHMENT, F_MAILBOX_ID, F_SIZE, F_TAGS,
-                F_THREAD_ID, F_UID,
+                F_ACCOUNT_ID, F_DATE, F_FROM, F_HAS_ATTACHMENT, F_INTERNAL_DATE, F_MAILBOX_ID,
+                F_SIZE, F_TAGS, F_THREAD_ID, F_UID,
             },
             schema::SchemaTools,
         },
@@ -726,7 +726,7 @@ impl EnvelopeIndexManager {
                         &query,
                         &TopDocs::with_limit(page_size as usize)
                             .and_offset(offset as usize)
-                            .order_by_fast_field(F_DATE, order),
+                            .order_by_fast_field(F_INTERNAL_DATE, order),
                     )
                     .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;
                 mailbox_docs = date_docs.into_iter().map(|(_, addr)| addr).collect();
@@ -804,7 +804,7 @@ impl EnvelopeIndexManager {
                 query.as_ref(),
                 &TopDocs::with_limit(page_size as usize)
                     .and_offset(offset as usize)
-                    .order_by_fast_field(F_DATE, order),
+                    .order_by_fast_field(F_INTERNAL_DATE, order),
             )
             .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;
         let mut result = Vec::new();
@@ -869,7 +869,7 @@ impl EnvelopeIndexManager {
                 query.as_ref(),
                 &TopDocs::with_limit(page_size as usize)
                     .and_offset(offset as usize)
-                    .order_by_fast_field(F_DATE, order),
+                    .order_by_fast_field(F_INTERNAL_DATE, order),
             )
             .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;
         let mut result = Vec::new();
