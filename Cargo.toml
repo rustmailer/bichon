@@ -15,6 +15,10 @@ path = "src/bin/bichonctl.rs"
 name = "bichon-admin"
 path = "src/bin/bichon_admin.rs"
 
+[[bin]]
+name = "bichonsync"
+path = "src/bin/bichonsync.rs"
+
 
 [features]
 default = []
