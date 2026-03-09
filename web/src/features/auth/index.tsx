@@ -23,7 +23,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import { UserAuthForm } from './components/user-auth-form'
+import { UserAuthForm } from './user-auth-form'
 import { useTranslation } from 'react-i18next'
 import { AuthLayout } from './auth-layout'
 

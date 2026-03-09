@@ -16,7 +16,6 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-
 use crate::modules::error::BichonResult;
 use crate::modules::indexer::manager::{EML_INDEX_MANAGER, ENVELOPE_INDEX_MANAGER};
 use std::collections::HashMap;
@@ -26,6 +25,6 @@ pub async fn delete_messages_impl(request: HashMap<u64, Vec<u64>>) -> BichonResu
         .delete_email_multi_account(&request)
         .await?;
     ENVELOPE_INDEX_MANAGER
-        .delete_envelopes_multi_account(&request)
+        .delete_envelopes_multi_account(request)
         .await
 }

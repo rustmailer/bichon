@@ -1549,7 +1549,7 @@
         "tooltip": "Alle filters wissen"
     },
     "search_input": {
-        "placeholder": "E-mails zoeken... (gebruik \"aanhalingstekens\" voor exacte overeenkomst)",
+        "placeholder": "E-mails zoeken... (Regex ondersteund)",
         "button": "Zoeken",
         "recent_title": "Recente zoekopdrachten",
         "clear_history": "Geschiedenis wissen",

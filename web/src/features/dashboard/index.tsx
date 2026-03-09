@@ -29,6 +29,7 @@ import { get_dashboard_stats, TimeBucket } from '@/api/system/api';
 import { Main } from '@/components/layout/main';
 import { FixedHeader } from '@/components/layout/fixed-header';
 import { useTranslation } from 'react-i18next';
+import { getToken } from '@/stores/authStore';
 
 interface DailyActivity {
   date: string;
@@ -102,8 +103,10 @@ const EmptyTable = ({ title }: { title: string }) => (
 );
 
 export default function MailArchiveDashboard() {
+  const token = getToken();
   const { data: stats, isLoading } = useQuery({
     queryKey: ['dashboard-stats'],
+    enabled: !!token,
     queryFn: get_dashboard_stats,
   });
 

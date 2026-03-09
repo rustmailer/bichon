@@ -1549,7 +1549,7 @@
         "tooltip": "Effacer tous les filtres"
     },
     "search_input": {
-        "placeholder": "Rechercher des e-mails... (utilisez les \"guillemets\" pour une correspondance exacte)",
+        "placeholder": "Rechercher des e-mails... (Regex supporté)",
         "button": "Rechercher",
         "recent_title": "Recherches récentes",
         "clear_history": "Effacer l’historique",

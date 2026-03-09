@@ -1,6 +1,9 @@
 use std::{io::Result, process::Command};
 
 fn main() -> Result<()> {
+    if cfg!(target_os = "windows") {
+        println!("cargo:rustc-link-lib=Rstrtmgr");
+    }
     let output = Command::new("git")
         .args(&["rev-parse", "--short", "HEAD"])
         .output()

@@ -38,13 +38,6 @@ pub(crate) async fn establish_tcp_connection_with_timeout(
 ) -> BichonResult<Pin<Box<TimeoutStream<TcpStream>>>> {
     // Establish the TCP connection with a timeout
     let tcp_stream = connect_with_optional_proxy(use_proxy, address).await?;
-
-    // // Disable Nagle's algorithm for more efficient network communication
-    // tcp_stream
-    //     .set_nodelay(true)
-    //     .map_err(|e| raise_error!(e.to_string(), ErrorCode::NetworkError))?;
-
-    // Wrap the TCP stream in a TimeoutStream for timeout management
     let mut timeout_stream = TimeoutStream::new(tcp_stream);
 
     // Set read and write timeouts
@@ -140,7 +133,7 @@ async fn connect_with_optional_proxy(
                 )
             })?
             .map(|s| s.into_inner())
-            .map_err(|e| raise_error!(e.to_string(), ErrorCode::NetworkError));
+            .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::NetworkError));
     }
     // Fallback to direct TCP connection
     timeout(TIMEOUT, TcpStream::connect(address))
@@ -160,5 +153,5 @@ async fn connect_with_optional_proxy(
                 ErrorCode::ConnectionTimeout
             )
         })?
-        .map_err(|e| raise_error!(e.to_string(), ErrorCode::NetworkError))
+        .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::NetworkError))
 }

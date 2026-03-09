@@ -43,6 +43,6 @@ export interface EmailEnvelope {
   internal_date: number;
   size: number;
   thread_id: number,
-  attachments: string[];
+  attachment_count: number;
   tags: string[];
 }

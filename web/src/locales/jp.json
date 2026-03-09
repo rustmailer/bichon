@@ -1549,7 +1549,7 @@
         "tooltip": "すべての条件をクリア"
     },
     "search_input": {
-        "placeholder": "メールを検索…（\"引用符\"で完全一致）",
+        "placeholder": "メールを検索... (正規表現対応)",
         "button": "検索",
         "recent_title": "最近の検索",
         "clear_history": "履歴をクリア",

@@ -24,6 +24,7 @@ pub mod common;
 pub mod context;
 pub mod dashboard;
 pub mod database;
+pub mod duckdb;
 pub mod envelope;
 pub mod error;
 pub mod imap;

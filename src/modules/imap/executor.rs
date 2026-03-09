@@ -25,6 +25,7 @@ use crate::modules::error::code::ErrorCode;
 use crate::modules::imap::session::SessionStream;
 use crate::modules::indexer::manager::{EML_INDEX_MANAGER, ENVELOPE_INDEX_MANAGER};
 use crate::modules::indexer::schema::SchemaTools;
+use crate::modules::utils::create_hash;
 use crate::modules::{error::BichonResult, imap::manager::ImapConnectionManager};
 use crate::raise_error;
 use async_imap::types::Name;
@@ -207,13 +208,15 @@ impl ImapExecutor {
             .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::ImapCommandFailed))?
         {
             let envelope = extract_envelope(&fetch, account_id, mailbox_id)?;
+            let eml_id = create_hash(account_id, &envelope.0.message_id);
+
             ENVELOPE_INDEX_MANAGER
-                .add_document(envelope.id, envelope.to_document(mailbox_id)?)
+                .add_document(envelope.0.id, envelope)
                 .await;
             let body = fetch.body().ok_or_else(|| {
                 raise_error!("missing a body".into(), ErrorCode::ImapUnexpectedResult)
             })?;
-            EML_INDEX_MANAGER.add_document( envelope.id, doc!(fields.f_id => envelope.id, fields.f_account_id => account_id, fields.f_mailbox_id => mailbox_id, fields.f_eml => body)).await;
+            EML_INDEX_MANAGER.add_document( eml_id, doc!(fields.f_id => eml_id, fields.f_account_id => account_id, fields.f_mailbox_id => mailbox_id, fields.f_eml => body)).await;
             count += 1;
         }
         Ok(count)
@@ -242,13 +245,14 @@ impl ImapExecutor {
             .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::ImapCommandFailed))?
         {
             let envelope = extract_envelope(&fetch, account_id, mailbox_id)?;
+            let eml_id = create_hash(account_id, &envelope.0.message_id);
             ENVELOPE_INDEX_MANAGER
-                .add_document(envelope.id, envelope.to_document(mailbox_id)?)
+                .add_document(envelope.0.id, envelope)
                 .await;
             let body = fetch.body().ok_or_else(|| {
                 raise_error!("missing a body".into(), ErrorCode::ImapUnexpectedResult)
             })?;
-            EML_INDEX_MANAGER.add_document( envelope.id, doc!(fields.f_id => envelope.id, fields.f_account_id => account_id, fields.f_mailbox_id => mailbox_id, fields.f_eml => body)).await;
+            EML_INDEX_MANAGER.add_document( eml_id, doc!(fields.f_id => eml_id, fields.f_account_id => account_id, fields.f_mailbox_id => mailbox_id, fields.f_eml => body)).await;
         }
         Ok(())
     }

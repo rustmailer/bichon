@@ -8,6 +8,13 @@ assignees: ""
 
 > **Please write and communicate in English.**
 
+---
+### 📢 Shape the Future of Bichon
+**Want your requested feature to be prioritized?** Help us shape the **2026 Roadmap** by filling out our 1-minute survey: 
+👉 **[Bichon User Survey](https://docs.google.com/forms/d/e/1FAIpQLScOlwsiUMfyQPBCLW2MLkygdRmAutEgvXDYPzzvEGPz0HFPXQ/viewform)**
+---
+
+
 ### Description
 What feature would you like to see?
 

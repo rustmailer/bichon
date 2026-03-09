@@ -1549,7 +1549,7 @@
         "tooltip": "Limpar todos os filtros"
     },
     "search_input": {
-        "placeholder": "Pesquisar e-mails... (use \"aspas\" para correspondência exata)",
+        "placeholder": "Pesquisar e-mails... (Regex suportado)",
         "button": "Pesquisar",
         "recent_title": "Pesquisas recentes",
         "clear_history": "Limpar histórico",

@@ -1549,7 +1549,7 @@
     "tooltip": "Clear all filters"
   },
   "search_input": {
-    "placeholder": "Search emails... (use \"quotes\" for exact match)",
+    "placeholder": "Search emails... (Regex supported)",
     "button": "Search",
     "recent_title": "Recent searches",
     "clear_history": "Clear history",

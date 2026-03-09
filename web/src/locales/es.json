@@ -1549,7 +1549,7 @@
         "tooltip": "Eliminar todos los filtros"
     },
     "search_input": {
-        "placeholder": "Buscar correos... (usa \"comillas\" para coincidencia exacta)",
+        "placeholder": "Buscar correos... (Soporta Regex)",
         "button": "Buscar",
         "recent_title": "Búsquedas recientes",
         "clear_history": "Borrar historial",

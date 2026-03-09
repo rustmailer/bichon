@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::modules::account::migration::{AccountV1, AccountV2, AccountV3};
+use crate::modules::account::migration::{AccountV1, AccountV2, AccountV3, AccountV4};
 use crate::modules::autoconfig::CachedMailSettings;
 use crate::modules::error::code::ErrorCode;
 use crate::modules::error::BichonResult;
@@ -67,6 +67,7 @@ impl ModelsAdapter {
         self.register_model::<AccountV1>();
         self.register_model::<AccountV2>();
         self.register_model::<AccountV3>();
+        self.register_model::<AccountV4>();
         self.register_model::<OAuth2>();
         self.register_model::<OAuth2PendingEntity>();
         self.register_model::<OAuth2AccessToken>();
@@ -188,30 +189,6 @@ pub async fn update_impl<T: ToInput + Clone + std::fmt::Debug + Send + 'static>(
     .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?
 }
 
-// pub async fn batch_update_impl<T: ToInput + Clone + std::fmt::Debug + Send + 'static>(
-//     database: &Arc<Database<'static>>,
-//     filter: impl FnOnce(&RwTransaction) -> RustMailerResult<Vec<T>> + Send + 'static,
-//     updated: impl FnOnce(&Vec<T>) -> RustMailerResult<Vec<(T, T)>> + Send + 'static,
-// ) -> RustMailerResult<Vec<T>> {
-//     let db = database.clone();
-//     tokio::task::spawn_blocking(move || {
-//         let rw = db
-//             .rw_transaction()
-//             .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;
-//         let targets = filter(&rw)?;
-//         let tuples = updated(&targets)?;
-//         for (old, updated) in tuples {
-//             rw.update(old, updated)
-//                 .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;
-//         }
-//         rw.commit()
-//             .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;
-//         Ok(targets)
-//     })
-//     .await
-//     .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?
-// }
-
 pub async fn async_find_impl<T: ToInput + Clone + Send + 'static>(
     database: &Arc<Database<'static>>,
     key: impl ToKey + Send + 'static,
@@ -230,21 +207,6 @@ pub async fn async_find_impl<T: ToInput + Clone + Send + 'static>(
     .await
     .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?
 }
-
-// pub fn find_impl<T: ToInput + Clone + Send + 'static>(
-//     database: &Arc<Database<'static>>,
-//     key: &str,
-// ) -> BichonResult<Option<T>> {
-//     let db = database.clone();
-//     let r_transaction = db
-//         .r_transaction()
-//         .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;
-//     let entity: Option<T> = r_transaction
-//         .get()
-//         .primary(key)
-//         .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;
-//     Ok(entity)
-// }
 
 pub async fn delete_impl<T: ToInput + Clone + Send + 'static>(
     database: &Arc<Database<'static>>,
@@ -423,7 +385,7 @@ pub async fn paginate_query_primary_scan_all_impl<
     .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?
 }
 
-pub async fn filter_by_secondary_key_impl<T: ToInput + Clone + Send + 'static>(
+pub async fn async_filter_by_secondary_key_impl<T: ToInput + Clone + Send + 'static>(
     database: &Arc<Database<'static>>,
     key_def: impl ToKeyDefinition<KeyOptions> + Send + 'static,
     start_with: impl ToKey + Send + 'static,
@@ -445,6 +407,26 @@ pub async fn filter_by_secondary_key_impl<T: ToInput + Clone + Send + 'static>(
     })
     .await
     .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?
+}
+
+pub fn filter_by_secondary_key_impl<T: ToInput + Clone + Send + 'static>(
+    database: &Arc<Database<'static>>,
+    key_def: impl ToKeyDefinition<KeyOptions> + Send + 'static,
+    start_with: impl ToKey + Send + 'static,
+) -> BichonResult<Vec<T>> {
+    let db = database.clone();
+    let r_transaction = db
+        .r_transaction()
+        .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;
+    let entities: Vec<T> = r_transaction
+        .scan()
+        .secondary(key_def)
+        .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?
+        .start_with(start_with)
+        .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?
+        .try_collect()
+        .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;
+    Ok(entities)
 }
 
 pub async fn count_by_unique_secondary_key_impl<T: ToInput + Clone + Send + 'static>(
@@ -469,7 +451,7 @@ pub async fn count_by_unique_secondary_key_impl<T: ToInput + Clone + Send + 'sta
     .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?
 }
 
-pub async fn secondary_find_impl<T: ToInput + Clone + Send + 'static>(
+pub async fn async_secondary_find_impl<T: ToInput + Clone + Send + 'static>(
     database: &Arc<Database<'static>>,
     key_def: impl ToKeyDefinition<KeyOptions> + Send + 'static,
     key: impl ToKey + Send + 'static,
@@ -489,6 +471,22 @@ pub async fn secondary_find_impl<T: ToInput + Clone + Send + 'static>(
     })
     .await
     .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?
+}
+
+pub fn secondary_find_impl<T: ToInput + Clone + Send + 'static>(
+    database: &Arc<Database<'static>>,
+    key_def: impl ToKeyDefinition<KeyOptions> + Send + 'static,
+    key: impl ToKey + Send + 'static,
+) -> BichonResult<Option<T>> {
+    let db = database.clone();
+    let r_transaction = db
+        .r_transaction()
+        .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;
+    let entities: Option<T> = r_transaction
+        .get()
+        .secondary(key_def, key)
+        .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;
+    Ok(entities)
 }
 
 #[derive(Debug)]

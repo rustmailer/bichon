@@ -5,6 +5,7 @@ use crate::{
         error::{code::ErrorCode, BichonResult},
         imap::executor::ImapExecutor,
         indexer::manager::{EML_INDEX_MANAGER, ENVELOPE_INDEX_MANAGER},
+        utils::create_hash,
     },
     raise_error,
 };
@@ -55,16 +56,13 @@ pub async fn restore_emails(account_id: u64, message_ids: Vec<u64>) -> BichonRes
                         ErrorCode::ResourceNotFound
                     )
                 })?;
-
+            let eml_id = create_hash(account_id, &envelope.message_id);
             let eml = EML_INDEX_MANAGER
-                .get(account_id, message_id)
+                .get(account_id, eml_id)
                 .await?
                 .ok_or_else(|| {
                     raise_error!(
-                        format!(
-                            "Email record not found: account_id={} id={}",
-                            account_id, message_id
-                        ),
+                        format!("Eml not found: account_id={} id={}", account_id, message_id),
                         ErrorCode::ResourceNotFound
                     )
                 })?;

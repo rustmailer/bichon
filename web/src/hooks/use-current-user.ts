@@ -21,10 +21,14 @@ import { useQuery } from '@tanstack/react-query'
 import { AxiosError } from 'axios'
 import { get_current_user, User } from '@/api/users/api'
 import { useMemo } from 'react'
+import { getToken } from '@/stores/authStore'
 
 export function useCurrentUser() {
+  const token = getToken();
+
   const query = useQuery<User | null, AxiosError>({
     queryKey: ['current-user'],
+    enabled: !!token,
     queryFn: get_current_user,
     retry: false,
   })

@@ -129,16 +129,16 @@ impl ImportEmls {
                     continue;
                 }
             };
-
+            let eml_id = create_hash(account_id, &envelope.0.message_id);
             ENVELOPE_INDEX_MANAGER
-                .add_document(envelope.id, envelope.to_document(mailbox_id).unwrap())
+                .add_document(envelope.0.id, envelope)
                 .await;
 
             EML_INDEX_MANAGER
                 .add_document(
-                    envelope.id,
+                    eml_id,
                     doc!(
-                        fields.f_id => envelope.id,
+                        fields.f_id => eml_id,
                         fields.f_account_id => account_id,
                         fields.f_mailbox_id => mailbox_id,
                         fields.f_eml => decoded

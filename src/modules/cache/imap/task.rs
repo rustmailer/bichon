@@ -54,7 +54,7 @@ impl AccountSyncTask {
         let task = move |param: Option<u64>| {
             let account_id = param.unwrap();
             Box::pin(async move {
-                let account = AccountModel::get(account_id).await.ok();
+                let account = AccountModel::async_get(account_id).await.ok();
                 match account {
                     Some(account) => {
                         if !account.enabled {

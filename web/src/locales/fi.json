@@ -1549,7 +1549,7 @@
         "tooltip": "Poista kaikki suodattimet"
     },
     "search_input": {
-        "placeholder": "Hae sähköposteja... (käytä \"lainausmerkkejä\" tarkkaan hakuun)",
+        "placeholder": "Hae sähköposteja... (Regex tuettu)",
         "button": "Hae",
         "recent_title": "Viimeisimmät haut",
         "clear_history": "Tyhjennä historia",

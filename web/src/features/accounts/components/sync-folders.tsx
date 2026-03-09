@@ -380,8 +380,8 @@ export function SyncFoldersDialog({ currentRow, open, onOpenChange }: Props) {
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-3xl">
-                <DialogHeader>
+            <DialogContent className="sm:max-w-3xl max-h-[90vh] flex flex-col">
+                <DialogHeader className="flex-shrink-0">
                     <DialogTitle>{t('accounts.selectSyncFolders')}</DialogTitle>
                     <DialogDescription>
                         {t('accounts.chooseFoldersToSync', { "email": currentRow.email })}
@@ -455,7 +455,7 @@ export function SyncFoldersDialog({ currentRow, open, onOpenChange }: Props) {
                         </div>
                     </div>
 
-                    <ScrollArea className="h-[35rem] w-full pr-4 -mr-4 py-1">
+                    <ScrollArea className="flex-1 min-h-0 w-full pr-4 -mr-4 py-1">
                         {isLoading && (
                             <div className="p-8 space-y-8">
                                 <div className="flex flex-col items-center gap-3 text-muted-foreground">

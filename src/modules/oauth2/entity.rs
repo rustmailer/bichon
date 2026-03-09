@@ -21,7 +21,7 @@ use crate::{
     modules::{
         database::{
             delete_impl, insert_impl, manager::DB_MANAGER, paginate_query_primary_scan_all_impl,
-            secondary_find_impl, update_impl,
+            async_secondary_find_impl, update_impl,
         },
         error::{code::ErrorCode, BichonResult},
         rest::response::DataPage,
@@ -133,7 +133,7 @@ impl OAuth2 {
     }
 
     pub async fn get(id: u64) -> BichonResult<Option<OAuth2>> {
-        secondary_find_impl(DB_MANAGER.meta_db(), OAuth2Key::id, id).await
+        async_secondary_find_impl(DB_MANAGER.meta_db(), OAuth2Key::id, id).await
     }
 
     pub async fn delete(id: u64) -> BichonResult<()> {

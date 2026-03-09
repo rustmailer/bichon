@@ -21,7 +21,7 @@ use crate::{
     modules::{
         database::{
             async_find_impl, batch_delete_impl, delete_impl, list_all_impl, manager::DB_MANAGER,
-            secondary_find_impl, update_impl, with_transaction,
+            async_secondary_find_impl, update_impl, with_transaction,
         },
         error::{code::ErrorCode, BichonResult},
         token::{AccessTokenModel, AccessTokenModelKey, TokenType},
@@ -282,7 +282,7 @@ impl BichonUserV2 {
         username: String,
         password: String,
     ) -> BichonResult<LoginResult> {
-        let user_option = secondary_find_impl::<UserModel>(
+        let user_option = async_secondary_find_impl::<UserModel>(
             DB_MANAGER.meta_db(),
             BichonUserV2Key::username,
             username.clone(),
@@ -292,7 +292,7 @@ impl BichonUserV2 {
         let user = match user_option {
             Some(u) => u,
             None => {
-                match secondary_find_impl::<UserModel>(
+                match async_secondary_find_impl::<UserModel>(
                     DB_MANAGER.meta_db(),
                     BichonUserV2Key::email,
                     username,
@@ -366,7 +366,7 @@ impl BichonUserV2 {
 
     pub async fn check_username_conflict(username: &str) -> BichonResult<()> {
         // Check username duplicate
-        if secondary_find_impl::<UserModel>(
+        if async_secondary_find_impl::<UserModel>(
             DB_MANAGER.meta_db(),
             BichonUserV2Key::username,
             username.to_string(),
@@ -385,7 +385,7 @@ impl BichonUserV2 {
 
     pub async fn check_email_conflict(email: &str) -> BichonResult<()> {
         // Check email duplicate
-        if secondary_find_impl::<UserModel>(
+        if async_secondary_find_impl::<UserModel>(
             DB_MANAGER.meta_db(),
             BichonUserV2Key::email,
             email.to_string(),
@@ -520,7 +520,7 @@ impl BichonUserV2 {
         }
 
         if let Some(username) = &request.username {
-            let user_option = secondary_find_impl::<UserModel>(
+            let user_option = async_secondary_find_impl::<UserModel>(
                 DB_MANAGER.meta_db(),
                 BichonUserV2Key::username,
                 username.to_string(),
@@ -538,7 +538,7 @@ impl BichonUserV2 {
         }
 
         if let Some(email) = &request.email {
-            let user_option = secondary_find_impl::<UserModel>(
+            let user_option = async_secondary_find_impl::<UserModel>(
                 DB_MANAGER.meta_db(),
                 BichonUserV2Key::email,
                 email.to_string(),

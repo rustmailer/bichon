@@ -21,7 +21,7 @@ use std::collections::HashMap;
 use super::error::code::ErrorCode;
 use crate::modules::database::manager::DB_MANAGER;
 use crate::modules::database::{
-    async_find_impl, delete_impl, filter_by_secondary_key_impl, with_transaction,
+    async_find_impl, delete_impl, async_filter_by_secondary_key_impl, with_transaction,
 };
 use crate::modules::database::{insert_impl, list_all_impl, update_impl};
 use crate::modules::settings::cli::SETTINGS;
@@ -154,7 +154,7 @@ impl AccessTokenModel {
     }
 
     pub async fn get_user_webui_token(user_id: u64) -> BichonResult<Option<AccessTokenModel>> {
-        let tokens = filter_by_secondary_key_impl::<AccessTokenModel>(
+        let tokens = async_filter_by_secondary_key_impl::<AccessTokenModel>(
             DB_MANAGER.meta_db(),
             AccessTokenModelKey::user_id,
             user_id,
@@ -167,7 +167,7 @@ impl AccessTokenModel {
     }
 
     pub async fn get_user_api_tokens(user_id: u64) -> BichonResult<Vec<AccessTokenModel>> {
-        let tokens = filter_by_secondary_key_impl::<AccessTokenModel>(
+        let tokens = async_filter_by_secondary_key_impl::<AccessTokenModel>(
             DB_MANAGER.meta_db(),
             AccessTokenModelKey::user_id,
             user_id,

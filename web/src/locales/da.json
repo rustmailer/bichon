@@ -1549,7 +1549,7 @@
         "tooltip": "Ryd alle filtre"
     },
     "search_input": {
-        "placeholder": "Søg i mails... (brug \"anførselstegn\" til nøjagtig match)",
+        "placeholder": "Søg i e-mails... (Regex understøttes)",
         "button": "Søg",
         "recent_title": "Seneste søgninger",
         "clear_history": "Ryd historik",

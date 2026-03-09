@@ -1549,7 +1549,7 @@
         "tooltip": "Alle Filter entfernen"
     },
     "search_input": {
-        "placeholder": "E-Mails durchsuchen... (\"Anführungszeichen\" für exakte Übereinstimmung)",
+        "placeholder": "E-Mails suchen... (Regex unterstützt)",
         "button": "Suchen",
         "recent_title": "Letzte Suchanfragen",
         "clear_history": "Verlauf löschen",

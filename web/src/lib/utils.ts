@@ -88,28 +88,12 @@ export function validateTag(facetPath: string) {
     };
   }
 
-  if (!facetPath.startsWith('/')) {
+  const invalidChars = /['"`;,()[\]{}<>]/;
+
+  if (invalidChars.test(facetPath)) {
     return {
       valid: false,
-      error: "Tag path must start with '/'"
-    };
-  }
-
-  let escaped = false;
-  for (let i = 1; i < facetPath.length; i++) {
-    const char = facetPath[i];
-
-    if (escaped) {
-      escaped = false;
-    } else if (char === '\\') {
-      escaped = true;
-    }
-  }
-
-  if (escaped) {
-    return {
-      valid: false,
-      error: "Tag path has unmatched escape character at the end"
+      error: "Tag path contains invalid characters"
     };
   }
 

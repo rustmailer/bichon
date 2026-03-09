@@ -23,6 +23,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     modules::{
+        duckdb::init::duckdb,
         error::{code::ErrorCode, BichonResult},
         indexer::{envelope::Envelope, manager::ENVELOPE_INDEX_MANAGER},
         rest::response::DataPage,
@@ -39,14 +40,14 @@ pub struct SearchFilter {
     pub bcc: Option<String>,
     pub since: Option<i64>,
     pub before: Option<i64>,
-    pub account_ids: Option<Vec<u64>>,
-    pub mailbox_ids: Option<Vec<u64>>,
+    pub account_ids: Option<HashSet<u64>>,
+    pub mailbox_ids: Option<HashSet<u64>>,
     pub min_size: Option<u64>,
     pub max_size: Option<u64>,
     pub message_id: Option<String>,
     pub has_attachment: Option<bool>,
     pub attachment_name: Option<String>,
-    pub tags: Option<Vec<String>>,
+    pub tags: Option<HashSet<String>>,
 }
 
 #[derive(Debug, Clone, Default, Eq, PartialEq, Serialize, Deserialize, Enum)]
@@ -78,6 +79,17 @@ impl SearchRequest {
                 ErrorCode::InvalidParameter
             ));
         }
+
+        if let Some(ref pattern) = self.filter.text {
+            if let Err(_) = duckdb()?.validate_regex(pattern) {
+                return Err(raise_error!(
+                    "Invalid search pattern: The regular expression is not supported by DuckDB."
+                        .into(),
+                    ErrorCode::InvalidParameter
+                ));
+            }
+        }
+
         Ok(())
     }
 }

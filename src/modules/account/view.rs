@@ -54,6 +54,7 @@ pub struct AccountResp {
     pub use_proxy: Option<u64>,
     pub use_dangerous: bool,
     pub pgp_key: Option<String>,
+    pub imap_daily_quota_bytes: Option<u32>,
 }
 
 impl AccountResp {
@@ -86,6 +87,7 @@ impl AccountResp {
             use_proxy: account.use_proxy,
             use_dangerous: account.use_dangerous,
             pgp_key: account.pgp_key,
+            imap_daily_quota_bytes: account.imap_daily_quota_bytes,
         }
     }
 }

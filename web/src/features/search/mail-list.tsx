@@ -154,7 +154,7 @@ export function MailList({
             )}
 
             {items.map((item, index) => {
-                const hasAttachments = item.attachments && item.attachments.length > 0
+                const hasAttachments = item.attachment_count > 0
                 const isSelectedRow = currentEnvelope?.id === item.id
                 const isChecked = hasSelected(item.account_id, item.id)
 
@@ -209,7 +209,7 @@ export function MailList({
                                 {hasAttachments && (
                                     <div className="flex items-center gap-1">
                                         <Paperclip className="h-3 w-3" />
-                                        <span>{item.attachments?.length}</span>
+                                        <span>{item.attachment_count}</span>
                                     </div>
                                 )}
 

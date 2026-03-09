@@ -33,7 +33,7 @@ use crate::{
             state::AccountRunningState,
         },
         cache::imap::mailbox::MailBox,
-        database::{list_all_impl, with_transaction},
+        database::{list_all_impl, secondary_find_impl, with_transaction},
         error::BichonResult,
         indexer::manager::{EML_INDEX_MANAGER, ENVELOPE_INDEX_MANAGER},
         users::{role::DEFAULT_ACCOUNT_MANAGER_ROLE_ID, UserModel, DEFAULT_ADMIN_USER_ID},
@@ -51,14 +51,14 @@ use crate::modules::database::count_by_unique_secondary_key_impl;
 use crate::modules::database::delete_impl;
 use crate::modules::database::manager::DB_MANAGER;
 use crate::modules::database::{
-    paginate_query_primary_scan_all_impl, secondary_find_impl, update_impl,
+    async_secondary_find_impl, paginate_query_primary_scan_all_impl, update_impl,
 };
 use crate::modules::error::code::ErrorCode;
 use crate::modules::oauth2::token::OAuth2AccessToken;
 use crate::modules::rest::response::DataPage;
 use crate::raise_error;
 
-pub type AccountModel = AccountV3;
+pub type AccountModel = AccountV4;
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Deserialize, Serialize, Enum)]
 pub enum AccountType {
@@ -158,6 +158,42 @@ impl AccountV3 {
     fn pk(&self) -> String {
         format!("{}_{}", self.created_at, self.id)
     }
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq, Deserialize, Serialize, Object)]
+#[native_model(id = 4, version = 4, from = AccountV3)]
+#[native_db(primary_key(pk -> String))]
+pub struct AccountV4 {
+    #[secondary_key(unique)]
+    pub id: u64,
+    pub imap: Option<ImapConfig>,
+    pub enabled: bool,
+    #[oai(validator(custom = "crate::modules::common::validator::EmailValidator"))]
+    pub email: String,
+    pub name: Option<String>,
+    pub capabilities: Option<Vec<String>>,
+    pub date_since: Option<DateSince>,
+    pub date_before: Option<RelativeDate>,
+    pub folder_limit: Option<u32>,
+    pub sync_folders: Option<Vec<String>>,
+    pub account_type: AccountType,
+    pub sync_interval_min: Option<i64>,
+    pub sync_batch_size: Option<u32>,
+    pub known_folders: Option<BTreeSet<String>>,
+    pub created_at: i64,
+    pub updated_at: i64,
+    pub created_by: u64, //user id
+    pub use_proxy: Option<u64>,
+    pub use_dangerous: bool,
+    pub pgp_key: Option<String>,
+    pub imap_daily_quota_bytes: Option<u32>,
+    pub auto_sync_new_mailboxes: Option<bool>,
+}
+
+impl AccountV4 {
+    fn pk(&self) -> String {
+        format!("{}_{}", self.created_at, self.id)
+    }
 
     pub fn new(user_id: u64, request: AccountCreateRequest) -> BichonResult<Self> {
         Ok(Self {
@@ -181,25 +217,30 @@ impl AccountV3 {
             created_by: user_id,
             sync_batch_size: request.sync_batch_size,
             date_before: request.date_before,
+            imap_daily_quota_bytes: request.imap_daily_quota_bytes,
+            auto_sync_new_mailboxes: request.auto_sync_new_mailboxes,
         })
     }
 
     pub async fn check_account_exists(account_id: u64) -> BichonResult<AccountModel> {
-        let account =
-            secondary_find_impl::<AccountModel>(DB_MANAGER.meta_db(), AccountV3Key::id, account_id)
-                .await?
-                .ok_or_else(|| {
-                    raise_error!(
-                        format!("Account id='{account_id}' not found"),
-                        ErrorCode::ResourceNotFound
-                    )
-                })?;
+        let account = async_secondary_find_impl::<AccountModel>(
+            DB_MANAGER.meta_db(),
+            AccountV4Key::id,
+            account_id,
+        )
+        .await?
+        .ok_or_else(|| {
+            raise_error!(
+                format!("Account id='{account_id}' not found"),
+                ErrorCode::ResourceNotFound
+            )
+        })?;
         Ok(account)
     }
 
     /// Fetches an `AccountEntity` by its `id`.
-    pub async fn get(account_id: u64) -> BichonResult<AccountModel> {
-        let result: AccountModel = Self::find(account_id).await?.ok_or_else(|| {
+    pub async fn async_get(account_id: u64) -> BichonResult<AccountModel> {
+        let result: AccountModel = Self::async_find(account_id).await?.ok_or_else(|| {
             raise_error!(
                 format!("Account with ID '{account_id}' not found"),
                 ErrorCode::ResourceNotFound
@@ -208,9 +249,27 @@ impl AccountV3 {
         Ok(result)
     }
 
-    pub async fn find(account_id: u64) -> BichonResult<Option<AccountModel>> {
-        secondary_find_impl::<AccountModel>(DB_MANAGER.meta_db(), AccountV3Key::id, account_id)
-            .await
+    pub fn get(account_id: u64) -> BichonResult<AccountModel> {
+        let result: AccountModel = Self::find(account_id)?.ok_or_else(|| {
+            raise_error!(
+                format!("Account with ID '{account_id}' not found"),
+                ErrorCode::ResourceNotFound
+            )
+        })?;
+        Ok(result)
+    }
+
+    pub async fn async_find(account_id: u64) -> BichonResult<Option<AccountModel>> {
+        async_secondary_find_impl::<AccountModel>(
+            DB_MANAGER.meta_db(),
+            AccountV4Key::id,
+            account_id,
+        )
+        .await
+    }
+
+    pub fn find(account_id: u64) -> BichonResult<Option<AccountModel>> {
+        secondary_find_impl::<AccountModel>(DB_MANAGER.meta_db(), AccountV4Key::id, account_id)
     }
 
     pub async fn create_account(
@@ -258,7 +317,7 @@ impl AccountV3 {
         request: AccountUpdateRequest,
         validate: bool,
     ) -> BichonResult<()> {
-        let account = AccountModel::get(account_id).await?;
+        let account = AccountModel::async_get(account_id).await?;
         if validate {
             request.validate_update_request(&account)?;
         }
@@ -273,7 +332,7 @@ impl AccountV3 {
     }
 
     pub async fn delete(account_id: u64) -> BichonResult<()> {
-        let account = Self::get(account_id).await?;
+        let account = Self::async_get(account_id).await?;
         if let Err(error) = Self::cleanup_account_resources_sequential(&account).await {
             tracing::error!(
                 "[CLEANUP_ACCOUNT_ERROR] Account {}: failed to cleanup resources: {:#?}",
@@ -287,7 +346,7 @@ impl AccountV3 {
 
     async fn delete_account(account_id: u64) -> BichonResult<()> {
         delete_impl(DB_MANAGER.meta_db(), move|rw|{
-            rw.get().secondary::<AccountModel>(AccountV3Key::id, account_id).map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?
+            rw.get().secondary::<AccountModel>(AccountV4Key::id, account_id).map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?
             .ok_or_else(||raise_error!(format!("The account entity with id={account_id} that you want to delete was not found."), ErrorCode::ResourceNotFound))
         }).await
     }
@@ -317,7 +376,7 @@ impl AccountV3 {
         sync_folders: Vec<String>,
     ) -> BichonResult<()> {
         update_impl(DB_MANAGER.meta_db(), move |rw| {
-            rw.get().secondary::<AccountModel>(AccountV3Key::id, account_id).map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?
+            rw.get().secondary::<AccountModel>(AccountV4Key::id, account_id).map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?
             .ok_or_else(|| raise_error!(format!("When trying to update account sync_folders, the corresponding record was not found. account_id={}", account_id), ErrorCode::ResourceNotFound))
         }, |current|{
             let mut updated = current.clone();
@@ -332,7 +391,7 @@ impl AccountV3 {
         known_folders: BTreeSet<String>,
     ) -> BichonResult<()> {
         update_impl(DB_MANAGER.meta_db(), move |rw| {
-            rw.get().secondary::<AccountModel>(AccountV3Key::id, account_id).map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?
+            rw.get().secondary::<AccountModel>(AccountV4Key::id, account_id).map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?
             .ok_or_else(|| raise_error!(format!("When trying to update account known_folders, the corresponding record was not found. account_id={}", account_id), ErrorCode::ResourceNotFound))
         }, |current|{
             let mut updated = current.clone();
@@ -347,7 +406,7 @@ impl AccountV3 {
         capabilities: Vec<String>,
     ) -> BichonResult<()> {
         update_impl(DB_MANAGER.meta_db(), move |rw| {
-            rw.get().secondary::<AccountModel>(AccountV3Key::id, account_id).map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?
+            rw.get().secondary::<AccountModel>(AccountV4Key::id, account_id).map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?
             .ok_or_else(|| raise_error!(format!("When trying to update account capabilities, the corresponding record was not found. account_id={}", account_id), ErrorCode::ResourceNotFound))
         }, |current|{
             let mut updated = current.clone();
@@ -378,7 +437,7 @@ impl AccountV3 {
     }
 
     pub async fn count() -> BichonResult<usize> {
-        count_by_unique_secondary_key_impl::<AccountModel>(DB_MANAGER.meta_db(), AccountV3Key::id)
+        count_by_unique_secondary_key_impl::<AccountModel>(DB_MANAGER.meta_db(), AccountV4Key::id)
             .await
     }
 
@@ -483,6 +542,13 @@ impl AccountV3 {
             new.pgp_key = Some(pgp_key);
         }
 
+        if let Some(imap_daily_quota_bytes) = request.imap_daily_quota_bytes {
+            new.imap_daily_quota_bytes = Some(imap_daily_quota_bytes);
+        }
+
+        if let Some(auto_sync_new_mailboxes) = request.auto_sync_new_mailboxes {
+            new.auto_sync_new_mailboxes = Some(auto_sync_new_mailboxes);
+        }
         new.updated_at = utc_now!();
         Ok(new)
     }
@@ -581,6 +647,62 @@ impl From<AccountV2> for AccountV3 {
             pgp_key: value.pgp_key,
             sync_batch_size: None,
             date_before: None,
+        }
+    }
+}
+
+impl From<AccountV4> for AccountV3 {
+    fn from(value: AccountV4) -> Self {
+        Self {
+            id: value.id,
+            imap: value.imap,
+            enabled: value.enabled,
+            email: value.email,
+            name: value.name,
+            capabilities: value.capabilities,
+            date_since: value.date_since,
+            date_before: value.date_before,
+            folder_limit: value.folder_limit,
+            sync_folders: value.sync_folders,
+            account_type: value.account_type,
+            sync_interval_min: value.sync_interval_min,
+            sync_batch_size: value.sync_batch_size,
+            known_folders: value.known_folders,
+            created_at: value.created_at,
+            updated_at: value.updated_at,
+            created_by: value.created_by,
+            use_proxy: value.use_proxy,
+            use_dangerous: value.use_dangerous,
+            pgp_key: value.pgp_key,
+        }
+    }
+}
+
+impl From<AccountV3> for AccountV4 {
+    fn from(value: AccountV3) -> Self {
+        Self {
+            id: value.id,
+            imap: value.imap,
+            enabled: value.enabled,
+            email: value.email,
+            name: value.name,
+            capabilities: value.capabilities,
+            date_since: value.date_since,
+            date_before: value.date_before,
+            folder_limit: value.folder_limit,
+            sync_folders: value.sync_folders,
+            account_type: value.account_type,
+            sync_interval_min: value.sync_interval_min,
+            sync_batch_size: value.sync_batch_size,
+            known_folders: value.known_folders,
+            created_at: value.created_at,
+            updated_at: value.updated_at,
+            created_by: value.created_by,
+            use_proxy: value.use_proxy,
+            use_dangerous: value.use_dangerous,
+            pgp_key: value.pgp_key,
+            imap_daily_quota_bytes: None,
+            auto_sync_new_mailboxes: None,
         }
     }
 }

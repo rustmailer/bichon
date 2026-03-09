@@ -21,7 +21,7 @@ use std::{fs, io, path::PathBuf};
 use crate::modules::error::BichonResult;
 use base64::engine::general_purpose::STANDARD;
 use base64::{engine::general_purpose, Engine};
-use rand::{rng, Rng};
+use rand::{rng, RngExt};
 
 use super::error::code::ErrorCode;
 
@@ -277,14 +277,23 @@ pub fn hash(s: &str) -> u64 {
 }
 
 pub fn create_hash(account_id: u64, field: &str) -> u64 {
-    // Construct a buffer of bytes from account_id and mailbox_name
     let mut buffer = Vec::new();
-    buffer.extend_from_slice(&account_id.to_le_bytes()); // Convert u64 to bytes
+    buffer.extend_from_slice(&account_id.to_le_bytes());
     buffer.push(b':'); // Separator
-    buffer.extend_from_slice(field.as_bytes()); // Add mailbox name
-                                                // Create a Cursor for the buffer
+    buffer.extend_from_slice(field.as_bytes());
     let mut cursor = std::io::Cursor::new(buffer);
-    // Compute the 128-bit Murmur3 hash and cast to u64
+    let hash = murmur3::murmur3_x64_128(&mut cursor, 0).unwrap();
+    (hash & 0x1F_FFFF_FFFF_FFFF) as u64
+}
+
+pub fn create_hash2(account_id: u64, field1: u64, field2: &str) -> u64 {
+    let mut buffer = Vec::new();
+    buffer.extend_from_slice(&account_id.to_le_bytes());
+    buffer.push(b':'); // Separator
+    buffer.extend_from_slice(&field1.to_le_bytes());
+    buffer.push(b':'); // Separator
+    buffer.extend_from_slice(field2.as_bytes());
+    let mut cursor = std::io::Cursor::new(buffer);
     let hash = murmur3::murmur3_x64_128(&mut cursor, 0).unwrap();
     (hash & 0x1F_FFFF_FFFF_FFFF) as u64
 }
@@ -334,4 +343,29 @@ pub fn decode_avatar_bytes(base64_str: &str) -> BichonResult<Vec<u8>> {
     }
 
     Ok(bytes)
+}
+
+pub fn validate_tag(tag: &str) -> Result<(), String> {
+    if tag.is_empty() {
+        return Err("Tag cannot be empty".to_string());
+    }
+
+    const INVALID: &[char] = &[
+        '\'', '"', '`', ';', ',', '(', ')', '[', ']', '{', '}', '<', '>',
+    ];
+
+    let mut found = Vec::new();
+
+    for c in tag.chars() {
+        if INVALID.contains(&c) && !found.contains(&c) {
+            found.push(c);
+        }
+    }
+
+    if !found.is_empty() {
+        let chars: String = found.iter().collect();
+        return Err(format!("Tag contains invalid characters: {}", chars));
+    }
+
+    Ok(())
 }

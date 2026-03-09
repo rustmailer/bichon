@@ -1549,7 +1549,7 @@
         "tooltip": "Fjern alle filtre"
     },
     "search_input": {
-        "placeholder": "Søk i e-poster... (bruk \"anførselstegn\" for eksakt treff)",
+        "placeholder": "Søk i e-poster... (Regex støttes)",
         "button": "Søk",
         "recent_title": "Nylige søk",
         "clear_history": "Tøm historikk",

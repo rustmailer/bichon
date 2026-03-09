@@ -16,13 +16,11 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-use mail_parser::{parsers::MessageStream, HeaderName, MessageParser};
+use mail_parser::{parsers::MessageStream, MessageParser, MimeHeaders};
 
 use crate::{
     base64_encode_url_safe,
-    modules::{
-        account::entity::Encryption, envelope::utils::normalize_subject, imap::client::Client,
-    },
+    modules::{account::entity::Encryption, imap::client::Client},
 };
 
 #[tokio::test]
@@ -109,13 +107,29 @@ R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7
 
 #[tokio::test]
 async fn test44() {
-    let path = r"C:\Users\polly\Downloads\test222.eml";
+    let path = r"C:\Users\polly\Downloads\test333.eml";
     let input = std::fs::read(path).unwrap();
     let message = MessageParser::default().parse(&input).unwrap();
-    let subject = message.subject().unwrap();
-    println!("Subject: {}", subject);
-    if subject.contains('\u{FFFD}') {
-        let subject = normalize_subject(message.header_raw(HeaderName::Subject));
-        println!("Subject: {}", subject);
+    for attachment in message.attachments() {
+        let content_type = attachment.content_type().unwrap();
+        let filename = attachment
+            .attachment_name()
+            .map(|name| name.to_string())
+            .unwrap_or_else(|| "unknown".to_string());
+
+        let disposition = attachment.content_disposition();
+
+        let file_type = format!(
+            "{}/{}",
+            content_type.c_type.as_ref(),
+            content_type.c_subtype.as_deref().unwrap_or("")
+        );
+
+        let inline = disposition.map(|d| d.is_inline()).unwrap_or(false);
+
+        println!(
+            "filename: {}, file_type: {}, inline: {}",
+            filename, file_type, inline
+        );
     }
 }

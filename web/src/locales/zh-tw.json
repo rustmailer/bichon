@@ -1549,7 +1549,7 @@
         "tooltip": "清除所有篩選條件"
     },
     "search_input": {
-        "placeholder": "搜尋郵件…（使用「雙引號」進行精確比對）",
+        "placeholder": "搜尋郵件... (支援正規表示式)",
         "button": "搜尋",
         "recent_title": "最近搜尋",
         "clear_history": "清除紀錄",

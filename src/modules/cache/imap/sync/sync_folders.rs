@@ -62,7 +62,7 @@ pub async fn get_sync_folders(
         mailboxes.iter().map(|(m, _)| m.name.clone()).collect(),
     )
     .await?;
-    let account = AccountModel::get(account.id).await?;
+    let account = AccountModel::async_get(account.id).await?;
     let subscribed = &account.sync_folders.unwrap_or_default();
     let is_noselect = |mailbox: &MailBox| {
         mailbox

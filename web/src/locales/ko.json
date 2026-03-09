@@ -1549,7 +1549,7 @@
         "tooltip": "모든 필터 조건 지우기"
     },
     "search_input": {
-        "placeholder": "메일 검색... (\"따옴표\"로 정확히 일치)",
+        "placeholder": "이메일 검색... (정규 표현식 지원)",
         "button": "검색",
         "recent_title": "최근 검색",
         "clear_history": "기록 지우기",

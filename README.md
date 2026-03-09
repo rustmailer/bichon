@@ -11,7 +11,19 @@
   A lightweight, high-performance Rust email archiver with WebUI
 </h3>
 
-<p style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+<p align="center">
+  <a href="https://github.com/rustmailer/bichon/stargazers">
+    <img src="https://img.shields.io/github/stars/rustmailer/bichon?style=for-the-badge&color=gold&label=STARS" alt="GitHub Stars">
+  </a>
+  <a href="https://hub.docker.com/r/rustmailer/bichon">
+    <img src="https://img.shields.io/docker/pulls/rustmailer/bichon?style=for-the-badge&color=2496ED&label=DOCKER%20PULLS" alt="Docker Pulls">
+  </a>
+  <a href="https://docs.google.com/forms/d/e/1FAIpQLScOlwsiUMfyQPBCLW2MLkygdRmAutEgvXDYPzzvEGPz0HFPXQ/viewform">
+    <img src="https://img.shields.io/badge/Roadmap-2026_Survey-blue?style=for-the-badge&logo=googleforms" alt="User Survey">
+  </a>
+</p>
+
+<p align="center">
   <a href="https://github.com/rustmailer/bichon/releases">
     <img src="https://img.shields.io/github/v/release/rustmailer/bichon" alt="Release">
   </a>
@@ -21,7 +33,9 @@
   <a href="LICENSE">
     <img src="https://img.shields.io/badge/license-AGPLv3-blue.svg" alt="License">
   </a>
-  <a href="https://deepwiki.com/rustmailer/bichon"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
+  <a href="https://deepwiki.com/rustmailer/bichon">
+    <img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki">
+  </a>
   <a href="https://discord.gg/Bq4M2cDmF4">
     <img src="https://img.shields.io/badge/Discord-Join%20Server-7289DA?logo=discord&logoColor=white" alt="Discord">
   </a>
@@ -29,6 +43,7 @@
     <img src="https://img.shields.io/twitter/follow/rustmailer?style=social" alt="Follow on X">
   </a>
 </p>
+
 </div>
 
 Bichon is an open-source email archiving system that **synchronizes emails from IMAP servers**, **indexes them for full-text search**, and provides a **REST API** for programmatic access.
@@ -59,6 +74,18 @@ Bichon implements a **Single-Instance Storage** philosophy at the account level 
 * **Lean Imports**: Duplicate emails encountered during `nosync` bulk imports are automatically merged.
 
 👉 [**Deep Dive: How Bichon handles de-duplication**](https://github.com/rustmailer/bichon/wiki/De%E2%80%90duplication)
+
+
+---
+
+### 📢 Shape the Future of Bichon!
+
+We’ve just reached **1.5k Stars**! To help us prioritize the **2026 Roadmap** (e.g., S3 support, Enterprise SSO, etc.), please take 1 minute to fill out our [User Feedback Survey](https://docs.google.com/forms/d/e/1FAIpQLScOlwsiUMfyQPBCLW2MLkygdRmAutEgvXDYPzzvEGPz0HFPXQ/viewform). 
+
+*Your input helps us keep the core engine free and fast!*
+
+---
+
 
 ## 🚀 Features
 

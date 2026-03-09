@@ -44,6 +44,8 @@ pub struct AccountCreateRequest {
     pub use_proxy: Option<u64>,
     pub use_dangerous: bool,
     pub pgp_key: Option<String>,
+    pub imap_daily_quota_bytes: Option<u32>,
+    pub auto_sync_new_mailboxes: Option<bool>,
 }
 
 impl AccountCreateRequest {
@@ -155,6 +157,8 @@ pub struct AccountUpdateRequest {
     pub use_dangerous: Option<bool>,
 
     pub pgp_key: Option<String>,
+    pub imap_daily_quota_bytes: Option<u32>,
+    pub auto_sync_new_mailboxes: Option<bool>,
 }
 
 impl AccountUpdateRequest {

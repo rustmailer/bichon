@@ -20,8 +20,9 @@ use crate::{
     decode_mailbox_name, encode_mailbox_name,
     modules::{
         database::{
-            async_find_impl, batch_delete_impl, batch_insert_impl, batch_upsert_impl, delete_impl,
-            filter_by_secondary_key_impl, manager::DB_MANAGER,
+            async_filter_by_secondary_key_impl, async_find_impl, batch_delete_impl,
+            batch_insert_impl, batch_upsert_impl, delete_impl, filter_by_secondary_key_impl,
+            manager::DB_MANAGER,
         },
         error::{code::ErrorCode, BichonResult},
     },
@@ -71,24 +72,6 @@ impl MailBox {
         encode_mailbox_name!(&self.name)
     }
 
-    // pub async fn batch_delete(mailboxes: Vec<MailBox>) -> BichonResult<()> {
-    //     batch_delete_impl(DB_MANAGER.envelope_db(), move |rw| {
-    //         let mut to_deleted = Vec::new();
-    //         for mailbox in mailboxes {
-    //             let retrived = rw
-    //                 .get()
-    //                 .primary::<MailBox>(mailbox.id)
-    //                 .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;
-    //             if let Some(retrived) = retrived {
-    //                 to_deleted.push(retrived);
-    //             }
-    //         }
-    //         Ok(to_deleted)
-    //     })
-    //     .await?;
-    //     Ok(())
-    // }
-
     pub async fn get(id: u64) -> BichonResult<MailBox> {
         let result = async_find_impl::<MailBox>(DB_MANAGER.envelope_db(), id).await?;
         Ok(result.ok_or_else(|| {
@@ -110,8 +93,21 @@ impl MailBox {
     }
 
     pub async fn list_all(account_id: u64) -> BichonResult<Vec<MailBox>> {
-        filter_by_secondary_key_impl(DB_MANAGER.envelope_db(), MailBoxKey::account_id, account_id)
-            .await
+        async_filter_by_secondary_key_impl(
+            DB_MANAGER.envelope_db(),
+            MailBoxKey::account_id,
+            account_id,
+        )
+        .await
+    }
+
+    pub fn find_mailbox(account_id: u64, mailbox_id: u64) -> BichonResult<Option<MailBox>> {
+        let all: Vec<MailBox> = filter_by_secondary_key_impl(
+            DB_MANAGER.envelope_db(),
+            MailBoxKey::account_id,
+            account_id,
+        )?;
+        Ok(all.into_iter().find(|m| m.id == mailbox_id))
     }
 
     pub async fn batch_insert(mailboxes: &[MailBox]) -> BichonResult<()> {

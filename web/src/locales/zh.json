@@ -1549,7 +1549,7 @@
     "tooltip": "清除所有筛选条件"
   },
   "search_input": {
-    "placeholder": "搜索邮件... (使用 \"双引号\" 进行精确匹配)",
+    "placeholder": "搜索邮件... (支持正则表达式)",
     "button": "搜索",
     "recent_title": "最近搜索",
     "clear_history": "清空记录",

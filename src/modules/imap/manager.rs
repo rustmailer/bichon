@@ -94,7 +94,7 @@ impl ImapConnectionManager {
     }
 
     pub async fn build(account_id: u64) -> BichonResult<Session<Box<dyn SessionStream>>> {
-        let account = AccountModel::get(account_id).await?;
+        let account = AccountModel::async_get(account_id).await?;
         let client = match Self::create_client(&account).await {
             Ok(client) => client,
             Err(error) => {

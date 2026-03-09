@@ -16,12 +16,9 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-
 use std::sync::LazyLock;
 
-use crate::modules::{
-    context::Initialize, error::BichonResult, utils::shutdown::shutdown_signal,
-};
+use crate::modules::{context::Initialize, error::BichonResult, utils::shutdown::shutdown_signal};
 use tokio::sync::broadcast;
 
 pub static SIGNAL_MANAGER: LazyLock<SignalManager> = LazyLock::new(SignalManager::new);

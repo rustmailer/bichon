@@ -1549,7 +1549,7 @@
         "tooltip": "Cancella tutti i filtri"
     },
     "search_input": {
-        "placeholder": "Cerca email... (usa le \"virgolette\" per corrispondenza esatta)",
+        "placeholder": "Cerca e-mail... (Regex supportato)",
         "button": "Cerca",
         "recent_title": "Ricerche recenti",
         "clear_history": "Cancella cronologia",

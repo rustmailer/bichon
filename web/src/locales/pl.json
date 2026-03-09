@@ -1549,7 +1549,7 @@
     "tooltip": "Wyczyść wszystkie filtry"
   },
   "search_input": {
-    "placeholder": "Szukaj e-maili... (użyj \"cudzysłowów\" dla dokładnego dopasowania)",
+    "placeholder": "Szukaj wiadomości... (Obsługuje Regex)",
     "button": "Szukaj",
     "recent_title": "Ostatnie wyszukiwania",
     "clear_history": "Wyczyść historię",

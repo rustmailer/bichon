@@ -34,6 +34,7 @@ use crate::modules::rest::response::DataPage;
 use crate::modules::rest::ApiResult;
 use crate::modules::rest::ErrorCode;
 use crate::modules::users::permissions::Permission;
+use crate::modules::utils::validate_tag;
 use crate::raise_error;
 use poem::Body;
 use poem_openapi::param::{Path, Query};
@@ -41,7 +42,6 @@ use poem_openapi::payload::{Attachment, AttachmentType, Json};
 use poem_openapi::OpenApi;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use tantivy::schema::Facet;
 
 pub struct MessageApi;
 
@@ -147,7 +147,7 @@ impl MessageApi {
 
     /// Fetches the content of a specific email.
     #[oai(
-        path = "/message-content/:account_id/:message_id",
+        path = "/message-content/:account_id/:envelope_id",
         method = "get",
         operation_id = "fetch_message_content"
     )]
@@ -156,7 +156,7 @@ impl MessageApi {
         /// The ID of the account.
         account_id: Path<u64>,
         /// The ID of the message to fetch.
-        message_id: Path<u64>,
+        envelope_id: Path<u64>,
         context: ClientContext,
     ) -> ApiResult<Json<FullMessageContent>> {
         let account_id = account_id.0;
@@ -164,13 +164,13 @@ impl MessageApi {
             .require_permission(Some(account_id), Permission::DATA_READ)
             .await?;
         Ok(Json(
-            retrieve_email_content(account_id, message_id.0).await?,
+            retrieve_email_content(account_id, envelope_id.0).await?,
         ))
     }
 
     /// Retrieves the envelope (metadata) of a specific message.
     #[oai(
-        path = "/envelope/:account_id/:message_id",
+        path = "/envelope/:account_id/:envelope_id",
         method = "get",
         operation_id = "get_envelope"
     )]
@@ -179,7 +179,7 @@ impl MessageApi {
         /// The ID of the account.
         account_id: Path<u64>,
         /// The ID of the message.
-        message_id: Path<u64>,
+        envelope_id: Path<u64>,
         context: ClientContext,
     ) -> ApiResult<Json<Envelope>> {
         let account_id = account_id.0;
@@ -187,13 +187,13 @@ impl MessageApi {
             .require_permission(Some(account_id), Permission::DATA_READ)
             .await?;
         let envelope = ENVELOPE_INDEX_MANAGER
-            .get_envelope_by_id(account_id, message_id.0)
+            .get_envelope_by_id(account_id, envelope_id.0)
             .await?
             .ok_or_else(|| {
                 raise_error!(
                     format!(
-                        "Envelope not found: account_id={} message_id={}",
-                        account_id, message_id.0
+                        "Envelope not found: account_id={} envelope_id={}",
+                        account_id, envelope_id.0
                     ),
                     ErrorCode::ResourceNotFound
                 )
@@ -203,7 +203,7 @@ impl MessageApi {
 
     /// Downloads the raw EML file of a specific email.
     #[oai(
-        path = "/download-message/:account_id/:message_id",
+        path = "/download-message/:account_id/:envelope_id",
         method = "get",
         operation_id = "download_message"
     )]
@@ -212,7 +212,7 @@ impl MessageApi {
         /// The ID of the account.
         account_id: Path<u64>,
         /// The ID of the message to download.
-        message_id: Path<u64>,
+        envelope_id: Path<u64>,
         context: ClientContext,
     ) -> ApiResult<Attachment<Body>> {
         let account_id = account_id.0;
@@ -220,12 +220,12 @@ impl MessageApi {
         context
             .require_permission(Some(account_id), Permission::DATA_RAW_DOWNLOAD)
             .await?;
-        let message_id = message_id.0;
-        let reader = EML_INDEX_MANAGER.get_reader(account_id, message_id).await?;
+        let envelope_id = envelope_id.0;
+        let reader = EML_INDEX_MANAGER.get_reader(account_id, envelope_id).await?;
         let body = Body::from_async_read(reader);
         let attachment = Attachment::new(body)
             .attachment_type(AttachmentType::Attachment)
-            .filename(format!("{message_id}.eml"));
+            .filename(format!("{envelope_id}.eml"));
         Ok(attachment)
     }
 
@@ -250,7 +250,7 @@ impl MessageApi {
 
     /// Downloads a specific attachment from an email. Requires `name` query parameter.
     #[oai(
-        path = "/download-attachment/:account_id/:message_id",
+        path = "/download-attachment/:account_id/:envelope_id",
         method = "get",
         operation_id = "download_attachment"
     )]
@@ -259,7 +259,7 @@ impl MessageApi {
         /// The ID of the account.
         account_id: Path<u64>,
         /// The ID of the message containing the attachment.
-        message_id: Path<u64>,
+        envelope_id: Path<u64>,
         /// The filename of the attachment to download.
         name: Query<String>,
         context: ClientContext,
@@ -271,7 +271,7 @@ impl MessageApi {
             .await?;
         let name = name.0.trim();
         let reader = EML_INDEX_MANAGER
-            .get_attachment(account_id, message_id.0, name)
+            .get_attachment(account_id, envelope_id.0, name)
             .await?;
         let body = Body::from_async_read(reader);
         let attachment = Attachment::new(body)
@@ -308,8 +308,8 @@ impl MessageApi {
     ) -> ApiResult<()> {
         let req = req.0;
         for tag in &req.tags {
-            Facet::from_text(tag)
-                .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InvalidParameter))?;
+            validate_tag(tag)
+                .map_err(|e| raise_error!(format!("{}", e), ErrorCode::InvalidParameter))?;
         }
 
         for account_id in req.updates.keys() {

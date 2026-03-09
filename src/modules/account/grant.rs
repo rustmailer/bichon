@@ -58,7 +58,7 @@ impl BatchAccountRoleRequest {
         }
 
         for id in &self.account_ids {
-            let exists = AccountModel::find(*id).await?; // Assuming an exists helper
+            let exists = AccountModel::async_find(*id).await?; // Assuming an exists helper
             if exists.is_none() {
                 return Err(raise_error!(
                     format!("Account ID {} not found", id),

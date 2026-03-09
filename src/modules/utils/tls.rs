@@ -77,7 +77,7 @@ async fn establish_rustls_stream(
     let tls_stream = tls_connector
         .connect(server_name, stream)
         .await
-        .map_err(|e| raise_error!(e.to_string(), ErrorCode::NetworkError))?;
+        .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::NetworkError))?;
 
     Ok(tls_stream)
 }

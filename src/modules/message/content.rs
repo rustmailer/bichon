@@ -16,11 +16,11 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-
 use crate::base64_encode;
 use crate::modules::account::migration::AccountModel;
 use crate::modules::error::code::ErrorCode;
-use crate::modules::indexer::manager::EML_INDEX_MANAGER;
+use crate::modules::indexer::manager::{EML_INDEX_MANAGER, ENVELOPE_INDEX_MANAGER};
+use crate::modules::utils::create_hash;
 use crate::{modules::error::BichonResult, raise_error};
 use mail_parser::{MessageParser, MimeHeaders};
 
@@ -45,6 +45,72 @@ pub struct AttachmentInfo {
     pub content_id: Option<String>,
 }
 
+impl AttachmentInfo {
+    pub fn get_extension(&self) -> String {
+        std::path::Path::new(&self.filename)
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .map(|ext| ext.to_lowercase())
+            .unwrap_or_default()
+    }
+
+    pub fn get_category(&self) -> &'static str {
+        let ext = self.get_extension();
+
+        let category = match ext.as_str() {
+            "doc" | "docx" | "pdf" | "rtf" | "odt" | "pages" | "pptx" | "ppt" => Some("document"),
+            "xls" | "xlsx" | "ods" | "numbers" | "csv" => Some("spreadsheet"),
+            "ical" | "ics" | "vcs" | "ifb" | "icalendar" => Some("event"),
+            "txt" | "log" | "md" => Some("text"),
+            "jpg" | "jpeg" | "png" | "gif" | "bmp" | "tiff" | "avif" | "heic" | "heif" | "webp" => {
+                Some("image")
+            }
+            "mp4" | "mkv" | "mov" | "avi" | "webm" => Some("video"),
+            "wav" | "mp3" | "aac" | "ogg" | "wma" | "flac" | "aiff" => Some("audio"),
+            "psd" | "eps" | "svg" | "cdr" | "ai" => Some("graphics_2d"),
+            "stl" | "obj" | "3mf" | "amf" | "f3d" | "sldprt" | "stp" | "step" | "dwg" | "x_t"
+            | "x_b" | "sat" | "ipt" => Some("graphics_3d"),
+            "c" | "h" | "html" | "css" | "js" | "ts" | "vue" | "tsx" | "svelte" | "py" | "java"
+            | "cs" | "go" | "rb" | "php" | "swift" | "rs" | "r" | "jl" | "lua" | "sql" => {
+                Some("code")
+            }
+            "tsv" | "xml" | "json" | "yml" | "yaml" | "toml" | "env" | "ini" => Some("data"),
+            "ps1" | "sh" | "bat" | "cmd" | "exe" | "msi" | "dmg" | "pkg" | "deb" | "rpm" => {
+                Some("executable")
+            }
+            "zip" | "gz" | "tgz" | "7z" | "rar" | "tar" | "bz2" | "zst" | "xz" | "iso" | "img" => {
+                Some("archive")
+            }
+            _ => None,
+        };
+
+        if let Some(cat) = category {
+            return cat;
+        }
+
+        let mime = self.file_type.to_lowercase();
+        if mime.starts_with("image/") {
+            return "image";
+        }
+        if mime.starts_with("video/") {
+            return "video";
+        }
+        if mime.starts_with("audio/") {
+            return "audio";
+        }
+        if mime.starts_with("text/") {
+            return "text";
+        }
+        if mime.contains("compressed") || mime.contains("zip") || mime.contains("archive") {
+            return "archive";
+        }
+        if mime.contains("pdf") || mime.contains("msword") || mime.contains("officedocument") {
+            return "document";
+        }
+
+        "other"
+    }
+}
 /// Represents the content of an email message in both plain text and HTML formats.
 ///
 /// This struct contains optional fields for plain text and HTML versions of
@@ -64,13 +130,23 @@ pub struct FullMessageContent {
     pub attachments: Option<Vec<AttachmentInfo>>,
 }
 
-pub async fn retrieve_email_content(
-    account_id: u64,
-    id: u64,
-) -> BichonResult<FullMessageContent> {
+pub async fn retrieve_email_content(account_id: u64, id: u64) -> BichonResult<FullMessageContent> {
     AccountModel::check_account_exists(account_id).await?;
+    let envelope = ENVELOPE_INDEX_MANAGER
+        .get_envelope_by_id(account_id, id)
+        .await?
+        .ok_or_else(|| {
+            raise_error!(
+                format!(
+                    "Email record not found: account_id={} id={}",
+                    account_id, id
+                ),
+                ErrorCode::ResourceNotFound
+            )
+        })?;
+    let eml_id = create_hash(account_id, &envelope.message_id);
     let eml = EML_INDEX_MANAGER
-        .get(account_id, id)
+        .get(account_id, eml_id)
         .await?
         .ok_or_else(|| {
             raise_error!(
@@ -130,10 +206,14 @@ pub async fn retrieve_email_content(
                 }
             }
         }
+        //inline attachment will not be displayed in email attachment list
+        if inline && attachment.content_id().is_some() {
+            continue;
+        }
 
         attachments.push(AttachmentInfo {
             filename,
-            size: attachment.len(),
+            size: attachment.contents().len(),
             inline,
             file_type,
             content_id: attachment.content_id().map(Into::into),

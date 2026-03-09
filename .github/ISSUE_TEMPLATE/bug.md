@@ -8,6 +8,12 @@ assignees: ""
 
 > **Please write and communicate in English.**
 
+
+---
+**Help us build a more stable Bichon!** 🛠️  
+While we look into this bug, consider sharing your usage patterns in our [2026 Roadmap Survey](https://docs.google.com/forms/d/e/1FAIpQLScOlwsiUMfyQPBCLW2MLkygdRmAutEgvXDYPzzvEGPz0HFPXQ/viewform) to help us prioritize stability and features.
+---
+
 ### Version
 Which version are you using?
 

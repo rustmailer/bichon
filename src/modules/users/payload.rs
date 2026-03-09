@@ -284,7 +284,7 @@ impl UserCreateRequest {
         }
 
         for (aid, rid) in &self.account_access_map {
-            if AccountModel::find(*aid).await?.is_none() {
+            if AccountModel::async_find(*aid).await?.is_none() {
                 return Err(raise_error!(
                     format!("Account {} not found", aid),
                     ErrorCode::InvalidParameter
@@ -404,7 +404,7 @@ impl UserUpdateRequest {
 
         if let Some(account_access_map) = &self.account_access_map {
             for (aid, rid) in account_access_map {
-                if AccountModel::find(*aid).await?.is_none() {
+                if AccountModel::async_find(*aid).await?.is_none() {
                     return Err(raise_error!(
                         format!("Account {} not found", aid),
                         ErrorCode::InvalidParameter

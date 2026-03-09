@@ -58,7 +58,7 @@ impl AccountApi {
         context
             .require_permission(Some(account_id), Permission::ACCOUNT_READ_DETAILS)
             .await?;
-        Ok(Json(AccountModel::get(account_id).await?))
+        Ok(Json(AccountModel::async_get(account_id).await?))
     }
 
     /// Delete an account by ID - WARNING: This permanently removes the account and all associated resources

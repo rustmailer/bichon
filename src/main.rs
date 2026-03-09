@@ -21,6 +21,7 @@ use bichon::{
     modules::{
         common::rustls::RustMailerTls,
         context::{executors::BichonContext, Initialize},
+        duckdb::init::DuckDBManager,
         error::BichonResult,
         logger,
         rest::start_http_server,
@@ -69,6 +70,7 @@ async fn initialize() -> BichonResult<()> {
     // SETTINGS.validate()?;
     SignalManager::initialize().await?;
     DataDirManager::initialize().await?;
+    DuckDBManager::initialize().await?;
     UserManager::initialize().await?;
     RustMailerTls::initialize().await?;
     BichonContext::initialize().await?;

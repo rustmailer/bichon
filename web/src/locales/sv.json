@@ -1549,7 +1549,7 @@
         "tooltip": "Rensa alla filter"
     },
     "search_input": {
-        "placeholder": "Sök e-post... (använd \"citattecken\" för exakt matchning)",
+        "placeholder": "Sök e-post... (Regex stöds)",
         "button": "Sök",
         "recent_title": "Senaste sökningar",
         "clear_history": "Rensa historik",
