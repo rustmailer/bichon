@@ -30,6 +30,7 @@ pub struct UserView {
     pub username: String,
     pub email: String,
 
+    #[serde(skip_serializing)]
     pub password: Option<String>,
 
     /// Scoped Access: Defines per-account permissions.
