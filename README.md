@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/rustmailer-bichon-badge.png)](https://mseep.ai/app/rustmailer-bichon)
+
 <div align="center">
 
 <h1 align="center">
