@@ -52,7 +52,10 @@ pub async fn decide_next_download_task(
     };
 
     let should_start = match trigger_type {
-        TriggerType::Manual => true,
+        // Manual and Idle both bypass the schedule/cooldown — Manual
+        // because a human asked, Idle because the server just told us
+        // something changed. Either way, run it now.
+        TriggerType::Manual | TriggerType::Idle => true,
         TriggerType::Scheduled => {
             let now = utc_now!();
             let cooldown_ok = now - state.last_finished_at.unwrap_or(0) > 60 * 1000;

@@ -3,4 +3,4 @@
 .idea
 config.toml
 node_modules
-dedup_report.txt
+dedup_report.txt.cargo/

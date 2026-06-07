@@ -247,6 +247,7 @@ impl From<AccountV3> for AccountModel {
             date_since: value.date_since,
             date_before: value.date_before,
             download_folders: value.sync_folders,
+            idle_mailboxes: None,
             account_type: value.account_type,
             download_interval_min: value.sync_interval_min,
             download_batch_size: value.sync_batch_size,

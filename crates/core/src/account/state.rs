@@ -40,6 +40,10 @@ pub enum TriggerType {
     Manual,
     #[default]
     Scheduled,
+    /// Triggered by an IMAP IDLE notification (RFC 2177). The download
+    /// task treats it like `Scheduled`, but downstream observability
+    /// can distinguish "real-time" syncs from the 10-second poll cycle.
+    Idle,
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Deserialize, Serialize)]

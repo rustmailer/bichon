@@ -27,7 +27,7 @@ use crate::{
         since::{DateSince, RelativeDate},
         state::DownloadState,
     },
-    cache::imap::{mailbox::MailBox, task::SYNC_TASKS},
+    cache::imap::{idle::IDLE_SUPERVISOR, mailbox::MailBox, task::SYNC_TASKS},
     common::paginated::DataPage,
     context::controller::DOWNLOAD_CONTROLLER,
     database::{
@@ -81,6 +81,12 @@ pub struct Account {
     pub date_since: Option<DateSince>,
     pub date_before: Option<RelativeDate>,
     pub download_folders: Option<Vec<String>>,
+    /// Mailboxes on which to keep a permanent IMAP IDLE connection
+    /// (RFC 2177). When set and the server advertises `IDLE`, each
+    /// listed mailbox spawns a dedicated supervisor that triggers an
+    /// incremental sync as soon as the server pushes a notification.
+    /// `None` or an empty list keeps the legacy poll-only behaviour.
+    pub idle_mailboxes: Option<Vec<String>>,
     pub account_type: AccountType,
     pub download_interval_min: Option<i64>,
     pub download_batch_size: Option<u32>,
@@ -120,6 +126,7 @@ impl Account {
             capabilities: None,
             date_since: request.date_since,
             download_folders: None,
+            idle_mailboxes: None,
             known_folders: None,
             account_type: request.account_type,
             download_interval_min: request.download_interval_min,
@@ -241,6 +248,7 @@ impl Account {
     async fn cleanup_account_resources_sequential(account: &AccountModel) -> BichonResult<()> {
         if matches!(account.account_type, AccountType::IMAP) {
             SYNC_TASKS.stop(account.id).await?;
+            IDLE_SUPERVISOR.stop_account(account.id).await;
             DownloadState::delete(account.id)?;
         }
         OAuth2AccessToken::try_delete(account.id)?;

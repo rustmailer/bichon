@@ -21,6 +21,7 @@ use std::collections::{HashMap, HashSet};
 use mailbox::MailBox;
 
 pub mod download;
+pub mod idle;
 pub mod mailbox;
 pub mod mailbox_cache;
 pub mod task;

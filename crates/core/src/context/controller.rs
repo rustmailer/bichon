@@ -16,7 +16,11 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::{cache::imap::task::SYNC_TASKS, error::BichonResult};
+use crate::{
+    account::migration::AccountModel,
+    cache::imap::{idle::IDLE_SUPERVISOR, task::SYNC_TASKS},
+    error::BichonResult,
+};
 use std::{sync::LazyLock, time::Duration};
 use tokio::sync::mpsc;
 use tracing::{error, info};
@@ -65,6 +69,14 @@ impl DownloadController {
             account_id, email
         );
         SYNC_TASKS.start_download_task(account_id, email).await;
+        // Best-effort: if the user has opted into IDLE for one or more
+        // mailboxes AND the server advertises IDLE, also spin up the
+        // real-time supervisor alongside the legacy poll loop. Failure
+        // here must NEVER block the legacy path, so the result is
+        // swallowed and logged.
+        if let Ok(account) = AccountModel::get(account_id) {
+            IDLE_SUPERVISOR.start_account(account).await;
+        }
         tokio::time::sleep(Duration::from_millis(100)).await;
         Ok(())
     }

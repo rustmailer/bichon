@@ -41,6 +41,8 @@ pub struct AccountResp {
     pub date_since: Option<DateSince>,
     pub date_before: Option<RelativeDate>,
     pub download_folders: Option<Vec<String>>,
+    /// Mailboxes kept on permanent IMAP IDLE. See `AccountModel`.
+    pub idle_mailboxes: Option<Vec<String>>,
     pub account_type: AccountType,
     pub download_interval_min: Option<i64>,
     pub download_batch_size: Option<u32>,
@@ -74,6 +76,7 @@ impl AccountResp {
             date_since: account.date_since,
             date_before: account.date_before,
             download_folders: account.download_folders,
+            idle_mailboxes: account.idle_mailboxes,
             account_type: account.account_type,
             download_interval_min: account.download_interval_min,
             download_batch_size: account.download_batch_size,
