@@ -180,6 +180,10 @@ pub struct AccountUpdateRequest {
     pub auto_download_new_mailboxes: Option<bool>,
     pub download_schedule: Option<String>,
     pub clear_download_schedule: Option<bool>,
+    /// Mailboxes to keep on a permanent IMAP IDLE connection. Pass `[]`
+    /// (empty) to stop IDLE for this account, or `null`/omit to leave it
+    /// unchanged. See `Account.idle_mailboxes`.
+    pub idle_mailboxes: Option<Vec<String>>,
 }
 
 impl AccountUpdateRequest {

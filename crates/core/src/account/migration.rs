@@ -398,6 +398,15 @@ impl Account {
             if let Some(folder_names) = request.sync_folders {
                 new.download_folders = Some(folder_names);
             }
+            // IDLE_SUPERVISOR will be reconciled by the caller after the DB
+            // write commits; here we just mutate the stored value.
+            if let Some(idle_mailboxes) = request.idle_mailboxes {
+                new.idle_mailboxes = if idle_mailboxes.is_empty() {
+                    None
+                } else {
+                    Some(idle_mailboxes)
+                };
+            }
             if let Some(sync_interval_min) = &request.download_interval_min {
                 new.download_interval_min = Some(*sync_interval_min);
             }

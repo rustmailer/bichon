@@ -107,7 +107,15 @@ impl AccountApi {
     ) -> ApiResult<()> {
         let account_id = account_id.0;
         context.require_permission(Some(account_id), Permission::ACCOUNT_MANAGE)?;
-        Ok(AccountModel::update(account_id, payload.0, true)?)
+        AccountModel::update(account_id, payload.0, true)?;
+        // Reconcile the IDLE supervisor so a config change (idle_mailboxes
+        // added, modified or cleared) takes effect without a restart.
+        if let Ok(updated) = AccountModel::get(account_id) {
+            bichon_core::cache::imap::idle::IDLE_SUPERVISOR
+                .start_account(updated)
+                .await;
+        }
+        Ok(())
     }
 
     /// List accounts with optional pagination parameters
