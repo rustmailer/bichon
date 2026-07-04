@@ -999,6 +999,9 @@ async fn perform_incremental_sync(
             account,
             local_mailbox,
             start_uid,
+            remote_mailbox
+                .uid_next
+                .and_then(|uid_next| uid_next.checked_sub(1)),
             before_date.as_deref(),
             token,
         )

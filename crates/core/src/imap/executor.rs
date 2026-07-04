@@ -101,7 +101,8 @@ impl ImapExecutor {
     ///
     /// When `before` is `Some(date)`, a two-step approach is used:
     /// `UID SEARCH` to find matching UIDs (standard IMAP), then batch `UID FETCH`
-    /// for the specific UIDs. When `before` is `None`, a direct ranged
+    /// for the specific UIDs. When `before` is `None`, bounded ranges are batched
+    /// when the server supplied `UIDNEXT`; otherwise a direct ranged
     /// `UID FETCH {start}:*` is issued and results are streamed.
     ///
     /// Returns `Ok(Some(max_uid))` with the highest UID fetched, or `Ok(None)`
@@ -111,6 +112,7 @@ impl ImapExecutor {
         account: &AccountModel,
         mailbox: &MailBox,
         start_uid: u64,
+        end_uid: Option<u32>,
         before: Option<&str>,
         token: CancellationToken,
     ) -> BichonResult<Option<u32>> {
@@ -126,7 +128,10 @@ impl ImapExecutor {
                 Self::fetch_new_mail_with_before(session, account, mailbox, start_uid, date, token)
                     .await
             }
-            None => Self::fetch_new_mail_range(session, account, mailbox, start_uid, token).await,
+            None => {
+                Self::fetch_new_mail_range(session, account, mailbox, start_uid, end_uid, token)
+                    .await
+            }
         }
     }
 
@@ -233,15 +238,107 @@ impl ImapExecutor {
         Ok(max_uid)
     }
 
-    /// Direct ranged UID FETCH without date filtering. Streams results from
-    /// the server in a single IMAP round-trip.
+    /// Ranged UID FETCH without date filtering. If `end_uid` is known, split the
+    /// range into bounded batches so large backlogs cannot occupy one long-lived
+    /// IMAP stream. If `end_uid` is unavailable, preserve the legacy unbounded
+    /// streaming behavior.
     async fn fetch_new_mail_range(
         session: &mut Session<Box<dyn SessionStream>>,
         account: &AccountModel,
         mailbox: &MailBox,
         start_uid: u64,
+        end_uid: Option<u32>,
         token: CancellationToken,
     ) -> BichonResult<Option<u32>> {
+        if let Some(end_uid) = end_uid {
+            if start_uid > end_uid as u64 {
+                DownloadState::update_folder_progress(
+                    account.id,
+                    mailbox.name.clone(),
+                    0,
+                    0,
+                    FolderStatus::Success,
+                    Some("No new emails found.".into()),
+                )?;
+                return Ok(None);
+            }
+
+            let batch_size = account.download_batch_size.unwrap_or(DEFAULT_BATCH_SIZE) as usize;
+            let uid_batches = generate_uid_range_batches(start_uid, end_uid, batch_size);
+            let planned = uid_batches.iter().map(|(_, count, _)| *count).sum();
+
+            DownloadState::update_folder_progress(
+                account.id,
+                mailbox.name.clone(),
+                planned,
+                0,
+                FolderStatus::Pending,
+                None,
+            )?;
+
+            let mut count = 0u64;
+            let mut max_uid: Option<u32> = None;
+            for (uid_range, _, batch_end) in uid_batches {
+                if token.is_cancelled() {
+                    tracing::info!("Account {}: fetch_new_mail batch interrupted.", account.id);
+                    DownloadState::update_session_status(
+                        account.id,
+                        DownloadStatus::Cancelled,
+                        Some("User stopped or system shutdown".to_string()),
+                    )?;
+                    DownloadState::update_folder_progress(
+                        account.id,
+                        mailbox.name.clone(),
+                        planned,
+                        count,
+                        FolderStatus::Cancelled,
+                        None,
+                    )?;
+                    return Err(raise_error!(
+                        "Stream cancelled".into(),
+                        ErrorCode::InternalError
+                    ));
+                }
+
+                info!(
+                    "[account {}][mailbox {}] fetch_new_mail: batched UID FETCH {}",
+                    account.id, mailbox.name, uid_range
+                );
+                let processed = Self::uid_batch_retrieve_emails(
+                    session,
+                    account.id,
+                    mailbox.id,
+                    &uid_range,
+                    account.max_email_size_bytes,
+                    token.clone(),
+                )
+                .await?;
+                count += processed;
+                if processed > 0 {
+                    max_uid = Some(batch_end);
+                }
+                DownloadState::update_folder_progress(
+                    account.id,
+                    mailbox.name.clone(),
+                    planned,
+                    count,
+                    FolderStatus::Downloading,
+                    None,
+                )?;
+            }
+
+            DownloadState::update_folder_progress(
+                account.id,
+                mailbox.name.clone(),
+                count,
+                count,
+                FolderStatus::Success,
+                None,
+            )?;
+
+            return Ok(max_uid);
+        }
+
         let uid_range = format!("{start_uid}:*");
         info!(
             "[account {}][mailbox {}] fetch_new_mail: direct UID FETCH {}",
@@ -646,6 +743,44 @@ pub fn generate_uid_sequence_hashset(
     result
 }
 
+/// Splits a bounded inclusive UID range into IMAP sequence-set batches.
+/// Returns `Vec<(sequence_set_string, batch_count, batch_end_uid)>`.
+fn generate_uid_range_batches(
+    start_uid: u64,
+    end_uid: u32,
+    chunk_size: usize,
+) -> Vec<(String, u64, u32)> {
+    assert!(chunk_size > 0);
+
+    if start_uid == 0 || start_uid > end_uid as u64 || start_uid > u32::MAX as u64 {
+        return Vec::new();
+    }
+
+    let mut result = Vec::new();
+    let mut start = start_uid as u32;
+
+    while start <= end_uid {
+        let end = start
+            .saturating_add(chunk_size as u32)
+            .saturating_sub(1)
+            .min(end_uid);
+        let count = end as u64 - start as u64 + 1;
+        let sequence_set = if start == end {
+            start.to_string()
+        } else {
+            format!("{start}:{end}")
+        };
+        result.push((sequence_set, count, end));
+
+        if end == u32::MAX {
+            break;
+        }
+        start = end + 1;
+    }
+
+    result
+}
+
 fn parse_message_id_header(header_bytes: &[u8]) -> Option<String> {
     let header = std::str::from_utf8(header_bytes).ok()?;
     for line in header.lines() {
@@ -723,6 +858,23 @@ mod test {
         assert_eq!(batches[2].1, 1);
     }
 
+    #[test]
+    fn uid_range_batches_do_not_use_unbounded_fetch() {
+        let batches = generate_uid_range_batches(195_225, 195_426, 100);
+
+        assert_eq!(
+            batches,
+            vec![
+                ("195225:195324".to_string(), 100, 195_324),
+                ("195325:195424".to_string(), 100, 195_424),
+                ("195425:195426".to_string(), 2, 195_426),
+            ]
+        );
+        assert!(batches
+            .iter()
+            .all(|(sequence_set, _, _)| !sequence_set.contains('*')));
+    }
+
     // ── parse_message_id_header ─────────────────────────────────────
 
     #[test]
@@ -737,10 +889,7 @@ mod test {
     #[test]
     fn parse_message_id_lowercase() {
         let header = b"Message-Id: <foo@bar.com>\r\n";
-        assert_eq!(
-            parse_message_id_header(header),
-            Some("foo@bar.com".into())
-        );
+        assert_eq!(parse_message_id_header(header), Some("foo@bar.com".into()));
     }
 
     #[test]
