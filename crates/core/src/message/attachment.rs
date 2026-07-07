@@ -66,14 +66,6 @@ pub async fn retrieve_attachment_content_self_healing(
 ) -> BichonResult<Cursor<Bytes>> {
     let (envelope, eml) = reattach_eml_content_self_healing(account_id, envelope_id).await?;
 
-    let indexed_attachment = envelope_has_attachment(account_id, &envelope.id, content_hash)?;
-    let detached_placeholder = eml_contains_detached_attachment_placeholder(&eml, content_hash);
-    if indexed_attachment || detached_placeholder {
-        if let Some(content) = BLOB_MANAGER.get_decoded_attachment(content_hash)? {
-            return Ok(Cursor::new(content));
-        }
-    }
-
     match find_attachment_content(&eml, content_hash) {
         Ok(Some(content)) => return Ok(Cursor::new(content)),
         Ok(None) => {}
@@ -85,6 +77,14 @@ pub async fn retrieve_attachment_content_self_healing(
                 error = %error,
                 "Reconstructed message attachment lookup failed; attempting IMAP recovery"
             );
+        }
+    }
+
+    let indexed_attachment = envelope_has_attachment(account_id, &envelope.id, content_hash)?;
+    let detached_placeholder = eml_contains_detached_attachment_placeholder(&eml, content_hash);
+    if indexed_attachment || detached_placeholder {
+        if let Some(content) = get_matching_decoded_attachment(content_hash)? {
+            return Ok(Cursor::new(content));
         }
     }
 
@@ -101,7 +101,7 @@ pub async fn retrieve_attachment_content_self_healing(
             || detached_placeholder
             || eml_contains_detached_attachment_placeholder(&raw_body, content_hash)
         {
-            if let Some(content) = BLOB_MANAGER.get_decoded_attachment(content_hash)? {
+            if let Some(content) = get_matching_decoded_attachment(content_hash)? {
                 return Ok(Cursor::new(content));
             }
         }
@@ -114,6 +114,24 @@ pub async fn retrieve_attachment_content_self_healing(
         "Target attachment not found".into(),
         ErrorCode::ResourceNotFound
     ))
+}
+
+fn get_matching_decoded_attachment(content_hash: &str) -> BichonResult<Option<Bytes>> {
+    let Some(content) = BLOB_MANAGER.get_decoded_attachment(content_hash)? else {
+        return Ok(None);
+    };
+    if decoded_attachment_matches_hash(&content, content_hash) {
+        return Ok(Some(content));
+    }
+    tracing::warn!(
+        content_hash,
+        "Decoded attachment blob did not match requested content hash; falling back to raw MIME recovery"
+    );
+    Ok(None)
+}
+
+fn decoded_attachment_matches_hash(content: &[u8], content_hash: &str) -> bool {
+    compute_content_hash(content) == content_hash
 }
 
 fn envelope_has_attachment(
@@ -201,7 +219,8 @@ pub fn retrieve_nested_attachment_content(
 
 #[cfg(test)]
 mod tests {
-    use super::eml_contains_detached_attachment_placeholder;
+    use super::{decoded_attachment_matches_hash, eml_contains_detached_attachment_placeholder};
+    use crate::utils::compute_content_hash;
 
     #[test]
     fn detects_exact_detached_attachment_placeholder() {
@@ -215,6 +234,18 @@ mod tests {
         assert!(!eml_contains_detached_attachment_placeholder(
             eml.as_bytes(),
             "12fc5a986e7f358daf4536cbc414757458b55c9b25333f2c9c868884735f0555"
+        ));
+    }
+
+    #[test]
+    fn verifies_decoded_attachment_hash_before_returning_it() {
+        let decoded = b"%PDF-1.4\nvalid decoded payload";
+        let hash = compute_content_hash(decoded);
+
+        assert!(decoded_attachment_matches_hash(decoded, &hash));
+        assert!(!decoded_attachment_matches_hash(
+            b"JVBERi0xLjQKnot decoded bytes",
+            &hash
         ));
     }
 }
