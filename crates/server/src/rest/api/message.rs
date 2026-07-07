@@ -24,11 +24,11 @@ use bichon_core::common::paginated::DataPage;
 use bichon_core::error::code::ErrorCode;
 use bichon_core::message::append::restore_emails;
 use bichon_core::message::append::RestoreMessagesRequest;
-use bichon_core::message::attachment::retrieve_attachment_content;
+use bichon_core::message::attachment::retrieve_attachment_content_self_healing;
 use bichon_core::message::attachment::retrieve_nested_attachment_content;
 use bichon_core::message::content::retrieve_nested_eml_content;
 use bichon_core::message::content::FullNestedMessageContent;
-use bichon_core::message::content::{retrieve_email_content, FullMessageContent};
+use bichon_core::message::content::{retrieve_email_content_self_healing, FullMessageContent};
 use bichon_core::message::delete::delete_messages_impl;
 use bichon_core::message::list::get_thread_messages;
 use bichon_core::message::search::{search_messages_impl, EmailSearchRequest};
@@ -141,11 +141,9 @@ impl MessageApi {
         let account_id = account_id.0;
         let block_remote = block_remote_content.0.unwrap_or(false);
         context.require_permission(Some(account_id), Permission::DATA_READ)?;
-        Ok(Json(retrieve_email_content(
-            account_id,
-            envelope_id.0,
-            block_remote,
-        )?))
+        Ok(Json(
+            retrieve_email_content_self_healing(account_id, envelope_id.0, block_remote).await?,
+        ))
     }
 
     /// Retrieves the content of an email embedded as an attachment.
@@ -272,7 +270,8 @@ impl MessageApi {
         AccountModel::check_account_exists(account_id)?;
         context.require_permission(Some(account_id), Permission::DATA_READ)?;
         let content_hash = content_hash.0.trim();
-        let reader = retrieve_attachment_content(account_id, envelope_id, content_hash)?;
+        let reader =
+            retrieve_attachment_content_self_healing(account_id, envelope_id, content_hash).await?;
         let body = Body::from_async_read(reader);
         let attachment = Attachment::new(body)
             .attachment_type(AttachmentType::Attachment)
@@ -302,7 +301,8 @@ impl MessageApi {
         AccountModel::check_account_exists(account_id)?;
         context.require_permission(Some(account_id), Permission::DATA_READ)?;
         let content_hash = content_hash.0.trim();
-        let reader = retrieve_attachment_content(account_id, envelope_id, content_hash)?;
+        let reader =
+            retrieve_attachment_content_self_healing(account_id, envelope_id, content_hash).await?;
         let body = Body::from_async_read(reader);
         Ok(Attachment::new(body).attachment_type(AttachmentType::Inline))
     }

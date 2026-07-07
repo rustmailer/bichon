@@ -18,12 +18,17 @@
 
 use crate::account::migration::AccountModel;
 use crate::base64_encode;
-use crate::envelope::extractor::{extract_envelope_from_nested_message, reattach_eml_content};
+use crate::envelope::extractor::{
+    extract_envelope_from_nested_message, reattach_eml_content, reattach_eml_content_self_healing,
+    recover_message_blob,
+};
 use crate::error::code::ErrorCode;
 use crate::store::envelope::Envelope;
+use crate::store::tantivy::envelope::ENVELOPE_MANAGER;
 use crate::utils::compute_content_hash;
 use crate::utils::html::block_remote_content;
 use crate::{error::BichonResult, raise_error};
+use bytes::Bytes;
 use mail_parser::{MessageParser, MimeHeaders};
 //use poem_openapi::Object;
 use serde::{Deserialize, Serialize};
@@ -179,6 +184,90 @@ pub fn retrieve_email_content(
 ) -> BichonResult<FullMessageContent> {
     AccountModel::check_account_exists(account_id)?;
     let (envelope, eml) = reattach_eml_content(account_id, envelope_id)?;
+    build_full_message_content(&envelope, eml, block_remote)
+}
+
+pub async fn retrieve_email_content_self_healing(
+    account_id: u64,
+    envelope_id: String,
+    block_remote: bool,
+) -> BichonResult<FullMessageContent> {
+    AccountModel::check_account_exists(account_id)?;
+    let (envelope, eml) = reattach_eml_content_self_healing(account_id, envelope_id).await?;
+    let indexed_attachments = indexed_attachments(account_id, &envelope.id)?;
+    let parsed_content = match build_full_message_content(&envelope, eml, block_remote) {
+        Ok(content) => content,
+        Err(error) if envelope.regular_attachment_count > 0 => {
+            tracing::warn!(
+                account_id,
+                envelope_id = %envelope.id,
+                error = %error,
+                expected_regular_attachments = envelope.regular_attachment_count,
+                "Recovered message content could not be parsed; refetching archived message from IMAP"
+            );
+            let raw_body = recover_message_blob(&envelope).await?;
+            return Ok(with_indexed_attachments(
+                build_full_message_content(&envelope, raw_body, block_remote)?,
+                indexed_attachments.as_ref(),
+            ));
+        }
+        Err(error) => return Err(error),
+    };
+    let parsed_count = parsed_content
+        .attachments
+        .as_ref()
+        .map(|attachments| attachments.len())
+        .unwrap_or(0);
+    if envelope.regular_attachment_count > 0 && parsed_count == 0 {
+        tracing::warn!(
+            account_id,
+            envelope_id = %envelope.id,
+            expected_regular_attachments = envelope.regular_attachment_count,
+            "Recovered message content had no attachment metadata; refetching archived message from IMAP"
+        );
+        let raw_body = recover_message_blob(&envelope).await?;
+        return Ok(with_indexed_attachments(
+            build_full_message_content(&envelope, raw_body, block_remote)?,
+            indexed_attachments.as_ref(),
+        ));
+    }
+    Ok(with_indexed_attachments(
+        parsed_content,
+        indexed_attachments.as_ref(),
+    ))
+}
+
+fn indexed_attachments(
+    account_id: u64,
+    envelope_id: &str,
+) -> BichonResult<Option<Vec<AttachmentInfo>>> {
+    Ok(ENVELOPE_MANAGER
+        .get_envelope_by_id(account_id, envelope_id)?
+        .and_then(|envelope| envelope.attachments))
+}
+
+fn with_indexed_attachments(
+    mut content: FullMessageContent,
+    indexed_attachments: Option<&Vec<AttachmentInfo>>,
+) -> FullMessageContent {
+    if let Some(indexed) = indexed_attachments {
+        let parsed_count = content
+            .attachments
+            .as_ref()
+            .map(|attachments| attachments.len())
+            .unwrap_or(0);
+        if parsed_count == 0 && !indexed.is_empty() {
+            content.attachments = Some(indexed.clone());
+        }
+    }
+    content
+}
+
+fn build_full_message_content(
+    envelope: &Envelope,
+    eml: Bytes,
+    block_remote: bool,
+) -> BichonResult<FullMessageContent> {
     let message = MessageParser::default().parse(&eml).ok_or_else(|| {
         raise_error!(
             "Failed to parse EML data — the message may be corrupted.".into(),
@@ -193,7 +282,7 @@ pub fn retrieve_email_content(
             raise_error!(
                 format!(
                     "Attachment is missing Content-Type (email id={})",
-                    &envelope.id
+                    envelope.id
                 ),
                 ErrorCode::InternalError
             )
@@ -420,7 +509,10 @@ mod tests {
         assert!(attachments[1].inline);
         assert_eq!(attachments[1].filename.as_deref(), Some("logo.png"));
         assert_eq!(attachments[1].size, 6789);
-        assert_eq!(attachments[1].content_id.as_deref(), Some("cid:logo@example.com"));
+        assert_eq!(
+            attachments[1].content_id.as_deref(),
+            Some("cid:logo@example.com")
+        );
         assert_eq!(attachments[1].content_hash, "def456");
         assert!(!attachments[1].is_message);
         assert_eq!(attachments[1].extracted_text, None);
@@ -459,8 +551,7 @@ mod tests {
         ];
 
         let json = serde_json::to_string(&attachments).expect("serialize");
-        let round_tripped: Vec<AttachmentInfo> =
-            serde_json::from_str(&json).expect("deserialize");
+        let round_tripped: Vec<AttachmentInfo> = serde_json::from_str(&json).expect("deserialize");
 
         assert_eq!(attachments, round_tripped);
     }

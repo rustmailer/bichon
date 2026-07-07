@@ -4,8 +4,10 @@ use bytes::Bytes;
 use mail_parser::MimeHeaders;
 
 use crate::{
-    envelope::extractor::extract_references, message::content::AttachmentInfo,
-    store::tantivy::tokenizers::EuroTokenizer, utils::compute_content_hash,
+    envelope::extractor::extract_references,
+    message::content::AttachmentInfo,
+    store::{blob::BlobManager, tantivy::tokenizers::EuroTokenizer},
+    utils::compute_content_hash,
 };
 
 use fjall::{
@@ -93,8 +95,12 @@ pub fn detach_attachments_standalone(
 
         if range_valid {
             blobs.push((
-                content_hash.clone(),
+                BlobManager::raw_attachment_key(&content_hash),
                 Bytes::copy_from_slice(&original_body[raw_start..raw_end]),
+            ));
+            blobs.push((
+                BlobManager::decoded_attachment_key(&content_hash),
+                Bytes::copy_from_slice(att.contents()),
             ));
         }
 
@@ -556,5 +562,61 @@ impl NewIndexWriter {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn detach_attachments_stores_raw_and_decoded_blob_keys() {
+        let raw = concat!(
+            "From: sender@example.com\r\n",
+            "To: recipient@example.com\r\n",
+            "Subject: Attachment test\r\n",
+            "MIME-Version: 1.0\r\n",
+            "Content-Type: multipart/mixed; boundary=\"bnd\"\r\n",
+            "\r\n",
+            "--bnd\r\n",
+            "Content-Type: text/plain\r\n",
+            "\r\n",
+            "Hello\r\n",
+            "--bnd\r\n",
+            "Content-Type: application/pdf\r\n",
+            "Content-Disposition: attachment; filename=\"result.pdf\"\r\n",
+            "Content-Transfer-Encoding: base64\r\n",
+            "\r\n",
+            "JVBERi0xLjQKYWJj\r\n",
+            "--bnd--\r\n",
+        )
+        .as_bytes()
+        .to_vec();
+        let message = MessageParser::default()
+            .parse(&raw)
+            .expect("valid test message");
+        let (_stripped, output) = detach_attachments_standalone(&raw, &message);
+
+        let decoded = b"%PDF-1.4\nabc";
+        let content_hash = compute_content_hash(decoded);
+        let raw_key = BlobManager::raw_attachment_key(&content_hash);
+        let decoded_key = BlobManager::decoded_attachment_key(&content_hash);
+
+        let raw_blob = output
+            .blobs
+            .iter()
+            .find(|(key, _)| key == &raw_key)
+            .map(|(_, data)| data)
+            .expect("raw attachment blob");
+        let decoded_blob = output
+            .blobs
+            .iter()
+            .find(|(key, _)| key == &decoded_key)
+            .map(|(_, data)| data)
+            .expect("decoded attachment blob");
+
+        assert_ne!(raw_blob.as_ref(), decoded);
+        assert_eq!(decoded_blob.as_ref(), decoded);
+        assert_eq!(output.infos[0].content_hash, content_hash);
     }
 }

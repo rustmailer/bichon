@@ -16,15 +16,18 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+use crate::raise_error;
 use crate::{
     common::signal::SIGNAL_MANAGER,
     envelope::extractor::reattach_eml_content_self_healing,
     error::{code::ErrorCode, BichonResult},
     settings::dir::DATA_DIR_MANAGER,
 };
-use crate::raise_error;
 use bytes::Bytes;
-use fjall::{CompressionType, Database, Keyspace, KeyspaceCreateOptions, KvSeparationOptions, config::{BlockSizePolicy, CompressionPolicy}};
+use fjall::{
+    config::{BlockSizePolicy, CompressionPolicy},
+    CompressionType, Database, Keyspace, KeyspaceCreateOptions, KvSeparationOptions,
+};
 
 use std::{io::Cursor, sync::LazyLock};
 use tokio::{
@@ -48,6 +51,14 @@ pub struct BlobManager {
 }
 
 impl BlobManager {
+    pub(crate) fn raw_attachment_key(content_hash: &str) -> String {
+        format!("raw:{content_hash}")
+    }
+
+    pub(crate) fn decoded_attachment_key(content_hash: &str) -> String {
+        format!("decoded:{content_hash}")
+    }
+
     pub async fn shutdown(&self) {
         let mut guard = self.handle.lock().await;
         if let Some(handle) = guard.take() {
@@ -55,16 +66,12 @@ impl BlobManager {
         }
     }
 
-    fn process_detached_email(
-        eml: DetachedEmail,
-        email_ks: &Keyspace,
-        attach_ks: &Keyspace,
-    ) {
+    fn process_detached_email(eml: DetachedEmail, email_ks: &Keyspace, attach_ks: &Keyspace) {
         let (email_hash, email_data) = eml.email;
         match email_ks.contains_key(&email_hash) {
             Ok(false) => {
                 if let Err(e) = email_ks.insert(email_hash, email_data) {
-                    tracing::error!("CRITICAL: Failed to insert email: {:?}",  e);
+                    tracing::error!("CRITICAL: Failed to insert email: {:?}", e);
                 }
             }
             Err(e) => tracing::error!("Fjall email_ks error: {:?}", e),
@@ -99,15 +106,14 @@ impl BlobManager {
             .open()
             .expect("Failed to initialize Fjall database: Check if the directory exists and has write permissions.");
 
-
         let email_keyspace = db
             .keyspace("email", || {
                 KeyspaceCreateOptions::default()
                 .max_memtable_size(16 * 1024 * 1024)
                 .data_block_size_policy(BlockSizePolicy::all(4 * 1024))
-                .data_block_compression_policy(  
-                    CompressionPolicy::all(CompressionType::Lz4)  
-                )  
+                .data_block_compression_policy(
+                    CompressionPolicy::all(CompressionType::Lz4)
+                )
                 .with_kv_separation(Some(
                     KvSeparationOptions::default()
                         .separation_threshold(1024)
@@ -118,13 +124,13 @@ impl BlobManager {
                 ))
             })
             .expect("Failed to open 'email' keyspace: The partition metadata might be corrupted or inaccessible.");
-        
+
         let attachments_keyspace = db
             .keyspace("attachments", || {
                 KeyspaceCreateOptions::default()
                 .data_block_size_policy(BlockSizePolicy::all(4 * 1024))
-                .data_block_compression_policy(  
-                    CompressionPolicy::all(CompressionType::Lz4)  
+                .data_block_compression_policy(
+                    CompressionPolicy::all(CompressionType::Lz4)
                 )
                 .with_kv_separation(Some(
                     KvSeparationOptions::default()
@@ -137,7 +143,7 @@ impl BlobManager {
                 .max_memtable_size(16 * 1024 * 1024)
             })
             .expect("Failed to open 'attachments' keyspace: Check disk space for blob storage initialization.");
-        
+
         let (sender, mut receiver) = mpsc::channel::<DetachedEmail>(100);
 
         let email_ks = email_keyspace.clone();
@@ -208,7 +214,7 @@ impl BlobManager {
 
     pub async fn queue(&self, email: DetachedEmail) {
         if let Err(e) = self.sender.send(email).await {
-          tracing::error!("BlobManager channel closed, email lost: {:#?}", e);
+            tracing::error!("BlobManager channel closed, email lost: {:#?}", e);
         }
     }
 
@@ -220,8 +226,22 @@ impl BlobManager {
     }
 
     pub fn get_attachment(&self, content_hash: &str) -> BichonResult<Option<Bytes>> {
+        let raw_key = Self::raw_attachment_key(content_hash);
+        match self.attachments_keyspace.get(&raw_key) {
+            Ok(Some(value)) => Ok(Some(value.into())),
+            Ok(None) => self
+                .attachments_keyspace
+                .get(content_hash)
+                .map(|user_value| user_value.map(|s| s.into()))
+                .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError)),
+            Err(e) => Err(raise_error!(format!("{:#?}", e), ErrorCode::InternalError)),
+        }
+    }
+
+    pub fn get_decoded_attachment(&self, content_hash: &str) -> BichonResult<Option<Bytes>> {
+        let decoded_key = Self::decoded_attachment_key(content_hash);
         self.attachments_keyspace
-            .get(content_hash)
+            .get(decoded_key)
             .map(|user_value| user_value.map(|s| s.into()))
             .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))
     }
@@ -235,7 +255,8 @@ impl BlobManager {
         I1: IntoIterator,
         I1::Item: AsRef<str>,
         I2: IntoIterator,
-        I2::Item: AsRef<str> {
+        I2::Item: AsRef<str>,
+    {
         let mut batch = self.db.batch();
         for hash in email_content_hashes {
             batch.remove(&self.email_keyspace, hash.as_ref());
