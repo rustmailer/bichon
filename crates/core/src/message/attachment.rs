@@ -12,6 +12,7 @@ use crate::{
         utils::compute_content_hash,
     },
 };
+use base64::{engine::general_purpose::STANDARD, Engine as _};
 use bytes::Bytes;
 use mail_parser::MessageParser;
 //use poem_openapi::Object;
@@ -71,6 +72,15 @@ pub async fn retrieve_attachment_content_self_healing(
             if !looks_like_base64_encoded_pdf(&content) {
                 return Ok(Cursor::new(content));
             }
+            if let Some(decoded) = decode_base64_pdf_attachment(&content) {
+                tracing::warn!(
+                    account_id,
+                    envelope_id = %envelope.id,
+                    content_hash,
+                    "Recovered base64-encoded PDF attachment content from reconstructed message"
+                );
+                return Ok(Cursor::new(decoded));
+            }
             tracing::warn!(
                 account_id,
                 envelope_id = %envelope.id,
@@ -96,6 +106,13 @@ pub async fn retrieve_attachment_content_self_healing(
         if let Some(content) = get_matching_decoded_attachment(content_hash)? {
             if !looks_like_base64_encoded_pdf(&content) {
                 return Ok(Cursor::new(content));
+            }
+            if let Some(decoded) = decode_base64_pdf_attachment(&content) {
+                tracing::warn!(
+                    content_hash,
+                    "Recovered base64-encoded PDF attachment content from decoded blob"
+                );
+                return Ok(Cursor::new(decoded));
             }
             tracing::warn!(
                 content_hash,
@@ -124,6 +141,15 @@ pub async fn retrieve_attachment_content_self_healing(
         if let Some(content) = find_attachment_content(&raw_body, content_hash)? {
             if !looks_like_base64_encoded_pdf(&content) {
                 return Ok(Cursor::new(content));
+            }
+            if let Some(decoded) = decode_base64_pdf_attachment(&content) {
+                tracing::warn!(
+                    account_id,
+                    envelope_id = %envelope.id,
+                    content_hash,
+                    "Recovered base64-encoded PDF attachment content from raw MIME body"
+                );
+                return Ok(Cursor::new(decoded));
             }
         }
     }
@@ -158,6 +184,41 @@ fn looks_like_base64_encoded_pdf(content: &[u8]) -> bool {
     content[..scan_len]
         .windows(marker.len())
         .any(|window| window == marker)
+}
+
+fn decode_base64_pdf_attachment(content: &[u8]) -> Option<Bytes> {
+    let marker = b"JVBERi0";
+    let marker_offset = content
+        .windows(marker.len())
+        .position(|window| window == marker)?;
+    let base64_body: Vec<u8> = content[marker_offset..]
+        .iter()
+        .copied()
+        .filter(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'+' | b'/' | b'='))
+        .collect();
+
+    decode_complete_pdf_base64(&base64_body)
+}
+
+fn decode_complete_pdf_base64(base64_body: &[u8]) -> Option<Bytes> {
+    if base64_body.len() % 4 == 1 {
+        return None;
+    }
+
+    let mut padded = base64_body.to_vec();
+    while padded.len() % 4 != 0 {
+        padded.push(b'=');
+    }
+
+    let decoded = STANDARD.decode(padded).ok()?;
+    if decoded.starts_with(b"%PDF-")
+        && decoded
+            .windows(b"%%EOF".len())
+            .any(|window| window == b"%%EOF")
+    {
+        return Some(Bytes::from(decoded));
+    }
+    None
 }
 
 fn envelope_has_attachment(
@@ -246,8 +307,8 @@ pub fn retrieve_nested_attachment_content(
 #[cfg(test)]
 mod tests {
     use super::{
-        decoded_attachment_matches_hash, eml_contains_detached_attachment_placeholder,
-        looks_like_base64_encoded_pdf,
+        decode_base64_pdf_attachment, decoded_attachment_matches_hash,
+        eml_contains_detached_attachment_placeholder, looks_like_base64_encoded_pdf,
     };
     use crate::utils::compute_content_hash;
 
@@ -286,5 +347,20 @@ mod tests {
         ));
         assert!(!looks_like_base64_encoded_pdf(b"%PDF-1.4\nraw pdf"));
         assert!(!looks_like_base64_encoded_pdf(b"plain text"));
+    }
+
+    #[test]
+    fn decodes_complete_base64_pdf_attachment_bodies() {
+        let encoded = b"\xef\xbf\xbd\xef\xbf\xbdJVBERi0xLjQKMSAwIG9iago8PD4+CmVuZG9iagoKJSVFT0Y=";
+
+        let decoded = decode_base64_pdf_attachment(encoded).expect("complete PDF should decode");
+
+        assert!(decoded.starts_with(b"%PDF-1.4"));
+        assert!(decoded.ends_with(b"%%EOF"));
+    }
+
+    #[test]
+    fn rejects_incomplete_base64_pdf_attachment_bodies() {
+        assert!(decode_base64_pdf_attachment(b"JVBERi0xLjQKcorrupt").is_none());
     }
 }
