@@ -65,15 +65,15 @@ pub async fn retrieve_attachment_content_self_healing(
     content_hash: &str,
 ) -> BichonResult<Cursor<Bytes>> {
     let (envelope, eml) = reattach_eml_content_self_healing(account_id, envelope_id).await?;
-    if !envelope_has_attachment(account_id, &envelope.id, content_hash)? {
-        return Err(raise_error!(
-            "Target attachment not found".into(),
-            ErrorCode::ResourceNotFound
-        ));
+
+    let indexed_attachment = envelope_has_attachment(account_id, &envelope.id, content_hash)?;
+    let detached_placeholder = eml_contains_detached_attachment_placeholder(&eml, content_hash);
+    if indexed_attachment || detached_placeholder {
+        if let Some(content) = BLOB_MANAGER.get_decoded_attachment(content_hash)? {
+            return Ok(Cursor::new(content));
+        }
     }
-    if let Some(content) = BLOB_MANAGER.get_decoded_attachment(content_hash)? {
-        return Ok(Cursor::new(content));
-    }
+
     match find_attachment_content(&eml, content_hash) {
         Ok(Some(content)) => return Ok(Cursor::new(content)),
         Ok(None) => {}
@@ -97,8 +97,13 @@ pub async fn retrieve_attachment_content_self_healing(
             "Reconstructed message did not contain requested attachment; refetching archived message from IMAP"
         );
         let raw_body = recover_message_blob(&envelope).await?;
-        if let Some(content) = BLOB_MANAGER.get_decoded_attachment(content_hash)? {
-            return Ok(Cursor::new(content));
+        if indexed_attachment
+            || detached_placeholder
+            || eml_contains_detached_attachment_placeholder(&raw_body, content_hash)
+        {
+            if let Some(content) = BLOB_MANAGER.get_decoded_attachment(content_hash)? {
+                return Ok(Cursor::new(content));
+            }
         }
         if let Some(content) = find_attachment_content(&raw_body, content_hash)? {
             return Ok(Cursor::new(content));
@@ -126,6 +131,12 @@ fn envelope_has_attachment(
         .unwrap_or_default()
         .iter()
         .any(|attachment| attachment.content_hash == content_hash))
+}
+
+fn eml_contains_detached_attachment_placeholder(eml: &[u8], content_hash: &str) -> bool {
+    let placeholder = format!("<<BICHON_DETACH_HASH:{content_hash}>>");
+    eml.windows(placeholder.len())
+        .any(|window| window == placeholder.as_bytes())
 }
 
 fn find_attachment_content(eml: &[u8], content_hash: &str) -> BichonResult<Option<Bytes>> {
@@ -186,4 +197,24 @@ pub fn retrieve_nested_attachment_content(
         })?;
 
     Ok(Cursor::new(Bytes::copy_from_slice(attachment_content)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::eml_contains_detached_attachment_placeholder;
+
+    #[test]
+    fn detects_exact_detached_attachment_placeholder() {
+        let hash = "12fc5a986e7f358daf4536cbc414757458b55c9b25333f2c9c868884735f0554";
+        let eml = format!("Content-Type: application/pdf\r\n\r\n<<BICHON_DETACH_HASH:{hash}>>\r\n");
+
+        assert!(eml_contains_detached_attachment_placeholder(
+            eml.as_bytes(),
+            hash
+        ));
+        assert!(!eml_contains_detached_attachment_placeholder(
+            eml.as_bytes(),
+            "12fc5a986e7f358daf4536cbc414757458b55c9b25333f2c9c868884735f0555"
+        ));
+    }
 }
