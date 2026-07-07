@@ -67,7 +67,17 @@ pub async fn retrieve_attachment_content_self_healing(
     let (envelope, eml) = reattach_eml_content_self_healing(account_id, envelope_id).await?;
 
     match find_attachment_content(&eml, content_hash) {
-        Ok(Some(content)) => return Ok(Cursor::new(content)),
+        Ok(Some(content)) => {
+            if !looks_like_base64_encoded_pdf(&content) {
+                return Ok(Cursor::new(content));
+            }
+            tracing::warn!(
+                account_id,
+                envelope_id = %envelope.id,
+                content_hash,
+                "Attachment content looks like base64-encoded PDF text; attempting IMAP recovery"
+            );
+        }
         Ok(None) => {}
         Err(error) => {
             tracing::warn!(
@@ -84,7 +94,13 @@ pub async fn retrieve_attachment_content_self_healing(
     let detached_placeholder = eml_contains_detached_attachment_placeholder(&eml, content_hash);
     if indexed_attachment || detached_placeholder {
         if let Some(content) = get_matching_decoded_attachment(content_hash)? {
-            return Ok(Cursor::new(content));
+            if !looks_like_base64_encoded_pdf(&content) {
+                return Ok(Cursor::new(content));
+            }
+            tracing::warn!(
+                content_hash,
+                "Decoded attachment blob looks like base64-encoded PDF text; falling back to raw MIME recovery"
+            );
         }
     }
 
@@ -106,7 +122,9 @@ pub async fn retrieve_attachment_content_self_healing(
             }
         }
         if let Some(content) = find_attachment_content(&raw_body, content_hash)? {
-            return Ok(Cursor::new(content));
+            if !looks_like_base64_encoded_pdf(&content) {
+                return Ok(Cursor::new(content));
+            }
         }
     }
 
@@ -132,6 +150,14 @@ fn get_matching_decoded_attachment(content_hash: &str) -> BichonResult<Option<By
 
 fn decoded_attachment_matches_hash(content: &[u8], content_hash: &str) -> bool {
     compute_content_hash(content) == content_hash
+}
+
+fn looks_like_base64_encoded_pdf(content: &[u8]) -> bool {
+    let marker = b"JVBERi0";
+    let scan_len = content.len().min(32);
+    content[..scan_len]
+        .windows(marker.len())
+        .any(|window| window == marker)
 }
 
 fn envelope_has_attachment(
@@ -219,7 +245,10 @@ pub fn retrieve_nested_attachment_content(
 
 #[cfg(test)]
 mod tests {
-    use super::{decoded_attachment_matches_hash, eml_contains_detached_attachment_placeholder};
+    use super::{
+        decoded_attachment_matches_hash, eml_contains_detached_attachment_placeholder,
+        looks_like_base64_encoded_pdf,
+    };
     use crate::utils::compute_content_hash;
 
     #[test]
@@ -247,5 +276,15 @@ mod tests {
             b"JVBERi0xLjQKnot decoded bytes",
             &hash
         ));
+    }
+
+    #[test]
+    fn detects_base64_encoded_pdf_attachment_bodies() {
+        assert!(looks_like_base64_encoded_pdf(b"JVBERi0xLjQKencoded"));
+        assert!(looks_like_base64_encoded_pdf(
+            b"\xef\xbf\xbd\xef\xbf\xbdJVBERi0xLjQKencoded"
+        ));
+        assert!(!looks_like_base64_encoded_pdf(b"%PDF-1.4\nraw pdf"));
+        assert!(!looks_like_base64_encoded_pdf(b"plain text"));
     }
 }
