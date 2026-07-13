@@ -44,6 +44,7 @@ use crate::{
         model::{extract_senders, AttachmentModel},
         schema::SchemaTools,
         tokenizers::EuroTokenizer,
+        wildcard::{analyzed, build_wildcard_query, is_wildcard_query, WildcardField},
     },
 };
 
@@ -333,20 +334,27 @@ impl IndexManager {
         }
 
         if let Some(ref text) = filter.text {
-            let query_parser =
-                QueryParser::for_index(&self.index, SchemaTools::attachment_default_fields());
-
-            let query = query_parser
-                .parse_query(text)
-                .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InvalidParameter))?;
-            subqueries.push((Occur::Must, Box::new(query)));
+            let query = if is_wildcard_query(text) {
+                build_wildcard_query(&analyzed(&SchemaTools::attachment_default_fields()), text)?
+            } else {
+                let query_parser =
+                    QueryParser::for_index(&self.index, SchemaTools::attachment_default_fields());
+                query_parser.parse_query(text).map_err(|e| {
+                    raise_error!(format!("{:#?}", e), ErrorCode::InvalidParameter)
+                })?
+            };
+            subqueries.push((Occur::Must, query));
         }
 
         if let Some(ref subject_val) = filter.subject {
-            let query_parser = QueryParser::for_index(&self.index, vec![f.f_subject]);
-            let q = query_parser
-                .parse_query(subject_val)
-                .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InvalidParameter))?;
+            let q = if is_wildcard_query(subject_val) {
+                build_wildcard_query(&analyzed(&[f.f_subject]), subject_val)?
+            } else {
+                let query_parser = QueryParser::for_index(&self.index, vec![f.f_subject]);
+                query_parser.parse_query(subject_val).map_err(|e| {
+                    raise_error!(format!("{:#?}", e), ErrorCode::InvalidParameter)
+                })?
+            };
             subqueries.push((Occur::Must, q));
         }
 
@@ -371,10 +379,14 @@ impl IndexManager {
         }
 
         if let Some(from_query) = &filter.from {
-            let query_parser = QueryParser::for_index(&self.index, vec![f.f_from_text]);
-            let q = query_parser
-                .parse_query(from_query)
-                .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InvalidParameter))?;
+            let q = if is_wildcard_query(from_query) {
+                build_wildcard_query(&analyzed(&[f.f_from_text]), from_query)?
+            } else {
+                let query_parser = QueryParser::for_index(&self.index, vec![f.f_from_text]);
+                query_parser.parse_query(from_query).map_err(|e| {
+                    raise_error!(format!("{:#?}", e), ErrorCode::InvalidParameter)
+                })?
+            };
             subqueries.push((Occur::Must, q))
         }
 
@@ -391,12 +403,25 @@ impl IndexManager {
         }
 
         if let Some(ref name) = filter.attachment_name {
-            let query_parser =
-                QueryParser::for_index(&self.index, vec![f.f_name_text, f.f_name_exact]);
-
-            let q = query_parser
-                .parse_query(name)
-                .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InvalidParameter))?;
+            let q = if is_wildcard_query(name) {
+                let fields = [
+                    WildcardField {
+                        field: f.f_name_text,
+                        analyzed: true,
+                    },
+                    WildcardField {
+                        field: f.f_name_exact,
+                        analyzed: false,
+                    },
+                ];
+                build_wildcard_query(&fields, name)?
+            } else {
+                let query_parser =
+                    QueryParser::for_index(&self.index, vec![f.f_name_text, f.f_name_exact]);
+                query_parser
+                    .parse_query(name)
+                    .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InvalidParameter))?
+            };
             subqueries.push((Occur::Must, q));
         }
 

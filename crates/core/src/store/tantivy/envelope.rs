@@ -49,6 +49,7 @@ use crate::{
             model::{extract_contacts, EnvelopeWithAttachments},
             schema::SchemaTools,
             tokenizers::EuroTokenizer,
+            wildcard::{analyzed, build_wildcard_query, is_wildcard_query, WildcardField},
         },
     },
     utc_now,
@@ -400,29 +401,39 @@ impl IndexManager {
         }
 
         if let Some(ref text) = filter.text {
-            let query_parser =
-                QueryParser::for_index(&self.index, SchemaTools::email_default_fields());
-
-            let query = query_parser
-                .parse_query(text)
-                .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InvalidParameter))?;
-            subqueries.push((Occur::Must, Box::new(query)));
+            let query = if is_wildcard_query(text) {
+                build_wildcard_query(&analyzed(&SchemaTools::email_default_fields()), text)?
+            } else {
+                let query_parser =
+                    QueryParser::for_index(&self.index, SchemaTools::email_default_fields());
+                query_parser.parse_query(text).map_err(|e| {
+                    raise_error!(format!("{:#?}", e), ErrorCode::InvalidParameter)
+                })?
+            };
+            subqueries.push((Occur::Must, query));
         }
 
         if let Some(ref subject_val) = filter.subject {
-            let query_parser = QueryParser::for_index(&self.index, vec![f.f_subject]);
-            let q = query_parser
-                .parse_query(subject_val)
-                .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InvalidParameter))?;
+            let q = if is_wildcard_query(subject_val) {
+                build_wildcard_query(&analyzed(&[f.f_subject]), subject_val)?
+            } else {
+                let query_parser = QueryParser::for_index(&self.index, vec![f.f_subject]);
+                query_parser.parse_query(subject_val).map_err(|e| {
+                    raise_error!(format!("{:#?}", e), ErrorCode::InvalidParameter)
+                })?
+            };
             subqueries.push((Occur::Must, q));
         }
 
         if let Some(ref body_val) = filter.body {
-            let query_parser = QueryParser::for_index(&self.index, vec![f.f_body]);
-
-            let q = query_parser
-                .parse_query(body_val)
-                .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InvalidParameter))?;
+            let q = if is_wildcard_query(body_val) {
+                build_wildcard_query(&analyzed(&[f.f_body]), body_val)?
+            } else {
+                let query_parser = QueryParser::for_index(&self.index, vec![f.f_body]);
+                query_parser.parse_query(body_val).map_err(|e| {
+                    raise_error!(format!("{:#?}", e), ErrorCode::InvalidParameter)
+                })?
+            };
             subqueries.push((Occur::Must, q));
         }
 
@@ -453,39 +464,61 @@ impl IndexManager {
             (f.f_bcc_text, &filter.bcc),
         ] {
             if let Some(ref v) = opt_value {
-                let query_parser = QueryParser::for_index(&self.index, vec![field]);
-                let q = query_parser
-                    .parse_query(v)
-                    .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InvalidParameter))?;
+                let q = if is_wildcard_query(v) {
+                    build_wildcard_query(&analyzed(&[field]), v)?
+                } else {
+                    let query_parser = QueryParser::for_index(&self.index, vec![field]);
+                    query_parser
+                        .parse_query(v)
+                        .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InvalidParameter))?
+                };
                 subqueries.push((Occur::Must, q));
             }
         }
 
         // any_recipient: OR across to, cc, bcc
         if let Some(ref v) = filter.any_recipient {
-            let mut recipient_queries: Vec<(Occur, Box<dyn Query>)> = Vec::new();
-            for field in [f.f_to_text, f.f_cc_text, f.f_bcc_text] {
-                let query_parser = QueryParser::for_index(&self.index, vec![field]);
-                if let Ok(q) = query_parser.parse_query(v) {
-                    recipient_queries.push((Occur::Should, q));
+            let recipient_fields = [f.f_to_text, f.f_cc_text, f.f_bcc_text];
+            if is_wildcard_query(v) {
+                let q = build_wildcard_query(&analyzed(&recipient_fields), v)?;
+                subqueries.push((Occur::Must, q));
+            } else {
+                let recipient_queries: Vec<(Occur, Box<dyn Query>)> = recipient_fields
+                    .into_iter()
+                    .filter_map(|field| {
+                        let query_parser = QueryParser::for_index(&self.index, vec![field]);
+                        query_parser
+                            .parse_query(v)
+                            .ok()
+                            .map(|q| (Occur::Should, q))
+                    })
+                    .collect();
+                if !recipient_queries.is_empty() {
+                    subqueries.push((Occur::Must, Box::new(BooleanQuery::new(recipient_queries))));
                 }
-            }
-            if !recipient_queries.is_empty() {
-                subqueries.push((Occur::Must, Box::new(BooleanQuery::new(recipient_queries))));
             }
         }
 
         // any_participant: OR across from, to, cc, bcc
         if let Some(ref v) = filter.any_participant {
-            let mut participant_queries: Vec<(Occur, Box<dyn Query>)> = Vec::new();
-            for field in [f.f_from_text, f.f_to_text, f.f_cc_text, f.f_bcc_text] {
-                let query_parser = QueryParser::for_index(&self.index, vec![field]);
-                if let Ok(q) = query_parser.parse_query(v) {
-                    participant_queries.push((Occur::Should, q));
+            let participant_fields = [f.f_from_text, f.f_to_text, f.f_cc_text, f.f_bcc_text];
+            if is_wildcard_query(v) {
+                let q = build_wildcard_query(&analyzed(&participant_fields), v)?;
+                subqueries.push((Occur::Must, q));
+            } else {
+                let participant_queries: Vec<(Occur, Box<dyn Query>)> = participant_fields
+                    .into_iter()
+                    .filter_map(|field| {
+                        let query_parser = QueryParser::for_index(&self.index, vec![field]);
+                        query_parser
+                            .parse_query(v)
+                            .ok()
+                            .map(|q| (Occur::Should, q))
+                    })
+                    .collect();
+                if !participant_queries.is_empty() {
+                    subqueries.push((Occur::Must, Box::new(BooleanQuery::new(participant_queries))));
                 }
-            }
-            if !participant_queries.is_empty() {
-                subqueries.push((Occur::Must, Box::new(BooleanQuery::new(participant_queries))));
             }
         }
 
@@ -506,26 +539,42 @@ impl IndexManager {
         }
 
         if let Some(ref name) = filter.attachment_name {
+            let name_is_wildcard = is_wildcard_query(name);
             if name.contains('.') {
-                let term = Term::from_field_text(f.f_attachment_name_exact, name);
-                let exact_query = TermQuery::new(term, IndexRecordOption::Basic);
+                let exact_query: Box<dyn Query> = if name_is_wildcard {
+                    build_wildcard_query(
+                        &[WildcardField {
+                            field: f.f_attachment_name_exact,
+                            analyzed: false,
+                        }],
+                        name,
+                    )?
+                } else {
+                    let term = Term::from_field_text(f.f_attachment_name_exact, name);
+                    Box::new(TermQuery::new(term, IndexRecordOption::Basic))
+                };
 
-                let query_parser =
-                    QueryParser::for_index(&self.index, vec![f.f_attachment_name_text]);
-                let q: Box<dyn Query> = query_parser
-                    .parse_query(name)
-                    .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InvalidParameter))?;
-                let query = BooleanQuery::new(vec![
-                    (Occur::Should, Box::new(exact_query)),
-                    (Occur::Should, Box::new(q)),
-                ]);
+                let q = if name_is_wildcard {
+                    build_wildcard_query(&analyzed(&[f.f_attachment_name_text]), name)?
+                } else {
+                    let query_parser =
+                        QueryParser::for_index(&self.index, vec![f.f_attachment_name_text]);
+                    query_parser.parse_query(name).map_err(|e| {
+                        raise_error!(format!("{:#?}", e), ErrorCode::InvalidParameter)
+                    })?
+                };
+                let query = BooleanQuery::new(vec![(Occur::Should, exact_query), (Occur::Should, q)]);
                 subqueries.push((Occur::Must, Box::new(query)));
             } else {
-                let query_parser =
-                    QueryParser::for_index(&self.index, vec![f.f_attachment_name_text]);
-                let q = query_parser
-                    .parse_query(name)
-                    .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InvalidParameter))?;
+                let q = if name_is_wildcard {
+                    build_wildcard_query(&analyzed(&[f.f_attachment_name_text]), name)?
+                } else {
+                    let query_parser =
+                        QueryParser::for_index(&self.index, vec![f.f_attachment_name_text]);
+                    query_parser.parse_query(name).map_err(|e| {
+                        raise_error!(format!("{:#?}", e), ErrorCode::InvalidParameter)
+                    })?
+                };
                 subqueries.push((Occur::Must, q));
             }
         }

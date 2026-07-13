@@ -32,6 +32,7 @@ pub mod filter;
 pub mod model;
 pub mod schema;
 pub mod tokenizers;
+pub mod wildcard;
 
 pub fn fatal_commit(writer: &mut IndexWriter) {
     const MAX_RETRIES: usize = 3;
