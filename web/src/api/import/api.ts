@@ -51,7 +51,7 @@ export const check_disk_space = async (): Promise<number> => {
   return response.data;
 };
 
-export const get_nosync_accounts = async (): Promise<AccountModel[]> => {
+export const get_import_accounts = async (): Promise<AccountModel[]> => {
   const data = await list_accounts();
   return (data.items || []).filter(
     (a) => a.enabled

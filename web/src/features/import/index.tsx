@@ -37,7 +37,7 @@ import {
 import {
   upload_import,
   get_import_progress,
-  get_nosync_accounts,
+  get_import_accounts,
   list_import_history,
   type ImportProgress,
   type ImportHistory,
@@ -121,7 +121,7 @@ export default function ImportPage() {
 
   const { data: accounts = [] } = useQuery({
     queryKey: ['nosync-accounts'],
-    queryFn: get_nosync_accounts,
+    queryFn: get_import_accounts,
     staleTime: 30_000,
   });
 
