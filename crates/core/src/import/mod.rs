@@ -374,12 +374,6 @@ fn validate_import_account(account_id: u64) -> BichonResult<AccountModel> {
             ErrorCode::InvalidParameter
         ));
     }
-    if !matches!(account.account_type, AccountType::NoSync) {
-        return Err(raise_error!(
-            "Import is only allowed for NoSync accounts. IMAP accounts sync from the server.".into(),
-            ErrorCode::InvalidParameter
-        ));
-    }
     Ok(account)
 }
 
