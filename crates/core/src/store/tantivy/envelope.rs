@@ -68,7 +68,10 @@ use tantivy::{
     },
     collector::{Count, DocSetCollector, FacetCollector, TopDocs},
     indexer::{LogMergePolicy, UserOperation},
-    query::{AllQuery, BooleanQuery, EmptyQuery, Occur, Query, QueryParser, RangeQuery, TermQuery},
+    query::{
+        AllQuery, BooleanQuery, EmptyQuery, Occur, Query, QueryParser, RangeQuery, TermQuery,
+        TermSetQuery,
+    },
     schema::{IndexRecordOption, Value},
     DocAddress, Index, IndexReader, IndexWriter, Order, TantivyDocument, Term,
 };
@@ -80,6 +83,7 @@ use tokio::{
 use tracing::{info, warn};
 
 pub static ENVELOPE_MANAGER: LazyLock<IndexManager> = LazyLock::new(IndexManager::new);
+pub(crate) static CANONICAL_STORAGE_GATE: Mutex<()> = Mutex::const_new(());
 
 pub struct IndexManager {
     index: Arc<Index>,
@@ -87,6 +91,14 @@ pub struct IndexManager {
     sender: mpsc::Sender<TantivyDocument>,
     reader: IndexReader,
     handle: Mutex<Option<JoinHandle<()>>>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct UidOnlyProjectionMarker {
+    pub mailbox_id: u64,
+    pub uid: u32,
+    pub content_hash: String,
+    pub shard_id: u64,
 }
 
 impl IndexManager {
@@ -227,6 +239,104 @@ impl IndexManager {
         if let Err(e) = self.sender.send(doc).await {
             tracing::warn!(error = %e, "Failed to queue document into Tantivy writer channel");
         }
+    }
+
+    /// Replaces and commits a batch of final UIDONLY completion markers. Raw
+    /// bytes and attachment documents must already be committed.
+    pub(crate) async fn replace_uidonly_documents(
+        &self,
+        documents: Vec<(String, TantivyDocument)>,
+    ) -> BichonResult<()> {
+        let mut writer = self.index_writer.lock().await;
+        let f_id = SchemaTools::email_fields().f_id;
+        let operations: Vec<_> = documents
+            .into_iter()
+            .flat_map(|(envelope_id, doc)| {
+                [
+                    UserOperation::Delete(Term::from_field_text(f_id, &envelope_id)),
+                    UserOperation::Add(doc),
+                ]
+            })
+            .collect();
+        writer
+            .run(operations)
+            .map_err(|e| raise_error!(format!("{e:#?}"), ErrorCode::InternalError))?;
+        writer
+            .commit()
+            .map_err(|e| raise_error!(format!("{e:#?}"), ErrorCode::InternalError))?;
+        Ok(())
+    }
+
+    pub(crate) fn get_uidonly_projection_markers(
+        &self,
+        account_id: u64,
+        envelope_ids: &[String],
+    ) -> BichonResult<HashMap<String, UidOnlyProjectionMarker>> {
+        if envelope_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+        let searcher = self.create_searcher()?;
+        let f = SchemaTools::email_fields();
+        let query = BooleanQuery::new(vec![
+            (
+                Occur::Must,
+                self.account_query(account_id) as Box<dyn Query>,
+            ),
+            (
+                Occur::Must,
+                Box::new(TermSetQuery::new(
+                    envelope_ids
+                        .iter()
+                        .map(|id| Term::from_field_text(f.f_id, id)),
+                )),
+            ),
+        ]);
+        let docs = searcher
+            .search(&query, &DocSetCollector)
+            .map_err(|e| raise_error!(format!("{e:#?}"), ErrorCode::InternalError))?;
+        let mut markers = HashMap::with_capacity(docs.len());
+        let mut seen_ids = HashSet::with_capacity(docs.len());
+        for address in docs {
+            let doc = searcher
+                .doc::<TantivyDocument>(address)
+                .map_err(|e| raise_error!(format!("{e:#?}"), ErrorCode::InternalError))?;
+            let Some(envelope_id) = doc
+                .get_first(f.f_id)
+                .and_then(|v| v.as_str())
+                .map(ToOwned::to_owned)
+            else {
+                continue;
+            };
+            if !seen_ids.insert(envelope_id.clone()) {
+                return Err(raise_error!(
+                    "multiple documents exist for one deterministic UIDONLY envelope id".into(),
+                    ErrorCode::Incompatible
+                ));
+            }
+            let marker = (
+                doc.get_first(f.f_mailbox_id).and_then(|v| v.as_u64()),
+                doc.get_first(f.f_uid)
+                    .and_then(|v| v.as_u64())
+                    .and_then(|v| u32::try_from(v).ok()),
+                doc.get_first(f.f_content_hash)
+                    .and_then(|v| v.as_str())
+                    .map(ToOwned::to_owned),
+                doc.get_first(f.f_shard_id).and_then(|v| v.as_u64()),
+            );
+            if let (Some(mailbox_id), Some(uid), Some(content_hash), Some(shard_id)) = marker
+            {
+                markers.insert(
+                    envelope_id,
+                    UidOnlyProjectionMarker {
+                        mailbox_id,
+                        uid,
+                        content_hash,
+                        shard_id,
+                    },
+                );
+            }
+        }
+        Ok(markers)
     }
 
     fn open_or_create_index(index_dir: &PathBuf) -> Index {
@@ -870,6 +980,7 @@ impl IndexManager {
     }
 
     pub async fn delete_account_envelopes(&self, account_id: u64) -> BichonResult<()> {
+        let _canonical_guard = CANONICAL_STORAGE_GATE.lock().await;
         let query = self.account_query(account_id);
         let (eml_content_hashes, attachments_content_hashes) =
             self.collect_content_hashes(query)?;
@@ -908,6 +1019,7 @@ impl IndexManager {
         if mailbox_ids.is_empty() {
             return Ok(());
         }
+        let _canonical_guard = CANONICAL_STORAGE_GATE.lock().await;
 
         let mut eml_content_hashes: HashSet<String> = HashSet::new();
         let mut attachments_content_hashes: HashSet<String> = HashSet::new();
@@ -932,6 +1044,10 @@ impl IndexManager {
         writer
             .commit()
             .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;
+
+        ATTACHMENT_MANAGER
+            .delete_mailbox_attachments(account_id, mailbox_ids.clone())
+            .await?;
 
         if !eml_content_hashes.is_empty() || !attachments_content_hashes.is_empty() {
             self.cleanup_unused_content(
@@ -1061,6 +1177,7 @@ impl IndexManager {
             tracing::warn!("delete_envelopes_multi_account: deletes is empty, nothing to delete");
             return Ok(());
         }
+        let _canonical_guard = CANONICAL_STORAGE_GATE.lock().await;
 
         let mut eml_content_hash_triples: HashSet<(u64, u64, String)> = HashSet::new();
         let mut attachments_content_hashes: HashSet<String> = HashSet::new();
@@ -1087,13 +1204,13 @@ impl IndexManager {
 
         let mut writer = self.index_writer.lock().await;
 
-        for (account_id, envelope_ids) in deletes {
+        for (account_id, envelope_ids) in &deletes {
             let unique_ids: HashSet<&String> = envelope_ids.iter().collect();
             if unique_ids.is_empty() {
                 continue;
             }
             for eid in unique_ids {
-                let query = self.envelope_query(account_id, eid);
+                let query = self.envelope_query(*account_id, eid);
                 writer
                     .delete_query(query)
                     .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;
@@ -1102,6 +1219,10 @@ impl IndexManager {
         writer
             .commit()
             .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;
+
+        ATTACHMENT_MANAGER
+            .delete_attachments_multi_account(deletes)
+            .await?;
 
         if !eml_content_hash_triples.is_empty() || !attachments_content_hashes.is_empty() {
             let eml_content_hashes: HashSet<String> = eml_content_hash_triples
@@ -1335,7 +1456,7 @@ impl IndexManager {
                     // blob store, referenced by f_content_hash.
                     if let Some(hash_val) = old_doc.get_first(f.f_content_hash) {
                         if let Some(content_hash) = hash_val.as_str() {
-                            match BLOB_MANAGER.get_email(content_hash) {
+                            match BLOB_MANAGER.get_canonical_email(content_hash) {
                                 Ok(Some(eml_bytes)) => {
                                     if let Some(message) = MessageParser::new().parse(&eml_bytes) {
                                         let text = message

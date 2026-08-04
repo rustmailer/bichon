@@ -78,11 +78,14 @@ pub async fn process_imap_download(
         }
     };
     session.logout().await.ok();
+    // The discovery connection refreshes cached capabilities. Route the
+    // download from that fresh snapshot, not the stale task input.
+    let account = AccountModel::get(account_id)?;
     if matches!(download_task, DownloadTask::FullFetch) {
         let result = match &account.date_since {
             Some(date_since) => {
                 rebuild_cache_by_date(
-                    account,
+                    &account,
                     &remote_mailboxes,
                     &date_since.since_date()?,
                     FetchDirection::Since,
@@ -93,7 +96,7 @@ pub async fn process_imap_download(
             None => match &account.date_before {
                 Some(r) => {
                     rebuild_cache_by_date(
-                        account,
+                        &account,
                         &remote_mailboxes,
                         &r.calculate_date()?,
                         FetchDirection::Before,
@@ -101,7 +104,7 @@ pub async fn process_imap_download(
                     )
                     .await
                 }
-                None => rebuild_cache(account, &remote_mailboxes, token).await,
+                None => rebuild_cache(&account, &remote_mailboxes, token).await,
             },
         };
         match result {
@@ -122,7 +125,7 @@ pub async fn process_imap_download(
     }
 
     let local_mailboxes = MailBox::list_all(account_id)?;
-    match reconcile_mailboxes(account, &remote_mailboxes, &local_mailboxes, token).await {
+    match reconcile_mailboxes(&account, &remote_mailboxes, &local_mailboxes, token).await {
         Ok(_) => DownloadState::update_session_status(account_id, DownloadStatus::Success, None)?,
         Err(e) => {
             let err_msg = format!("Email Download interrupted: {:#?}", e);

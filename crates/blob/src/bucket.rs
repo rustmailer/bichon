@@ -163,6 +163,27 @@ impl IndexStore {
         self.get(key).map(|r| r.is_some())
     }
 
+    /// Check several keys in one read transaction.
+    pub fn exists_batch(&self, keys: &[[u8; 32]]) -> Result<Vec<bool>> {
+        let txn = self
+            .db
+            .begin_read()
+            .map_err(|e| crate::error::Error::IndexDb(format!("read txn: {}", e)))?;
+        let table = txn
+            .open_table(INDEX_TABLE)
+            .map_err(|e| crate::error::Error::IndexDb(format!("open table: {}", e)))?;
+        keys.iter()
+            .map(|key| {
+                let record = table
+                    .get(key)
+                    .map_err(|e| crate::error::Error::IndexDb(format!("get: {}", e)))?
+                    .map(|guard| IndexRecord::decode(&guard.value().0))
+                    .transpose()?;
+                Ok(record.is_some_and(|record| !record.is_tombstone()))
+            })
+            .collect()
+    }
+
     /// Insert or update a record for a key.  Committed in a single write txn.
     pub fn insert(&self, record: &IndexRecord) -> Result<()> {
         let txn = self

@@ -656,6 +656,7 @@ async fn parse_email(data: &[u8], session: &Session) -> BichonResult<()> {
             uid_next: None,
             uid_validity: None,
             highest_uid: None,
+            uidonly_source_scope: None,
         };
 
         if let Err(e) = MailBox::batch_upsert(&[mailbox]) {

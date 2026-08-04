@@ -25,10 +25,11 @@ use crate::error::code::ErrorCode;
 use crate::error::BichonResult;
 use crate::imap::executor::ImapExecutor;
 use crate::message::content::AttachmentInfo;
-use crate::store::blob::{DetachedEmail, BLOB_MANAGER};
+use crate::store::blob::{DetachedEmail, UidOnlyBlob, BLOB_MANAGER};
 use crate::store::tantivy::attachment::ATTACHMENT_MANAGER;
+use crate::store::tantivy::dedup::UIDONLY_SHARD_BIT;
 use crate::store::tantivy::dedup_cache::DEDUP_CACHE;
-use crate::store::tantivy::envelope::ENVELOPE_MANAGER;
+use crate::store::tantivy::envelope::{CANONICAL_STORAGE_GATE, ENVELOPE_MANAGER};
 use crate::store::tantivy::model::{AttachmentModel, EnvelopeWithAttachments};
 use crate::utils::html::extract_text;
 use crate::utils::{compute_content_hash, hex_hash};
@@ -37,10 +38,81 @@ use crate::{raise_error, utc_now};
 use async_imap::types::Fetch;
 use bytes::Bytes;
 use mail_parser::{Address, HeaderName, Message, MessageParser, MimeHeaders};
-use tantivy::TantivyDocument;
 use tantivy::schema::Facet;
+use tantivy::TantivyDocument;
 use tracing::error;
 use uuid::Uuid;
+
+pub(crate) const UIDONLY_PROJECTION_BATCH_MESSAGES: usize = 32;
+pub(crate) const UIDONLY_PROJECTION_BATCH_BYTES: usize = 64 * 1024 * 1024;
+
+pub(crate) struct UidOnlyMessage {
+    pub body: Vec<u8>,
+    pub uid: u32,
+}
+
+struct PreparedEnvelope {
+    envelope_id: String,
+    content_hash: String,
+    detached_email: DetachedEmail,
+    attachment_docs: Vec<TantivyDocument>,
+    envelope_doc: TantivyDocument,
+}
+
+pub(crate) fn uidonly_envelope_id(
+    account_id: u64,
+    mailbox_id: u64,
+    uid_validity: u32,
+    uid: u32,
+    source_scope: &str,
+) -> String {
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(b"bichon-uidonly-envelope-v1\0");
+    hasher.update(&account_id.to_be_bytes());
+    hasher.update(&mailbox_id.to_be_bytes());
+    hasher.update(&uid_validity.to_be_bytes());
+    hasher.update(&uid.to_be_bytes());
+    hasher.update(source_scope.as_bytes());
+    format!("uidonly-{}", hasher.finalize().to_hex())
+}
+
+pub(crate) fn verify_uidonly_projections(
+    account_id: u64,
+    mailbox_id: u64,
+    uid_validity: u32,
+    uids: &[u32],
+    source_scope: &str,
+) -> BichonResult<Vec<bool>> {
+    let identities: Vec<_> = uids
+        .iter()
+        .map(|uid| {
+            (
+                *uid,
+                uidonly_envelope_id(account_id, mailbox_id, uid_validity, *uid, source_scope),
+            )
+        })
+        .collect();
+    let envelope_ids: Vec<_> = identities.iter().map(|(_, id)| id.clone()).collect();
+    let markers = ENVELOPE_MANAGER.get_uidonly_projection_markers(account_id, &envelope_ids)?;
+    let candidates: Vec<_> = identities
+        .iter()
+        .enumerate()
+        .filter_map(|(index, (uid, envelope_id))| {
+            let marker = markers.get(envelope_id)?;
+            (marker.mailbox_id == mailbox_id
+                && marker.uid == *uid
+                && marker.shard_id == UIDONLY_SHARD_BIT)
+                .then(|| (index, marker.content_hash.clone()))
+        })
+        .collect();
+    let hashes: Vec<_> = candidates.iter().map(|(_, hash)| hash.clone()).collect();
+    let exists = BLOB_MANAGER.has_uidonly_exact_batch(&hashes)?;
+    let mut verified = vec![false; uids.len()];
+    for ((index, _), exists) in candidates.into_iter().zip(exists) {
+        verified[index] = exists;
+    }
+    Ok(verified)
+}
 
 pub async fn extract_envelope_and_store_it(
     fetch: Fetch,
@@ -64,7 +136,9 @@ pub async fn extract_envelope_and_store_it(
         }
     };
     let size = fetch.size.unwrap_or(body.len() as u32);
-    extract_envelope_core(body, uid, size, internal_date, account_id, mailbox_id).await
+    extract_envelope_core(body, uid, size, internal_date, account_id, mailbox_id)
+        .await
+        .map(|_| ())
 }
 
 pub async fn extract_envelope_from_eml(
@@ -72,7 +146,9 @@ pub async fn extract_envelope_from_eml(
     account_id: u64,
     mailbox_id: u64,
 ) -> BichonResult<()> {
-    extract_envelope_core(body, 0, body.len() as u32, 0, account_id, mailbox_id).await
+    extract_envelope_core(body, 0, body.len() as u32, 0, account_id, mailbox_id)
+        .await
+        .map(|_| ())
 }
 
 pub async fn extract_envelope_from_smtp(
@@ -89,6 +165,91 @@ pub async fn extract_envelope_from_smtp(
         mailbox_id,
     )
     .await
+    .map(|_| ())
+}
+
+pub(crate) async fn project_uidonly_messages(
+    messages: Vec<UidOnlyMessage>,
+    account_id: u64,
+    mailbox_id: u64,
+    uid_validity: u32,
+    source_scope: &str,
+) -> BichonResult<()> {
+    let total_bytes = messages.iter().try_fold(0usize, |total, message| {
+        total.checked_add(message.body.len()).ok_or_else(|| {
+            raise_error!(
+                "UIDONLY projection batch byte count overflow".into(),
+                ErrorCode::PayloadTooLarge
+            )
+        })
+    })?;
+    if messages.len() > UIDONLY_PROJECTION_BATCH_MESSAGES
+        || (messages.len() > 1 && total_bytes > UIDONLY_PROJECTION_BATCH_BYTES)
+    {
+        return Err(raise_error!(
+            "UIDONLY projection batch exceeds its memory bound".into(),
+            ErrorCode::PayloadTooLarge
+        ));
+    }
+
+    let mut blobs = Vec::new();
+    let mut attachment_batches = Vec::new();
+    let mut envelope_documents = Vec::new();
+    for message in messages {
+        let envelope_id = uidonly_envelope_id(
+            account_id,
+            mailbox_id,
+            uid_validity,
+            message.uid,
+            source_scope,
+        );
+        let size = u32::try_from(message.body.len()).map_err(|_| {
+            raise_error!(
+                "UIDONLY message is too large to project".into(),
+                ErrorCode::PayloadTooLarge
+            )
+        })?;
+        match prepare_envelope_core(
+            &message.body,
+            message.uid,
+            size,
+            0,
+            account_id,
+            mailbox_id,
+            Some((envelope_id, UIDONLY_SHARD_BIT)),
+        )
+        .await?
+        {
+            None => {
+                return Err(raise_error!(
+                    "UIDONLY message was unexpectedly filtered".into(),
+                    ErrorCode::InternalError
+                ))
+            }
+            Some(prepared) => {
+                let envelope_id = prepared.envelope_id.clone();
+                blobs.push(UidOnlyBlob {
+                    content_hash: prepared.content_hash,
+                    raw: message.body,
+                    attachments: prepared.detached_email.attachments.unwrap_or_default(),
+                });
+                attachment_batches.push((envelope_id.clone(), prepared.attachment_docs));
+                envelope_documents.push((envelope_id, prepared.envelope_doc));
+            }
+        }
+    }
+
+    if !blobs.is_empty() {
+        let _canonical_guard = CANONICAL_STORAGE_GATE.lock().await;
+        BLOB_MANAGER.store_uidonly_exact_batch(blobs).await?;
+        ATTACHMENT_MANAGER
+            .replace_uidonly_batches(attachment_batches)
+            .await?;
+        ENVELOPE_MANAGER
+            .replace_uidonly_documents(envelope_documents)
+            .await?;
+    }
+    Ok(())
 }
 
 async fn extract_envelope_core(
@@ -99,44 +260,95 @@ async fn extract_envelope_core(
     account_id: u64,
     mailbox_id: u64,
 ) -> BichonResult<()> {
+    match prepare_envelope_core(body, uid, size, internal_date, account_id, mailbox_id, None)
+        .await?
+    {
+        None => Ok(()),
+        Some(prepared) => {
+            BLOB_MANAGER.queue(prepared.detached_email).await;
+            ENVELOPE_MANAGER.queue(prepared.envelope_doc).await;
+            DEDUP_CACHE.insert(account_id, mailbox_id, &prepared.content_hash);
+            for doc in prepared.attachment_docs {
+                ATTACHMENT_MANAGER.queue(doc).await;
+            }
+            Ok(())
+        }
+    }
+}
+
+async fn prepare_envelope_core(
+    body: &[u8],
+    uid: u32,
+    size: u32,
+    internal_date: i64,
+    account_id: u64,
+    mailbox_id: u64,
+    uidonly_identity: Option<(String, u64)>,
+) -> BichonResult<Option<PreparedEnvelope>> {
     //The content hash of the original raw EML
     let email_content_hash = compute_content_hash(body);
-    if DEDUP_CACHE.contains(account_id, mailbox_id, &email_content_hash) {
+    if uidonly_identity.is_none()
+        && DEDUP_CACHE.contains(account_id, mailbox_id, &email_content_hash)
+    {
         tracing::debug!("Duplicate email detected");
         //println!("Duplicate email detected");
-        return Ok(());
+        return Ok(None);
     }
-    let message: Message<'_> = MessageParser::new().parse(body).ok_or_else(|| {
-        raise_error!(
-            "Email header parse result is not available".into(),
-            ErrorCode::InternalError
-        )
-    })?;
+    let is_uidonly = uidonly_identity.is_some();
+    let message: Message<'_> = match MessageParser::new().parse(body) {
+        Some(message) => message,
+        None if is_uidonly => {
+            return prepare_unparseable_uidonly(
+                body,
+                uid,
+                internal_date,
+                account_id,
+                mailbox_id,
+                uidonly_identity.expect("UIDONLY identity checked above"),
+            )
+            .await;
+        }
+        None => {
+            return Err(raise_error!(
+                "Email header parse result is not available".into(),
+                ErrorCode::InternalError
+            ));
+        }
+    };
 
-    if let Ok(account) = AccountModel::get(account_id) {
-        if let Some(ref rules) = account.archive_rules {
-            let sender = message.from().and_then(|addr| {
-                AddrVec::from(addr).0.into_iter().next().and_then(|a| a.address)
-            });
-            let subject = message.subject().map(|s| s.to_string());
-
-            let is_spam = !rules.spam_headers.is_empty()
-                && rules.spam_headers.iter().any(|h| {
-                    message
-                        .header_raw(h.clone())
-                        .map(|v| matches!(v.trim().to_lowercase().as_str(), "yes" | "true"))
-                        .unwrap_or(false)
+    // UIDONLY is a complete-mailbox export path. Its caller rejects enabled
+    // archive rules, so do not let a mid-run configuration change silently
+    // turn later UIDs into filtered receipts.
+    if !is_uidonly {
+        if let Ok(account) = AccountModel::get(account_id) {
+            if let Some(ref rules) = account.archive_rules {
+                let sender = message.from().and_then(|addr| {
+                    AddrVec::from(addr)
+                        .0
+                        .into_iter()
+                        .next()
+                        .and_then(|a| a.address)
                 });
+                let subject = message.subject().map(|s| s.to_string());
 
-            if !rules.should_archive(sender.as_deref(), subject.as_deref(), size, is_spam) {
-                tracing::debug!(
-                    account_id,
-                    uid,
-                    sender = sender.as_deref().unwrap_or("?"),
-                    subject = subject.as_deref().unwrap_or("?"),
-                    "Email filtered out by archive rules"
-                );
-                return Ok(());
+                let is_spam = !rules.spam_headers.is_empty()
+                    && rules.spam_headers.iter().any(|h| {
+                        message
+                            .header_raw(h.clone())
+                            .map(|v| matches!(v.trim().to_lowercase().as_str(), "yes" | "true"))
+                            .unwrap_or(false)
+                    });
+
+                if !rules.should_archive(sender.as_deref(), subject.as_deref(), size, is_spam) {
+                    tracing::debug!(
+                        account_id,
+                        uid,
+                        sender = sender.as_deref().unwrap_or("?"),
+                        subject = subject.as_deref().unwrap_or("?"),
+                        "Email filtered out by archive rules"
+                    );
+                    return Ok(None);
+                }
             }
         }
     }
@@ -150,7 +362,11 @@ async fn extract_envelope_core(
         String::new()
     };
 
-    let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    let text = if is_uidonly {
+        normalize_whitespace_bounded(&text, 16 * 1024 * 1024)
+    } else {
+        text.split_whitespace().collect::<Vec<_>>().join(" ")
+    };
 
     let preview = if text.chars().count() > preview_limit {
         text.chars().take(preview_limit).collect::<String>() + "..."
@@ -202,10 +418,29 @@ async fn extract_envelope_core(
         .and_then(|add| add.address)
         .unwrap_or_else(|| "unknown".to_string());
     let attachment_count = message.attachment_count();
-    let attachments = detach_and_store_attachments(body, &message, &email_content_hash, account_id, mailbox_id).await;
+    let (attachments, detached_email) = prepare_detached_attachments(
+        body,
+        &message,
+        &email_content_hash,
+        account_id,
+        mailbox_id,
+        !is_uidonly,
+    )
+    .await;
 
-    let envelope_id = Uuid::new_v4().to_string();
+    let (envelope_id, shard_id) =
+        uidonly_identity.unwrap_or_else(|| (Uuid::new_v4().to_string(), 0));
     let now = utc_now!();
+    let stored_size = if is_uidonly {
+        u32::try_from(body.len()).map_err(|_| {
+            raise_error!(
+                "UIDONLY message size exceeds Bichon's envelope size field".into(),
+                ErrorCode::PayloadTooLarge
+            )
+        })?
+    } else {
+        size
+    };
 
 
     let mut final_tags = Vec::new();
@@ -274,7 +509,7 @@ async fn extract_envelope_core(
         .collect();
 
     let envelope = Envelope {
-        id: envelope_id,
+        id: envelope_id.clone(),
         message_id,
         account_id,
         mailbox_id,
@@ -288,7 +523,7 @@ async fn extract_envelope_core(
         date,
         internal_date,
         ingest_at: now,
-        size,
+        size: stored_size,
         thread_id,
         attachment_count,
         regular_attachment_count: attachment_docs.len(),
@@ -303,7 +538,7 @@ async fn extract_envelope_core(
         envelope,
         attachments: Some(attachments),
     };
-    let doc = ea.to_document(&body_text, 0)?;
+    let doc = ea.to_document(&body_text, shard_id)?;
     tracing::debug!(
         "[account {}][mailbox {}] extract: uid={} msg_id={} content_hash={}",
         account_id,
@@ -312,12 +547,80 @@ async fn extract_envelope_core(
         &ea.envelope.message_id,
         &ea.envelope.content_hash,
     );
-    ENVELOPE_MANAGER.queue(doc).await;
-    DEDUP_CACHE.insert(account_id, mailbox_id, &email_content_hash);
-    for doc in attachment_docs {
-        ATTACHMENT_MANAGER.queue(doc).await;
+    Ok(Some(PreparedEnvelope {
+        envelope_id,
+        content_hash: email_content_hash,
+        detached_email,
+        attachment_docs,
+        envelope_doc: doc,
+    }))
+}
+
+fn normalize_whitespace_bounded(input: &str, max_bytes: usize) -> String {
+    let mut output = String::with_capacity(input.len().min(max_bytes));
+    for word in input.split_whitespace() {
+        let separator = usize::from(!output.is_empty());
+        if output
+            .len()
+            .checked_add(separator)
+            .and_then(|len| len.checked_add(word.len()))
+            .is_none_or(|len| len > max_bytes)
+        {
+            break;
+        }
+        if separator == 1 {
+            output.push(' ');
+        }
+        output.push_str(word);
     }
-    Ok(())
+    output
+}
+
+async fn prepare_unparseable_uidonly(
+    body: &[u8],
+    uid: u32,
+    internal_date: i64,
+    account_id: u64,
+    mailbox_id: u64,
+    identity: (String, u64),
+) -> BichonResult<Option<PreparedEnvelope>> {
+    let (envelope_id, shard_id) = identity;
+    let size = u32::try_from(body.len()).map_err(|_| {
+        raise_error!(
+            "UIDONLY message size exceeds Bichon's envelope size field".into(),
+            ErrorCode::PayloadTooLarge
+        )
+    })?;
+    let content_hash = compute_content_hash(body);
+    let envelope = Envelope {
+        id: envelope_id.clone(),
+        message_id: format!("<{}@uidonly.bichon.invalid>", &envelope_id),
+        account_id,
+        mailbox_id,
+        uid,
+        from: "unknown".into(),
+        internal_date,
+        ingest_at: utc_now!(),
+        size,
+        thread_id: hex_hash(&envelope_id),
+        content_hash: content_hash.clone(),
+        ..Envelope::default()
+    };
+    let doc = EnvelopeWithAttachments {
+        envelope,
+        attachments: Some(Vec::new()),
+    }
+    .to_document("", shard_id)?;
+    Ok(Some(PreparedEnvelope {
+        envelope_id,
+        content_hash: content_hash.clone(),
+        detached_email: DetachedEmail {
+            email: (content_hash, Bytes::new()),
+            attachments: Some(Vec::new()),
+        },
+        attachment_docs: Vec::new(),
+        envelope_doc: doc,
+    }))
 }
 
 pub fn extract_envelope_from_nested_message(
@@ -426,13 +729,14 @@ pub fn extract_references(message: &Message<'_>) -> Option<Vec<String>> {
     }
 }
 
-pub async fn detach_and_store_attachments(
+async fn prepare_detached_attachments(
     original_body: &[u8],
     message: &Message<'_>,
     eml_content_hash: &str,
     account_id: u64,
     mailbox_id: u64,
-) -> Vec<AttachmentInfo> {
+    legacy_storage: bool,
+) -> (Vec<AttachmentInfo>, DetachedEmail) {
     let rules = if account_id > 0 {
         AccountModel::get(account_id)
             .ok()
@@ -451,7 +755,10 @@ pub async fn detach_and_store_attachments(
         .and_then(|addr| AddrVec::from(addr).0.into_iter().next())
         .and_then(|add| add.address);
 
-    let mut stripped_eml = original_body.to_vec();
+    let mut stripped_eml = legacy_storage
+        .then(|| original_body.to_vec())
+        .unwrap_or_default();
+    let shared_body = (!legacy_storage).then(|| Bytes::copy_from_slice(original_body));
     let mut attachment_infos = Vec::new();
     // Step 1: Collect and sort attachment ranges in reverse to maintain offset integrity
     let mut ranges: Vec<_> = message
@@ -492,15 +799,19 @@ pub async fn detach_and_store_attachments(
         if range_valid {
             let raw_bytes = &original_body[raw_start..raw_end];
             // The actual content stored in the blob is the raw undecoded data.
-            attachments.push((content_hash.clone(), Bytes::copy_from_slice(raw_bytes)));
-
-            // Replace raw attachment content with a hash-based placeholder
-            let placeholder = format!("<<BICHON_DETACH_HASH:{}>>", &content_hash);
-            stripped_eml.splice(raw_start..raw_end, placeholder.as_bytes().iter().cloned());
+            let bytes = shared_body
+                .as_ref()
+                .map(|body| body.slice(raw_start..raw_end))
+                .unwrap_or_else(|| Bytes::copy_from_slice(raw_bytes));
+            attachments.push((content_hash.clone(), bytes));
+            if legacy_storage {
+                // Replace raw attachment content with a hash-based placeholder
+                let placeholder = format!("<<BICHON_DETACH_HASH:{}>>", &content_hash);
+                stripped_eml.splice(raw_start..raw_end, placeholder.as_bytes().iter().cloned());
+            }
         } else {
-            // Invalid range: store a zero-length blob so the consistency
-            // check passes; reattachment will log a warning for the missing
-            // blob data but won't panic.
+            // Exact raw remains canonical when a malformed attachment range
+            // cannot be sliced. Keep the legacy zero-length compatibility blob.
             attachments.push((content_hash.clone(), Bytes::new()));
         }
 
@@ -541,7 +852,8 @@ pub async fn detach_and_store_attachments(
 
         if !inline || !has_cid {
             let decoded_len = att.contents().len();
-            if should_extract
+            if legacy_storage
+                && should_extract
                 && decoded_len <= crate::ext::text_extractor::MAX_EXTRACT_BYTES
                 && crate::ext::text_extractor::should_try_extract(&file_type, &ext)
             {
@@ -597,15 +909,33 @@ pub async fn detach_and_store_attachments(
             }
         }
     }
-    // Step 4: Store the final stripped EML content
-    BLOB_MANAGER
-        .queue(DetachedEmail {
+    (
+        attachment_infos,
+        DetachedEmail {
             email: (eml_content_hash.to_string(), Bytes::from(stripped_eml)),
             attachments: Some(attachments),
-        })
-        .await;
+        },
+    )
+}
 
-    attachment_infos
+pub async fn detach_and_store_attachments(
+    original_body: &[u8],
+    message: &Message<'_>,
+    eml_content_hash: &str,
+    account_id: u64,
+    mailbox_id: u64,
+) -> Vec<AttachmentInfo> {
+    let (infos, detached) = prepare_detached_attachments(
+        original_body,
+        message,
+        eml_content_hash,
+        account_id,
+        mailbox_id,
+        true,
+    )
+    .await;
+    BLOB_MANAGER.queue(detached).await;
+    infos
 }
 
 pub fn reattach_eml_content(
@@ -626,7 +956,7 @@ pub fn reattach_eml_content(
         })?;
 
     let restored_eml = BLOB_MANAGER
-        .get_email(&e.envelope.content_hash)?
+        .get_canonical_email(&e.envelope.content_hash)?
         .ok_or_else(|| {
             raise_error!(
                 format!(
@@ -637,7 +967,11 @@ pub fn reattach_eml_content(
             )
         })?;
 
-    if !e.envelope.has_any_attachments() {
+    // UIDONLY stores the complete raw message, while legacy entries store a
+    // detached representation that still needs attachment substitution.
+    if compute_content_hash(&restored_eml) == e.envelope.content_hash
+        || !e.envelope.has_any_attachments()
+    {
         return Ok((e.envelope, restored_eml));
     }
 
@@ -647,7 +981,7 @@ pub fn reattach_eml_content(
         return Err(raise_error!(
             format!(
                 "Consistency check failed: envelope.attachment_count ({}) does not match attachments.len ({})",
-                e.envelope.attachment_count, 
+                e.envelope.attachment_count,
                 actual_count
             ),
             ErrorCode::InternalError
@@ -716,7 +1050,10 @@ pub async fn reattach_eml_content_self_healing(
         .envelope;
 
     // Fast path: the content blob is present, reuse the regular reattach logic.
-    if BLOB_MANAGER.get_email(&envelope.content_hash)?.is_some() {
+    if BLOB_MANAGER
+        .get_canonical_email(&envelope.content_hash)?
+        .is_some()
+    {
         return reattach_eml_content(account_id, envelope_id);
     }
 
@@ -801,6 +1138,75 @@ async fn recover_message_blob(envelope: &Envelope) -> BichonResult<Bytes> {
 #[cfg(test)]
 mod test {
     use html2text::config;
+
+    #[test]
+    fn uidonly_identity_is_stable_and_source_scoped() {
+        let first = super::uidonly_envelope_id(7, 11, 13, 17, "imap.example:993\0alice");
+        assert_eq!(
+            first,
+            super::uidonly_envelope_id(7, 11, 13, 17, "imap.example:993\0alice")
+        );
+        assert_ne!(
+            first,
+            super::uidonly_envelope_id(7, 11, 13, 17, "imap.example:993\0bob")
+        );
+        assert_ne!(
+            first,
+            super::uidonly_envelope_id(7, 11, 13, 17, "export.example:993\0alice")
+        );
+    }
+
+    #[test]
+    fn uidonly_search_text_normalization_is_bounded() {
+        assert_eq!(
+            super::normalize_whitespace_bounded(" a\n b  c ", 5),
+            "a b c"
+        );
+        assert_eq!(
+            super::normalize_whitespace_bounded("alpha beta", 5),
+            "alpha"
+        );
+    }
+
+    #[tokio::test]
+    async fn uidonly_projection_batch_is_verified_and_idempotent() {
+        let raw = b"From: sender@example.invalid\r\nTo: archive@example.invalid\r\n\
+                    Subject: fixture\r\n\r\nbody\r\n";
+        let messages = || {
+            [17, 18]
+                .into_iter()
+                .map(|uid| super::UidOnlyMessage {
+                    body: raw.to_vec(),
+                    uid,
+                })
+                .collect()
+        };
+        super::project_uidonly_messages(messages(), 7, 11, 13, "source-a")
+            .await
+            .unwrap();
+        super::project_uidonly_messages(messages(), 7, 11, 13, "source-a")
+            .await
+            .unwrap();
+        assert_eq!(
+            super::verify_uidonly_projections(7, 11, 13, &[17, 18, 19], "source-a").unwrap(),
+            [true, true, false]
+        );
+    }
+
+    #[tokio::test]
+    async fn uidonly_projection_batch_count_is_bounded() {
+        let messages = (0..=super::UIDONLY_PROJECTION_BATCH_MESSAGES)
+            .map(|uid| super::UidOnlyMessage {
+                body: Vec::new(),
+                uid: uid as u32,
+            })
+            .collect();
+        assert!(
+            super::project_uidonly_messages(messages, 7, 11, 13, "source-a")
+                .await
+                .is_err()
+        );
+    }
 
     #[test]
     fn test_various_html_with_overflow_enabled() {
@@ -898,5 +1304,47 @@ mod test {
         // The attachment count must still match so the consistency check
         // in reattach_eml_content doesn't fail later.
         assert_eq!(infos.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn uidonly_nested_attachments_use_bounded_shared_slices() {
+        let raw = b"From: outer@example.invalid\r\n\
+MIME-Version: 1.0\r\n\
+Content-Type: multipart/mixed; boundary=outer\r\n\r\n\
+--outer\r\n\
+Content-Type: message/rfc822\r\n\
+Content-Disposition: attachment; filename=forwarded.eml\r\n\r\n\
+From: inner@example.invalid\r\n\
+MIME-Version: 1.0\r\n\
+Content-Type: multipart/mixed; boundary=inner\r\n\r\n\
+--inner\r\n\
+Content-Type: application/octet-stream\r\n\
+Content-Disposition: attachment; filename=data.bin\r\n\
+Content-Transfer-Encoding: base64\r\n\r\n\
+YWJjZA==\r\n\
+--inner--\r\n\
+--outer\r\n\
+Content-Type: application/octet-stream\r\n\
+Content-Disposition: attachment; filename=outer.bin\r\n\
+Content-Transfer-Encoding: base64\r\n\r\n\
+ZWZnaA==\r\n\
+--outer--\r\n";
+        let message = super::MessageParser::new().parse(raw).unwrap();
+        let ranges: Vec<_> = message
+            .attachments()
+            .map(|part| (part.raw_body_offset(), part.raw_end_offset()))
+            .collect();
+        assert!(ranges.len() >= 2);
+
+        let (_, detached) = super::prepare_detached_attachments(
+            raw,
+            &message,
+            &super::compute_content_hash(raw),
+            0,
+            0,
+            false,
+        )
+        .await;
+        assert_eq!(detached.attachments.unwrap().len(), ranges.len());
     }
 }

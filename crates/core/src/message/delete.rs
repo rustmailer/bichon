@@ -17,15 +17,9 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::error::BichonResult;
-use crate::store::tantivy::attachment::ATTACHMENT_MANAGER;
 use crate::store::tantivy::envelope::ENVELOPE_MANAGER;
 use std::collections::HashMap;
 
 pub async fn delete_messages_impl(request: HashMap<u64, Vec<String>>) -> BichonResult<()> {
-    ENVELOPE_MANAGER
-        .delete_envelopes_multi_account(request.clone())
-        .await?;
-    ATTACHMENT_MANAGER
-        .delete_attachments_multi_account(request)
-        .await
+    ENVELOPE_MANAGER.delete_envelopes_multi_account(request).await
 }

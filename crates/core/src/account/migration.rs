@@ -39,7 +39,7 @@ use crate::{
     id,
     oauth2::token::OAuth2AccessToken,
     raise_error,
-    store::tantivy::{attachment::ATTACHMENT_MANAGER, envelope::ENVELOPE_MANAGER},
+    store::tantivy::envelope::ENVELOPE_MANAGER,
     users::{payload::UserUpdateRequest, role::DEFAULT_ACCOUNT_MANAGER_ROLE_ID, UserModel},
     utc_now,
 };
@@ -301,6 +301,9 @@ pub struct Account {
     pub updated_at: i64,
     pub created_by: u64, //user id
     pub use_dangerous: bool,
+    /// UIDONLY acquisition is opt-in because it changes remote message identity.
+    #[serde(default)]
+    pub uidonly_enabled: bool,
     pub pgp_key: Option<String>,
     pub imap_quota_bytes: Option<u64>,
     pub imap_quota_window: Option<QuotaWindow>,
@@ -345,6 +348,7 @@ impl Account {
             created_at: utc_now!(),
             updated_at: utc_now!(),
             use_dangerous: request.use_dangerous,
+            uidonly_enabled: request.uidonly_enabled.unwrap_or_default(),
             pgp_key: request.pgp_key,
             created_by: user_id,
             download_batch_size: request.download_batch_size,
@@ -501,9 +505,6 @@ impl Account {
         MailBox::clean(account.id)?;
         ENVELOPE_MANAGER
             .delete_account_envelopes(account.id)
-            .await?;
-        ATTACHMENT_MANAGER
-            .delete_account_attachments(account.id)
             .await?;
         Self::delete_account(account)?;
         info!("Sequential cleanup completed for account: {}", account.id);
@@ -671,6 +672,10 @@ impl Account {
             new.use_dangerous = use_dangerous;
         }
 
+        if let Some(uidonly_enabled) = request.uidonly_enabled {
+            new.uidonly_enabled = uidonly_enabled;
+        }
+
         if let Some(pgp_key) = request.pgp_key {
             new.pgp_key = Some(pgp_key);
         }
@@ -706,6 +711,32 @@ impl Account {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn uidonly_setting_defaults_off_and_only_changes_explicitly() {
+        let account = Account::new(1, AccountCreateRequest::default()).unwrap();
+        assert!(!account.uidonly_enabled);
+        let update = |old: &Account, value| {
+            Account::apply_update_fields(
+                old,
+                AccountUpdateRequest {
+                    uidonly_enabled: value,
+                    ..Default::default()
+                },
+            )
+            .unwrap()
+        };
+        let enabled = update(&account, Some(true));
+        assert!(enabled.uidonly_enabled);
+        assert!(update(&enabled, None).uidonly_enabled);
+        assert!(!update(&enabled, Some(false)).uidonly_enabled);
+
+        let mut legacy = serde_json::to_value(enabled).unwrap();
+        legacy.as_object_mut().unwrap().remove("uidonly_enabled");
+        assert!(!serde_json::from_value::<Account>(legacy)
+            .unwrap()
+            .uidonly_enabled);
+    }
 
     // ── FilterRule ───────────────────────────────────────────────────
 

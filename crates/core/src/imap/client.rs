@@ -21,10 +21,11 @@ use crate::error::code::ErrorCode;
 use crate::error::BichonResult;
 use crate::imap::session::SessionStream;
 use crate::imap::stats::StatsWrapper;
+use crate::imap::uidonly::{self, UidOnlyHandle, UidOnlyLimits};
+use crate::raise_error;
 use crate::utils::net::establish_tcp_connection_with_timeout;
 use crate::utils::net::establish_tls_connection;
 use crate::utils::tls::establish_tls_stream;
-use crate::raise_error;
 use async_imap::Client as ImapClient;
 use async_imap::Session as ImapSession;
 use std::net::SocketAddr;
@@ -85,6 +86,20 @@ impl Client {
         Self {
             inner: ImapClient::new(stream),
         }
+    }
+
+    /// Installs the UIDONLY protocol guard around the final transport. This is
+    /// called after STARTTLS has finished, but before authentication consumes
+    /// the client, so the same authenticated connection can be enabled later.
+    pub(crate) fn with_uidonly(self, limits: UidOnlyLimits) -> BichonResult<(Self, UidOnlyHandle)> {
+        let stream = self.inner.into_inner();
+        let (stream, handle) = uidonly::wrap(stream, limits).map_err(|_| {
+            raise_error!(
+                "Invalid UIDONLY transport limits".into(),
+                ErrorCode::InvalidParameter
+            )
+        })?;
+        Ok((Self::new(stream), handle))
     }
 
     pub(crate) async fn login(

@@ -209,6 +209,22 @@ export function TabServer({ isEdit }: TabServerProps) {
           </FormItem>
         )}
       />
+
+      <FormField
+        control={control}
+        name="uidonly_enabled"
+        render={({ field }) => (
+          <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+            <FormControl>
+              <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+            </FormControl>
+            <div className="space-y-1 leading-none">
+              <FormLabel>{t('accounts.uidonlyEnabled')}</FormLabel>
+              <FormDescription>{t('accounts.uidonlyEnabledDescription')}</FormDescription>
+            </div>
+          </FormItem>
+        )}
+      />
     </div>
   );
 }

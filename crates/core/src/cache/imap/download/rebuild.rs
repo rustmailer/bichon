@@ -23,18 +23,27 @@ use crate::{
     },
     cache::{
         imap::{
-            download::flow::{fetch_and_save_by_date, fetch_and_save_full_mailbox, FetchDirection},
+            download::flow::{
+                fetch_and_save_by_date, fetch_and_save_full_mailbox, FetchDirection,
+            },
             mailbox::MailBox,
         },
         SEMAPHORE,
     },
     error::{code::ErrorCode, BichonResult},
+    imap::uidonly_acquisition::account_requires_uidonly,
     raise_error,
-    store::tantivy::{attachment::ATTACHMENT_MANAGER, envelope::ENVELOPE_MANAGER},
+    store::tantivy::envelope::ENVELOPE_MANAGER,
 };
 
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
+
+fn can_trust_empty_mailbox(account: &AccountModel, mailbox: &MailBox) -> bool {
+    mailbox.exists == 0
+        && mailbox.uidonly_source_scope.is_none()
+        && !account_requires_uidonly(account)
+}
 
 pub async fn rebuild_cache(
     account: &AccountModel,
@@ -59,7 +68,7 @@ pub async fn rebuild_cache(
             )?;
             break;
         }
-        if mailbox.exists == 0 {
+        if can_trust_empty_mailbox(account, mailbox) {
             info!(
                 "Account {}: Mailbox '{}' on the remote server has no emails. Skipping fetch for this mailbox.",
                 account.id, &mailbox.name
@@ -88,12 +97,8 @@ pub async fn rebuild_cache(
             }
         };
 
-        match fetch_and_save_full_mailbox(&account, &mailbox, token.clone()).await {
-            Ok(new_highest_uid) => {
-                let mut updated = mailbox.clone();
-                updated.highest_uid = new_highest_uid;
-                MailBox::batch_upsert(&[updated])?;
-            }
+        match fetch_and_save_full_mailbox(&account, &mailbox, false, token.clone()).await {
+            Ok(updated) => MailBox::batch_upsert(&[updated])?,
             Err(err) => {
                 has_error = true;
                 tracing::error!("Folder sync task failed: {:#?}", err);
@@ -114,6 +119,29 @@ pub async fn rebuild_cache(
     Ok(())
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_ordinary_empty_mailboxes_use_the_fast_path() {
+        let mailbox = MailBox::default();
+        assert!(can_trust_empty_mailbox(&AccountModel::default(), &mailbox));
+        let limited = AccountModel {
+            capabilities: Some(vec!["UIDONLY".into(), "MESSAGELIMIT=10000".into()]),
+            ..Default::default()
+        };
+        assert!(!can_trust_empty_mailbox(&limited, &mailbox));
+        assert!(!can_trust_empty_mailbox(
+            &AccountModel::default(),
+            &MailBox {
+                uidonly_source_scope: Some("proof".into()),
+                ..Default::default()
+            }
+        ));
+    }
+}
+
 pub async fn rebuild_cache_by_date(
     account: &AccountModel,
     remote_mailboxes: &[MailBox],
@@ -121,6 +149,16 @@ pub async fn rebuild_cache_by_date(
     direction: FetchDirection,
     token: CancellationToken,
 ) -> BichonResult<()> {
+    if account_requires_uidonly(account)
+        || remote_mailboxes
+            .iter()
+            .any(|mailbox| mailbox.uidonly_source_scope.is_some())
+    {
+        return Err(raise_error!(
+            "Date-scoped acquisition is unsafe on a UIDONLY-limited server".into(),
+            ErrorCode::Incompatible
+        ));
+    }
     MailBox::batch_insert(remote_mailboxes)?;
     DownloadState::init_folder_details(
         account.id,
@@ -203,33 +241,13 @@ pub async fn rebuild_mailbox_cache(
     account: &AccountModel,
     local_mailbox: &MailBox,
     remote_mailbox: &MailBox,
+    force_uidonly: bool,
     token: CancellationToken,
-) -> BichonResult<Option<u32>> {
+) -> BichonResult<MailBox> {
     ENVELOPE_MANAGER
         .delete_mailbox_envelopes(account.id, vec![local_mailbox.id])
         .await?;
-    ATTACHMENT_MANAGER
-        .delete_mailbox_attachments(account.id, vec![local_mailbox.id])
-        .await?;
-    if remote_mailbox.exists == 0 {
-        info!(
-            "Account {}: Mailbox '{}' has no emails on the remote server. The mailbox is empty, no envelopes to fetch.",
-            account.id,
-            &local_mailbox.name
-        );
-        DownloadState::update_folder_progress(
-            account.id,
-            remote_mailbox.name.clone(),
-            0,
-            0,
-            FolderStatus::Success,
-            None,
-        )?;
-        return Ok(None);
-    }
-
-    let result = fetch_and_save_full_mailbox(account, remote_mailbox, token).await?;
-    Ok(result)
+    fetch_and_save_full_mailbox(account, remote_mailbox, force_uidonly, token).await
 }
 
 pub async fn rebuild_mailbox_cache_by_date(
@@ -240,11 +258,14 @@ pub async fn rebuild_mailbox_cache_by_date(
     direction: FetchDirection,
     token: CancellationToken,
 ) -> BichonResult<Option<u32>> {
+    if account_requires_uidonly(account) || remote.uidonly_source_scope.is_some() {
+        return Err(raise_error!(
+            "Date-scoped acquisition is unsafe on a UIDONLY-limited server".into(),
+            ErrorCode::Incompatible
+        ));
+    }
     ENVELOPE_MANAGER
         .delete_mailbox_envelopes(account.id, vec![local_mailbox_id])
-        .await?;
-    ATTACHMENT_MANAGER
-        .delete_mailbox_attachments(account.id, vec![local_mailbox_id])
         .await?;
     if remote.exists == 0 {
         info!(

@@ -154,6 +154,7 @@ export interface AccountModel {
     created_at: number;
     updated_at: number;
     use_dangerous: boolean;
+    uidonly_enabled: boolean;
     pgp_key?: string;
     imap_quota_window?: QuotaWindow;
     imap_quota_bytes?: number;

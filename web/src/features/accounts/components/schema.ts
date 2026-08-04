@@ -90,6 +90,7 @@ export const getAccountSchema = (isEdit: boolean, t: (key: string) => string) =>
     imap: getImapConfigSchema(isEdit, t),
     enabled: z.boolean(),
     use_dangerous: z.boolean(),
+    uidonly_enabled: z.boolean(),
     date_since: dateSelectionSchema(t).optional(),
     date_before: relativeDateSchema(t).optional(),
     download_interval_min: z

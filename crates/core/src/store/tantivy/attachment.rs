@@ -209,6 +209,31 @@ impl IndexManager {
         let _ = self.sender.send(doc).await;
     }
 
+    /// Idempotently replaces a UIDONLY projection batch in one commit, before
+    /// the corresponding envelope completion markers are published.
+    pub(crate) async fn replace_uidonly_batches(
+        &self,
+        batches: Vec<(String, Vec<TantivyDocument>)>,
+    ) -> BichonResult<()> {
+        let mut writer = self.index_writer.lock().await;
+        let f_envelope_id = SchemaTools::attachment_fields().f_envelope_id;
+        let mut operations = Vec::new();
+        for (envelope_id, docs) in batches {
+            operations.push(UserOperation::Delete(Term::from_field_text(
+                f_envelope_id,
+                &envelope_id,
+            )));
+            operations.extend(docs.into_iter().map(UserOperation::Add));
+        }
+        writer
+            .run(operations)
+            .map_err(|e| raise_error!(format!("{e:#?}"), ErrorCode::InternalError))?;
+        writer
+            .commit()
+            .map_err(|e| raise_error!(format!("{e:#?}"), ErrorCode::InternalError))?;
+        Ok(())
+    }
+
     fn open_or_create_index(index_dir: &PathBuf) -> Index {
         let need_create = !index_dir.exists()
             || index_dir

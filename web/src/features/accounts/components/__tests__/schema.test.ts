@@ -16,6 +16,7 @@ const validAccountData = {
   },
   enabled: true,
   use_dangerous: false,
+  uidonly_enabled: false,
   download_interval_min: 60,
   download_batch_size: 30,
   auto_download_new_mailboxes: true,

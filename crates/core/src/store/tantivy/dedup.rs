@@ -11,7 +11,7 @@ use crate::raise_error;
 use crate::store::tantivy::attachment::ATTACHMENT_MANAGER;
 use crate::store::tantivy::envelope::ENVELOPE_MANAGER;
 use crate::store::tantivy::fields::{
-    F_ACCOUNT_ID, F_CONTENT_HASH, F_ID, F_INGEST_AT, F_MAILBOX_ID,
+    F_ACCOUNT_ID, F_CONTENT_HASH, F_ID, F_INGEST_AT, F_MAILBOX_ID, F_SHARD_ID,
 };
 use crate::store::tantivy::schema::SchemaTools;
 
@@ -34,6 +34,12 @@ struct DedupEntry {
 /// Key   = (mailbox_id, content_hash)  — stable identity across uidvalidity resets
 /// Value = all documents sharing that key, to be reduced to exactly one.
 type DedupMap = HashMap<(u64, String), Vec<DedupEntry>>;
+
+pub(crate) const UIDONLY_SHARD_BIT: u64 = 1 << 63;
+
+pub(crate) fn is_uidonly_shard(shard_id: u64) -> bool {
+    shard_id & UIDONLY_SHARD_BIT != 0
+}
 
 // ─── Public entry point ───────────────────────────────────────────────────────
 
@@ -178,6 +184,10 @@ fn dedup_account(
             .fast_fields()
             .i64(F_INGEST_AT)
             .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;
+        let shard_col = segment_reader
+            .fast_fields()
+            .u64(F_SHARD_ID)
+            .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;
         // content_hash and f_id are text fields with FAST; stored as dictionary-encoded strings
         let hash_col = segment_reader
             .fast_fields()
@@ -197,6 +207,10 @@ fn dedup_account(
             }
             // Filter to the current account without touching stored fields
             if account_col.values.get_val(doc_id) != account_id {
+                continue;
+            }
+            // UIDONLY records represent server UIDs, not unique bodies.
+            if is_uidonly_shard(shard_col.values.get_val(doc_id)) {
                 continue;
             }
 
@@ -409,12 +423,27 @@ mod tests {
         hash: &str,
         ingest_at: i64,
     ) {
+        add_email_with_shard(f, w, id, account, mailbox, hash, ingest_at, 0);
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn add_email_with_shard(
+        f: &EmailFields,
+        w: &mut IndexWriter,
+        id: &str,
+        account: u64,
+        mailbox: u64,
+        hash: &str,
+        ingest_at: i64,
+        shard_id: u64,
+    ) {
         let mut doc = TantivyDocument::new();
         doc.add_text(f.f_id, id);
         doc.add_u64(f.f_account_id, account);
         doc.add_u64(f.f_mailbox_id, mailbox);
         doc.add_text(f.f_content_hash, hash);
         doc.add_i64(f.f_ingest_at, ingest_at);
+        doc.add_u64(f.f_shard_id, shard_id);
         w.add_document(doc).unwrap();
     }
 
@@ -513,6 +542,22 @@ mod tests {
             },
             &["dup-new", "unique"],
             &["att-new"],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn dedup_preserves_distinct_uidonly_records_with_identical_raw() {
+        Harness::run(
+            "uidonly-identical-raw",
+            |ef, ew, af, aw| {
+                add_email_with_shard(ef, ew, "epoch-7-uid-1", 1, 2, "same", 1, UIDONLY_SHARD_BIT);
+                add_email_with_shard(ef, ew, "epoch-7-uid-2", 1, 2, "same", 2, UIDONLY_SHARD_BIT);
+                add_attachment(af, aw, "att-1", "epoch-7-uid-1", 1, 2);
+                add_attachment(af, aw, "att-2", "epoch-7-uid-2", 1, 2);
+            },
+            &["epoch-7-uid-1", "epoch-7-uid-2"],
+            &["att-1", "att-2"],
         )
         .await;
     }

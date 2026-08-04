@@ -52,6 +52,9 @@ pub struct AccountCreateRequest {
     pub download_batch_size: Option<u32>,
     pub max_email_size_bytes: Option<u64>,
     pub use_dangerous: bool,
+    /// Explicitly enables UIDONLY acquisition when required by the server.
+    /// Omitted values remain disabled for backward compatibility.
+    pub uidonly_enabled: Option<bool>,
     pub pgp_key: Option<String>,
     pub imap_quota_bytes: Option<u64>,
     pub imap_quota_window: Option<QuotaWindow>,
@@ -188,6 +191,8 @@ pub struct AccountUpdateRequest {
     pub download_batch_size: Option<u32>,
     pub max_email_size_bytes: Option<u64>,
     pub use_dangerous: Option<bool>,
+    /// Enables or disables UIDONLY acquisition for this account.
+    pub uidonly_enabled: Option<bool>,
 
     pub pgp_key: Option<String>,
     pub imap_quota_bytes: Option<u64>,

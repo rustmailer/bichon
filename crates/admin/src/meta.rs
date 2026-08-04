@@ -256,6 +256,7 @@ impl From<AccountV3> for AccountModel {
             updated_at: value.updated_at,
             created_by: value.created_by,
             use_dangerous: value.use_dangerous,
+            uidonly_enabled: false,
             pgp_key: value.pgp_key,
             imap_quota_window: None,
             imap_quota_bytes: None,
@@ -666,6 +667,7 @@ impl From<MailBox> for bichon_core::cache::imap::mailbox::MailBox {
             uid_next: value.uid_next,
             uid_validity: value.uid_validity,
             highest_uid: None,
+            uidonly_source_scope: None,
         }
     }
 }

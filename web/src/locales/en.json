@@ -380,6 +380,8 @@
     "updateFailed": "Update failed, please try again later",
     "updateTheEmailAccountHere": "Update the email account here. ",
     "updatedAt": "Updated At",
+    "uidonlyEnabled": "Enable UID-only acquisition",
+    "uidonlyEnabledDescription": "Required for large Yahoo mailboxes. This changes remote message identity for this account; disabling it later stops synchronization instead of falling back to the limited mailbox view.",
     "useDangerous": "Trust Any TLS Certificate",
     "useDangerousDescription": "Enable this option only if you are connecting to an IMAP server with a public or self-signed certificate that may not be recognized by your system. Using this setting bypasses standard certificate validation, which can expose you to man-in-the-middle attacks. Only enable if you understand the risks.",
     "useNoProxy": "No Proxy",

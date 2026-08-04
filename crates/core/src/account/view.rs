@@ -52,6 +52,7 @@ pub struct AccountResp {
     pub created_user_name: String,
     pub created_user_email: String,
     pub use_dangerous: bool,
+    pub uidonly_enabled: bool,
     pub pgp_key: Option<String>,
     pub imap_quota_bytes: Option<u64>,
     pub imap_quota_window: Option<QuotaWindow>,
@@ -90,6 +91,7 @@ impl AccountResp {
                 .map(|u| u.email.clone())
                 .unwrap_or_else(|| "N/A".to_string()),
             use_dangerous: account.use_dangerous,
+            uidonly_enabled: account.uidonly_enabled,
             pgp_key: account.pgp_key,
             imap_quota_bytes: account.imap_quota_bytes,
             imap_quota_window: account.imap_quota_window,

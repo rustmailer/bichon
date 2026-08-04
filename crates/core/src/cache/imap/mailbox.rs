@@ -60,6 +60,10 @@ pub struct MailBox {
     /// Used for incremental sync: next fetch starts from `highest_uid + 1`.
     /// If `None`, a fallback query against the Tantivy index will be performed once.
     pub highest_uid: Option<u32>,
+    /// Source fingerprint proving that `highest_uid` came from a complete
+    /// UIDONLY traversal rather than a provider-limited legacy view.
+    #[serde(default)]
+    pub uidonly_source_scope: Option<String>,
 }
 
 impl MemDbModel for MailBox {

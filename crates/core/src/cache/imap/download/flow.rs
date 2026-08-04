@@ -36,6 +36,10 @@ use crate::{
             compress_uid_list, generate_uid_sequence_hashset, slow_server_message, ImapExecutor,
             DEFAULT_BATCH_SIZE,
         },
+        imap::uidonly_acquisition::{
+            account_requires_uidonly, connect_and_acquire_or_legacy,
+            mailbox_has_uidonly_proof, AcquisitionRoute,
+        },
         store::tantivy::envelope::ENVELOPE_MANAGER,
     },
 };
@@ -58,6 +62,12 @@ pub async fn fetch_and_save_by_date(
     direction: FetchDirection,
     token: CancellationToken,
 ) -> BichonResult<Option<u32>> {
+    if account_requires_uidonly(account) || mailbox.uidonly_source_scope.is_some() {
+        return Err(raise_error!(
+            "Date-scoped acquisition is unsafe on a UIDONLY-limited server".into(),
+            ErrorCode::Incompatible
+        ));
+    }
     let account_id = account.id;
     let mut session = match ImapExecutor::create_connection(account_id).await {
         Ok(session) => session,
@@ -258,24 +268,61 @@ pub async fn fetch_and_save_by_date(
 }
 
 /// Fetches all messages from a mailbox.
-/// Returns `Ok(Some(max_uid))` with the highest UID stored, or `Ok(None)` if empty.
-///
-/// The mailbox is enumerated via `UID SEARCH ALL` first, then downloaded in UID
-/// batches. Unlike sequence-number paging, UIDs stay stable while the download
-/// runs (new arrivals only get larger UIDs), so no message is silently skipped
-/// when the server changes mid-download.
+/// Returns a checkpoint only after the complete mailbox run succeeds.
+/// The legacy route enumerates `UID SEARCH ALL` first, so new arrivals cannot
+/// shift messages between batches while the download is running.
 pub async fn fetch_and_save_full_mailbox(
     account: &AccountModel,
     mailbox: &MailBox,
+    force_uidonly: bool,
     token: CancellationToken,
-) -> BichonResult<Option<u32>> {
+) -> BichonResult<MailBox> {
     let mailbox_id = mailbox.id;
     let account_id = account.id;
 
-    let mut session = match ImapExecutor::create_connection(account_id).await {
-        Ok(session) => session,
+    // Classify the actual acquisition connection. Cached capabilities route
+    // known-limited accounts early, but can never authorize a legacy fetch.
+    let route = connect_and_acquire_or_legacy(
+        account,
+        mailbox,
+        force_uidonly,
+        token.clone(),
+        |progress| {
+            DownloadState::update_folder_progress(
+                account_id,
+                mailbox.name.clone(),
+                progress.planned,
+                progress.resolved,
+                FolderStatus::Downloading,
+                None,
+            )
+        },
+    )
+    .await;
+    let mut session = match route {
+        Ok(AcquisitionRoute::Acquired {
+            report,
+            source_scope,
+        }) => {
+            DownloadState::update_folder_progress(
+                account_id,
+                mailbox.name.clone(),
+                report.inventoried,
+                report.archived,
+                FolderStatus::Success,
+                None,
+            )?;
+            let mut updated = mailbox.clone();
+            updated.highest_uid = report.checkpoint;
+            updated.uid_validity = Some(report.uid_validity);
+            updated.uid_next = Some(report.uid_next);
+            updated.exists = report.exists;
+            updated.uidonly_source_scope = Some(source_scope);
+            return Ok(updated);
+        }
+        Ok(AcquisitionRoute::Legacy(session)) => session,
         Err(e) => {
-            let err_msg = format!("Connection failed for this folder: {:#?}", e);
+            let err_msg = format!("Full mailbox acquisition failed: {:#?}", e);
             DownloadState::update_folder_progress(
                 account_id,
                 mailbox.name.clone(),
@@ -323,7 +370,10 @@ pub async fn fetch_and_save_full_mailbox(
             None,
         )?;
         session.logout().await.ok();
-        return Ok(None);
+        let mut updated = mailbox.clone();
+        updated.highest_uid = None;
+        updated.uidonly_source_scope = None;
+        return Ok(updated);
     }
 
     let max_uid = *uid_list.last().unwrap();
@@ -337,7 +387,6 @@ pub async fn fetch_and_save_full_mailbox(
     );
 
     let mut current_processed = 0u64;
-    let mut has_error_or_cancel = false;
 
     for (index, batch) in uid_batches.into_iter().enumerate() {
         if token.is_cancelled() {
@@ -354,8 +403,11 @@ pub async fn fetch_and_save_full_mailbox(
                 FolderStatus::Cancelled,
                 None,
             )?;
-            has_error_or_cancel = true;
-            break;
+            session.logout().await.ok();
+            return Err(raise_error!(
+                "Full mailbox download cancelled".into(),
+                ErrorCode::InternalError
+            ));
         }
 
         // Heartbeat: keeps `current_folder` fresh so the web UI can show
@@ -452,24 +504,25 @@ pub async fn fetch_and_save_full_mailbox(
                     FolderStatus::Failed,
                     Some(err_msg),
                 )?;
-                has_error_or_cancel = true;
-                break;
+                session.logout().await.ok();
+                return Err(e);
             }
         }
     }
 
-    if !has_error_or_cancel {
-        DownloadState::update_folder_progress(
-            account_id,
-            mailbox.name.clone(),
-            planned,
-            current_processed,
-            FolderStatus::Success,
-            None,
-        )?;
-    }
+    DownloadState::update_folder_progress(
+        account_id,
+        mailbox.name.clone(),
+        planned,
+        current_processed,
+        FolderStatus::Success,
+        None,
+    )?;
     session.logout().await.ok();
-    Ok(max_uid.into())
+    let mut updated = mailbox.clone();
+    updated.highest_uid = Some(max_uid);
+    updated.uidonly_source_scope = None;
+    Ok(updated)
 }
 
 /// Generates a synthetic UIDVALIDITY for IMAP servers that don't provide it.
@@ -759,14 +812,37 @@ async fn reconcile_uid_validity_change(
     Ok(max_uid)
 }
 
+fn mailbox_source_changed(account: &AccountModel, mailbox: &MailBox) -> bool {
+    mailbox.uidonly_source_scope.is_some() && !mailbox_has_uidonly_proof(account, mailbox)
+}
+
+fn intersecting_source_changed(account: &AccountModel, mailboxes: &[(MailBox, MailBox)]) -> bool {
+    mailboxes
+        .iter()
+        .any(|(local, _)| mailbox_source_changed(account, local))
+}
+
 pub async fn reconcile_mailboxes(
     account: &AccountModel,
     remote_mailboxes: &[MailBox],
     local_mailboxes: &[MailBox],
     token: CancellationToken,
 ) -> BichonResult<()> {
-    let start_time = Instant::now();
     let existing_mailboxes = find_intersecting_mailboxes(local_mailboxes, remote_mailboxes);
+    let source_changed = intersecting_source_changed(account, &existing_mailboxes);
+    let known_limited = local_mailboxes
+        .iter()
+        .any(|mailbox| mailbox_has_uidonly_proof(account, mailbox))
+        || account_requires_uidonly(account);
+    if (known_limited || source_changed)
+        && (account.date_since.is_some() || account.date_before.is_some())
+    {
+        return Err(raise_error!(
+            "Date-scoped acquisition is unsafe on a UIDONLY-limited server".into(),
+            ErrorCode::Incompatible
+        ));
+    }
+    let start_time = Instant::now();
     let account_id = account.id;
     if !existing_mailboxes.is_empty() {
         let mut mailboxes_to_update = Vec::with_capacity(existing_mailboxes.len());
@@ -777,6 +853,7 @@ pub async fn reconcile_mailboxes(
         )?;
 
         for (local_mailbox, remote_mailbox) in &existing_mailboxes {
+            let source_changed = mailbox_source_changed(account, local_mailbox);
             if token.is_cancelled() {
                 DownloadState::update_session_status(
                     account.id,
@@ -784,6 +861,30 @@ pub async fn reconcile_mailboxes(
                     Some("Received termination signal (User stop or System shutdown)".to_string()),
                 )?;
                 break;
+            }
+
+            if account.date_since.is_none()
+                && account.date_before.is_none()
+                && (known_limited || source_changed)
+            {
+                let can_resume = local_mailbox.uid_validity == remote_mailbox.uid_validity
+                    && !source_changed
+                    && mailbox_has_uidonly_proof(account, local_mailbox);
+                let mut acquisition_mailbox = (*remote_mailbox).clone();
+                if can_resume {
+                    acquisition_mailbox.highest_uid = local_mailbox.highest_uid;
+                    acquisition_mailbox.uidonly_source_scope =
+                        local_mailbox.uidonly_source_scope.clone();
+                }
+                let result = fetch_and_save_full_mailbox(
+                    account,
+                    &acquisition_mailbox,
+                    known_limited,
+                    token.clone(),
+                )
+                .await?;
+                mailboxes_to_update.push(result);
+                continue;
             }
 
             // Handle missing UIDVALIDITY from non-compliant IMAP servers
@@ -885,7 +986,11 @@ pub async fn reconcile_mailboxes(
                 )?;
                 break;
             }
-            if mailbox.exists > 0 {
+            if mailbox.exists > 0
+                || (account.date_since.is_none()
+                    && account.date_before.is_none()
+                    && (known_limited || account_requires_uidonly(account)))
+            {
                 let account = account.clone();
                 let mailbox = mailbox.clone();
 
@@ -901,41 +1006,50 @@ pub async fn reconcile_mailboxes(
                 };
 
                 let result = match &account.date_since {
-                    Some(date_since) => {
-                        rebuild_mailbox_cache_by_date(
+                    Some(date_since) => rebuild_mailbox_cache_by_date(
+                        &account,
+                        mailbox.id,
+                        &date_since.since_date()?,
+                        &mailbox,
+                        FetchDirection::Since,
+                        token.clone(),
+                    )
+                    .await
+                    .map(|highest_uid| {
+                        let mut updated = mailbox.clone();
+                        updated.highest_uid = highest_uid;
+                        updated
+                    }),
+                    None => match &account.date_before {
+                        Some(r) => rebuild_mailbox_cache_by_date(
                             &account,
                             mailbox.id,
-                            &date_since.since_date()?,
+                            &r.calculate_date()?,
                             &mailbox,
-                            FetchDirection::Since,
+                            FetchDirection::Before,
                             token.clone(),
                         )
                         .await
-                    }
-                    None => match &account.date_before {
-                        Some(r) => {
-                            rebuild_mailbox_cache_by_date(
+                        .map(|highest_uid| {
+                            let mut updated = mailbox.clone();
+                            updated.highest_uid = highest_uid;
+                            updated
+                        }),
+                        None => {
+                            rebuild_mailbox_cache(
                                 &account,
-                                mailbox.id,
-                                &r.calculate_date()?,
                                 &mailbox,
-                                FetchDirection::Before,
+                                &mailbox,
+                                known_limited,
                                 token.clone(),
                             )
                             .await
-                        }
-                        None => {
-                            rebuild_mailbox_cache(&account, &mailbox, &mailbox, token.clone()).await
                         }
                     },
                 };
 
                 match result {
-                    Ok(new_highest_uid) => {
-                        let mut updated = mailbox.clone();
-                        updated.highest_uid = new_highest_uid;
-                        MailBox::batch_upsert(&[updated])?;
-                    }
+                    Ok(updated) => MailBox::batch_upsert(&[updated])?,
                     Err(err) => {
                         has_error = true;
                         tracing::error!("Folder sync task failed: {:#?}", err);
@@ -1003,8 +1117,14 @@ async fn perform_incremental_sync(
                                     .await?
                                 }
                                 None => {
-                                    fetch_and_save_full_mailbox(account, remote_mailbox, token)
-                                        .await?
+                                    fetch_and_save_full_mailbox(
+                                        account,
+                                        remote_mailbox,
+                                        false,
+                                        token,
+                                    )
+                                    .await?
+                                    .highest_uid
                                 }
                             },
                         };
@@ -1062,6 +1182,48 @@ mod tests {
     // ============================================================
     // Pure unit tests (no network)
     // ============================================================
+
+    #[test]
+    fn stale_nonremote_uidonly_scope_does_not_force_current_mailbox_rescan() {
+        let local = [
+            MailBox {
+                name: "INBOX".into(),
+                ..Default::default()
+            },
+            MailBox {
+                name: "Unsubscribed".into(),
+                uidonly_source_scope: Some("old-source".into()),
+                ..Default::default()
+            },
+        ];
+        let remote = [MailBox {
+            name: "INBOX".into(),
+            ..Default::default()
+        }];
+        let current = find_intersecting_mailboxes(&local, &remote);
+        assert!(mailbox_source_changed(&AccountModel::default(), &local[1]));
+        assert!(!intersecting_source_changed(
+            &AccountModel::default(),
+            &current
+        ));
+    }
+
+    #[tokio::test]
+    async fn known_limited_server_rejects_date_scoped_fallback_before_connecting() {
+        let account = AccountModel {
+            capabilities: Some(vec!["UIDONLY".into(), "MESSAGELIMIT=10000".into()]),
+            ..Default::default()
+        };
+        assert!(fetch_and_save_by_date(
+            &account,
+            "2026-01-01",
+            &MailBox::default(),
+            FetchDirection::Since,
+            CancellationToken::new(),
+        )
+        .await
+        .is_err());
+    }
 
     #[test]
     fn test_generate_synthetic_uidvalidity_deterministic() {

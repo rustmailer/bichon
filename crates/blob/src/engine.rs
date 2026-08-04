@@ -320,6 +320,10 @@ impl Engine {
         self.shared.index_store.exists(key)
     }
 
+    pub fn exists_batch(&self, keys: &[[u8; 32]]) -> Result<Vec<bool>> {
+        self.shared.index_store.exists_batch(keys)
+    }
+
     // ── Batch delete ─────────────────────────────────────────────────────
 
     pub fn delete_batch(&self, keys: &[[u8; 32]]) -> Result<()> {
@@ -375,7 +379,6 @@ impl Engine {
 
         let mut records: Vec<IndexRecord> = Vec::with_capacity(entries.len());
         let mut ends: Vec<(u32, u64)> = Vec::with_capacity(entries.len());
-
         for (key, value, codec) in entries {
             if value.len() > crate::types::MAX_VALUE_SIZE {
                 return Err(Error::ValueTooLarge { size: value.len() });

@@ -37,7 +37,12 @@ impl FormatTime for LocalTimer {
 pub fn initialize_logging() {
     let level = validate_log_level(&SETTINGS.bichon_log_level);
     if matches!(level, Level::DEBUG) || matches!(level, Level::TRACE) {
-        LogTracer::init().unwrap();
+        // async-imap trace events include raw commands and parser buffers,
+        // which may contain credentials or complete message literals.
+        LogTracer::builder()
+            .ignore_crate("async_imap")
+            .init()
+            .unwrap();
     }
     if SETTINGS.bichon_log_to_file {
         setup_file_logger(level).unwrap();

@@ -22,11 +22,17 @@ use crate::{
     envelope::extractor::reattach_eml_content_self_healing,
     error::{code::ErrorCode, BichonResult},
     settings::dir::DATA_DIR_MANAGER,
+    utils::compute_content_hash,
 };
 use bichon_blob::{Codec, Config, Engine};
 use bytes::Bytes;
 
-use std::{io::Cursor, sync::Arc, sync::LazyLock};
+use std::{
+    collections::{hash_map::Entry, HashMap, HashSet},
+    io::Cursor,
+    sync::Arc,
+    sync::LazyLock,
+};
 use tokio::{
     sync::{mpsc, Mutex},
     task::{self, JoinHandle},
@@ -34,9 +40,22 @@ use tokio::{
 
 pub static BLOB_MANAGER: LazyLock<BlobManager> = LazyLock::new(BlobManager::new);
 
+pub(crate) fn uidonly_exact_raw_blob_key(content_hash: &str) -> String {
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(b"bichon-uidonly-exact-raw-v1\0");
+    hasher.update(content_hash.as_bytes());
+    hex::encode(hasher.finalize().as_bytes())
+}
+
 pub struct DetachedEmail {
     pub email: (String, Bytes),
     pub attachments: Option<Vec<(String, Bytes)>>,
+}
+
+pub(crate) struct UidOnlyBlob {
+    pub content_hash: String,
+    pub raw: Vec<u8>,
+    pub attachments: Vec<(String, Bytes)>,
 }
 
 pub struct BlobManager {
@@ -54,6 +73,104 @@ fn hex_to_key(hex: &str) -> BichonResult<[u8; 32]> {
         )
     })?;
     Ok(key)
+}
+
+fn insert_uidonly_blob(
+    values: &mut HashMap<[u8; 32], Vec<u8>>,
+    order: &mut Vec<[u8; 32]>,
+    key: [u8; 32],
+    value: Vec<u8>,
+    reject_mismatch: bool,
+) -> BichonResult<()> {
+    match values.entry(key) {
+        Entry::Vacant(entry) => {
+            order.push(key);
+            entry.insert(value);
+        }
+        Entry::Occupied(entry) if reject_mismatch && entry.get() != &value => {
+            return Err(raise_error!(
+                "one UIDONLY blob key mapped to different bytes in a batch".into(),
+                ErrorCode::InternalError
+            ));
+        }
+        Entry::Occupied(_) => {}
+    }
+    Ok(())
+}
+
+fn store_uidonly_exact_batch_inner(engine: &Engine, blobs: Vec<UidOnlyBlob>) -> BichonResult<()> {
+    let mut values = HashMap::new();
+    let mut order = Vec::new();
+    let mut exact_keys = HashSet::new();
+    let mut exact_readbacks = Vec::new();
+
+    for blob in blobs {
+        if compute_content_hash(&blob.raw) != blob.content_hash {
+            return Err(raise_error!(
+                "UIDONLY raw bytes do not match their content hash".into(),
+                ErrorCode::InternalError
+            ));
+        }
+        let exact_key = hex_to_key(&uidonly_exact_raw_blob_key(&blob.content_hash))?;
+        if exact_keys.insert(exact_key) {
+            exact_readbacks.push((exact_key, blob.content_hash.clone(), blob.raw.len()));
+        }
+        insert_uidonly_blob(&mut values, &mut order, exact_key, blob.raw, true)?;
+        for (hash, bytes) in blob.attachments {
+            // Attachment keys predate UIDONLY and are based on decoded bytes,
+            // while their stored MIME slices may differ in transfer encoding.
+            // Preserve the first value, matching the legacy dedup behavior.
+            insert_uidonly_blob(
+                &mut values,
+                &mut order,
+                hex_to_key(&hash)?,
+                bytes.to_vec(),
+                false,
+            )?;
+        }
+    }
+
+    let existing = engine
+        .exists_batch(&order)
+        .map_err(|e| raise_error!(format!("{e:#?}"), ErrorCode::InternalError))?;
+    let entries: Vec<_> = order
+        .iter()
+        .copied()
+        .zip(existing)
+        .filter(|(_, exists)| !exists)
+        .map(|key| {
+            let key = key.0;
+            (
+                key,
+                values.remove(&key).expect("ordered UIDONLY blob"),
+                Codec::Lz4,
+            )
+        })
+        .collect();
+    engine
+        .put_batch(&entries)
+        .map_err(|e| raise_error!(format!("{e:#?}"), ErrorCode::InternalError))?;
+    drop(entries);
+    drop(values);
+
+    for (key, content_hash, size) in exact_readbacks {
+        let stored = engine
+            .get(&key)
+            .map_err(|e| raise_error!(format!("{e:#?}"), ErrorCode::InternalError))?
+            .ok_or_else(|| {
+                raise_error!(
+                    "UIDONLY exact raw blob missing after durable write".into(),
+                    ErrorCode::InternalError
+                )
+            })?;
+        if stored.len() != size || compute_content_hash(&stored) != content_hash {
+            return Err(raise_error!(
+                "UIDONLY exact raw blob failed readback verification".into(),
+                ErrorCode::InternalError
+            ));
+        }
+    }
+    Ok(())
 }
 
 impl BlobManager {
@@ -195,8 +312,55 @@ impl BlobManager {
         }
     }
 
+    /// Durably stores a batch of exact RFC822 messages, then reads every unique
+    /// raw blob back before any search-index completion marker may be written.
+    pub(crate) async fn store_uidonly_exact_batch(
+        &self,
+        blobs: Vec<UidOnlyBlob>,
+    ) -> BichonResult<()> {
+        let engine = Arc::clone(&self.engine);
+        tokio::task::spawn_blocking(move || store_uidonly_exact_batch_inner(&engine, blobs))
+            .await
+            .map_err(|e| raise_error!(format!("{e:#?}"), ErrorCode::InternalError))?
+    }
+
     pub fn get_email(&self, content_hash: &str) -> BichonResult<Option<Bytes>> {
         self.get(content_hash)
+    }
+
+    pub(crate) fn get_uidonly_exact(&self, content_hash: &str) -> BichonResult<Option<Bytes>> {
+        let Some(raw) = self.get(&uidonly_exact_raw_blob_key(content_hash))? else {
+            return Ok(None);
+        };
+        if compute_content_hash(&raw) != content_hash {
+            return Err(raise_error!(
+                "UIDONLY exact raw blob digest mismatch".into(),
+                ErrorCode::InternalError
+            ));
+        }
+        Ok(Some(raw))
+    }
+
+    /// Fast restart check. This is a receipt only when the caller has already
+    /// found a valid envelope marker committed after the initial full readback.
+    pub(crate) fn has_uidonly_exact_batch(
+        &self,
+        content_hashes: &[String],
+    ) -> BichonResult<Vec<bool>> {
+        let keys: Result<Vec<_>, _> = content_hashes
+            .iter()
+            .map(|hash| hex_to_key(&uidonly_exact_raw_blob_key(hash)))
+            .collect();
+        self.engine
+            .exists_batch(&keys?)
+            .map_err(|e| raise_error!(format!("{e:#?}"), ErrorCode::InternalError))
+    }
+
+    pub(crate) fn get_canonical_email(&self, content_hash: &str) -> BichonResult<Option<Bytes>> {
+        match self.get_uidonly_exact(content_hash)? {
+            Some(raw) => Ok(Some(raw)),
+            None => self.get(content_hash),
+        }
     }
 
     pub fn get_attachment(&self, content_hash: &str) -> BichonResult<Option<Bytes>> {
@@ -222,10 +386,11 @@ impl BlobManager {
         I2: IntoIterator,
         I2::Item: AsRef<str>,
     {
-        let mut keys: Vec<[u8; 32]> = email_content_hashes
-            .into_iter()
-            .map(|h| hex_to_key(h.as_ref()))
-            .collect::<BichonResult<_>>()?;
+        let mut keys = Vec::new();
+        for hash in email_content_hashes {
+            keys.push(hex_to_key(hash.as_ref())?);
+            keys.push(hex_to_key(&uidonly_exact_raw_blob_key(hash.as_ref()))?);
+        }
 
         for h in attachment_content_hashes {
             keys.push(hex_to_key(h.as_ref())?);
@@ -238,6 +403,51 @@ impl BlobManager {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{store_uidonly_exact_batch_inner, uidonly_exact_raw_blob_key, UidOnlyBlob};
+    use crate::utils::compute_content_hash;
+    use bichon_blob::{Codec, Config, Engine};
+    use bytes::Bytes;
+
+    #[test]
+    fn exact_raw_write_is_durable_verified_and_idempotent() {
+        let dir = std::env::temp_dir().join(format!("bichon-uidonly-{}", uuid::Uuid::new_v4()));
+        let engine = Engine::open(&dir, Config::default()).unwrap();
+        let raw = b"From: sender@example.invalid\r\n\r\nbody\r\n";
+        let hash = compute_content_hash(raw);
+        let exact_hash = uidonly_exact_raw_blob_key(&hash);
+        assert_ne!(exact_hash, hash);
+        assert_eq!(exact_hash, uidonly_exact_raw_blob_key(&hash));
+        let attachment = Bytes::from_static(b"attachment");
+        let attachment_hash = compute_content_hash(&attachment);
+        let key = super::hex_to_key(&hash).unwrap();
+        engine
+            .put(key, b"legacy detached value", Codec::Lz4)
+            .unwrap();
+        let blob = || UidOnlyBlob {
+            content_hash: hash.clone(),
+            raw: raw.to_vec(),
+            attachments: vec![(attachment_hash.clone(), attachment.clone())],
+        };
+        store_uidonly_exact_batch_inner(&engine, vec![blob(), blob()]).unwrap();
+        store_uidonly_exact_batch_inner(&engine, vec![blob()]).unwrap();
+        assert_eq!(engine.get(&key).unwrap().unwrap(), b"legacy detached value");
+        let exact_key = super::hex_to_key(&uidonly_exact_raw_blob_key(&hash)).unwrap();
+        assert_eq!(engine.get(&exact_key).unwrap().unwrap(), raw);
+        let attachment_key = super::hex_to_key(&attachment_hash).unwrap();
+        assert_eq!(engine.get(&attachment_key).unwrap().unwrap(), attachment);
+        assert_eq!(
+            engine
+                .exists_batch(&[key, exact_key, attachment_key])
+                .unwrap(),
+            vec![true, true, true]
+        );
+        engine.shutdown().unwrap();
+        std::fs::remove_dir_all(dir).unwrap();
     }
 }
 

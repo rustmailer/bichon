@@ -24,12 +24,19 @@ use crate::imap::capabilities::{capability_to_string, check_capabilities, fetch_
 use crate::imap::client::Client;
 use crate::imap::oauth2::OAuth2;
 use crate::imap::session::SessionStream;
+use crate::imap::uidonly::{UidOnlyHandle, UidOnlyLimits};
 use crate::oauth2::token::OAuth2AccessToken;
 use crate::{bichon_version, decrypt, raise_error};
 use async_imap::Session;
 use tracing::{error, warn};
 
 pub struct ImapConnectionManager;
+
+pub(crate) struct UidOnlyConnection {
+    pub session: Session<Box<dyn SessionStream>>,
+    pub handle: UidOnlyHandle,
+    pub capabilities: Vec<String>,
+}
 
 impl ImapConnectionManager {
     async fn create_client(account: &AccountModel) -> BichonResult<Client> {
@@ -93,13 +100,11 @@ impl ImapConnectionManager {
         }
     }
 
-    pub async fn build(account_id: u64) -> BichonResult<Session<Box<dyn SessionStream>>> {
-        let account = AccountModel::get(account_id)?;
+    async fn create_client_with_retry(account: &AccountModel) -> BichonResult<Client> {
         let account_email = account.email.clone();
-
         let mut client = None;
         for attempt in 0..3u32 {
-            match Self::create_client(&account).await {
+            match Self::create_client(account).await {
                 Ok(c) => {
                     client = Some(c);
                     break;
@@ -123,14 +128,19 @@ impl ImapConnectionManager {
             }
         }
 
-        let client = client.ok_or_else(|| {
+        client.ok_or_else(|| {
             raise_error!(
                 format!("Failed to create IMAP {}'s client after 3 attempts", account_email),
                 ErrorCode::NetworkError
             )
-        })?;
+        })
+    }
 
-        let mut session = match Self::authenticate(client, &account).await {
+    async fn initialize_session(
+        account: &AccountModel,
+        client: Client,
+    ) -> BichonResult<(Session<Box<dyn SessionStream>>, Vec<String>)> {
+        let mut session = match Self::authenticate(client, account).await {
             Ok(session) => session,
             Err(error) => {
                 error!("Failed to authenticate IMAP session: {:#?}", error);
@@ -138,10 +148,10 @@ impl ImapConnectionManager {
             }
         };
 
-        match fetch_capabilities(&mut session).await {
+        let to_save = match fetch_capabilities(&mut session).await {
             Ok(capabilities) => {
                 let to_save: Vec<String> = capabilities.iter().map(capability_to_string).collect();
-                AccountModel::update_capabilities(account_id, to_save)?;
+                AccountModel::update_capabilities(account.id, to_save.clone())?;
                 if let Err(error) = check_capabilities(&capabilities) {
                     error!("Failed to check IMAP capabilities: {:#?}", error);
                     return Err(error);
@@ -159,13 +169,38 @@ impl ImapConnectionManager {
                         warn!("IMAP ID command failed (ignored): {:#?}", e);
                     }
                 }
+                to_save
             }
             Err(error) => {
                 error!("Failed to fetch IMAP capabilities: {:#?}", error);
                 return Err(error);
             }
-        }
+        };
 
+        Ok((session, to_save))
+    }
+
+    pub async fn build(account_id: u64) -> BichonResult<Session<Box<dyn SessionStream>>> {
+        let account = AccountModel::get(account_id)?;
+        let client = Self::create_client_with_retry(&account).await?;
+        let (session, _) = Self::initialize_session(&account, client).await?;
         Ok(session)
+    }
+
+    /// Builds one capability-probed connection with the UIDONLY guard already
+    /// installed. The returned session is still in ordinary mode until an
+    /// exact `ENABLE UIDONLY` exchange succeeds.
+    pub(crate) async fn build_uidonly(
+        account: &AccountModel,
+        limits: UidOnlyLimits,
+    ) -> BichonResult<UidOnlyConnection> {
+        let client = Self::create_client_with_retry(account).await?;
+        let (client, handle) = client.with_uidonly(limits)?;
+        let (session, capabilities) = Self::initialize_session(account, client).await?;
+        Ok(UidOnlyConnection {
+            session,
+            handle,
+            capabilities,
+        })
     }
 }
