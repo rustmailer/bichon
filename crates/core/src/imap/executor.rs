@@ -23,6 +23,7 @@ use crate::envelope::extractor::extract_envelope_and_store_it;
 use crate::error::code::ErrorCode;
 use crate::imap::session::SessionStream;
 use crate::raise_error;
+use crate::store::tantivy::envelope::ENVELOPE_MANAGER;
 use crate::{error::BichonResult, imap::manager::ImapConnectionManager};
 use async_imap::types::Name;
 use async_imap::Session;
@@ -226,24 +227,8 @@ impl ImapExecutor {
                     start_uid,
                     examined.uid_next,
                 ) {
-                    tracing::warn!(
-                        account_id = account.id,
-                        mailbox = %mailbox.name,
-                        start_uid,
-                        uid_next = examined.uid_next,
-                        "{}",
-                        msg
-                    );
-                    DownloadState::append_session_error(account.id, msg)?;
-                    DownloadState::update_folder_progress(
-                        account.id,
-                        mailbox.name.clone(),
-                        0,
-                        0,
-                        FolderStatus::Failed,
-                        Some("UID enumeration came back empty despite new mail on server. Retrying on next sync.".into()),
-                    )?;
-                    return Ok(None);
+                    return resolve_empty_enumeration(account, mailbox, &examined, start_uid, msg)
+                        .await;
                 }
             }
             DownloadState::update_folder_progress(
@@ -499,24 +484,8 @@ impl ImapExecutor {
                     start_uid,
                     examined.uid_next,
                 ) {
-                    tracing::warn!(
-                        account_id = account.id,
-                        mailbox = %mailbox.name,
-                        start_uid,
-                        uid_next = examined.uid_next,
-                        "{}",
-                        msg
-                    );
-                    DownloadState::append_session_error(account.id, msg)?;
-                    DownloadState::update_folder_progress(
-                        account.id,
-                        mailbox.name.clone(),
-                        0,
-                        0,
-                        FolderStatus::Failed,
-                        Some("UID enumeration came back empty despite new mail on server. Retrying on next sync.".into()),
-                    )?;
-                    return Ok(None);
+                    return resolve_empty_enumeration(account, mailbox, &examined, start_uid, msg)
+                        .await;
                 }
             }
             DownloadState::update_folder_progress(
@@ -1170,6 +1139,83 @@ fn empty_enumeration_anomaly(
     } else {
         None
     }
+}
+
+/// Resolve an empty incremental enumeration once `empty_enumeration_anomaly`
+/// has flagged it as suspicious.
+///
+/// The pure guard only knows `UIDNEXT > start_uid`, which cannot distinguish a
+/// truncated/throttled empty (real mail we must NOT skip) from a retired-UID
+/// tail (Gmail relabel/archive/move leaves `UIDNEXT` above the last surviving
+/// message, so `{start}:*` is legitimately empty). Confirm with an
+/// authoritative message count: `EXISTS` from EXAMINE and the local stored
+/// count are both immune to the SEARCH/FETCH truncation that fools the guard.
+///
+/// Returns the value the caller should return from its fetch fn:
+/// - `Ok(Some(uid))` — retired tail confirmed; advance `highest_uid` to `uid`.
+/// - `Ok(None)` — genuine gap; refuse to advance and retry next sync.
+async fn resolve_empty_enumeration(
+    account: &AccountModel,
+    mailbox: &MailBox,
+    examined: &async_imap::types::Mailbox,
+    start_uid: u64,
+    anomaly_msg: String,
+) -> BichonResult<Option<u32>> {
+    let server_count = examined.exists as u64;
+    let local_count = ENVELOPE_MANAGER.count_for_mailbox(account.id, mailbox.id)? as u64;
+
+    if server_count <= local_count {
+        // Retired-UID tail: the folder holds no more mail than we already
+        // store, so the empty range is genuinely empty. Advance past it so the
+        // guard stops re-firing every sync. Safe: we cannot skip mail that is
+        // not there. (Conservative on the oversized-skipped edge: if the folder
+        // has messages skipped for size, server_count may exceed local_count
+        // and we simply fall through to the retry path -- never skipping mail.)
+        let new_highest = examined
+            .uid_next
+            .unwrap_or(0)
+            .saturating_sub(1)
+            .max(start_uid as u32);
+        info!(
+            account_id = account.id,
+            mailbox = %mailbox.name,
+            server_count,
+            local_count,
+            new_highest,
+            "Empty range confirmed as retired-UID tail (server count <= local); advancing highest_uid past it."
+        );
+        DownloadState::update_folder_progress(
+            account.id,
+            mailbox.name.clone(),
+            0,
+            0,
+            FolderStatus::Success,
+            Some("No new emails (retired-UID tail).".into()),
+        )?;
+        return Ok(Some(new_highest));
+    }
+
+    // Server genuinely holds more mail than we do -> real gap -> refuse & retry.
+    tracing::warn!(
+        account_id = account.id,
+        mailbox = %mailbox.name,
+        start_uid,
+        uid_next = examined.uid_next,
+        server_count,
+        local_count,
+        "{}",
+        anomaly_msg
+    );
+    DownloadState::append_session_error(account.id, anomaly_msg)?;
+    DownloadState::update_folder_progress(
+        account.id,
+        mailbox.name.clone(),
+        0,
+        0,
+        FolderStatus::Failed,
+        Some("UID enumeration came back empty despite new mail on server. Retrying on next sync.".into()),
+    )?;
+    Ok(None)
 }
 
 fn parse_message_id_header(header_bytes: &[u8]) -> Option<String> {
