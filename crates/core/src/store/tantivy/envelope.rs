@@ -867,6 +867,18 @@ impl IndexManager {
         }
     }
 
+    /// Cheap count of stored envelopes for a mailbox (no ID materialization,
+    /// unlike `get_message_ids_for_mailbox`). Used to distinguish a retired-UID
+    /// tail from a truncated enumeration when the incremental fetch comes back
+    /// empty.
+    pub fn count_for_mailbox(&self, account_id: u64, mailbox_id: u64) -> BichonResult<usize> {
+        let searcher = self.create_searcher()?;
+        let query = self.mailbox_query(account_id, mailbox_id);
+        searcher
+            .search(&query, &Count)
+            .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))
+    }
+
     pub fn get_max_uid(&self, account_id: u64, mailbox_id: u64) -> BichonResult<Option<u64>> {
         let searcher = self.create_searcher()?;
 
