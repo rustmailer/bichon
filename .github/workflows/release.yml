@@ -67,7 +67,7 @@ jobs:
           node-version: 20
 
       - name: Install pnpm
-        run: npm install -g pnpm
+        run: npm install -g pnpm@10.18.3
 
       - name: Build frontend (web)
         working-directory: ./web
