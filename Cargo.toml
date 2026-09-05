@@ -23,6 +23,8 @@ bichon-memdb = { path = "crates/memdb" }
 bichon-blob = { path = "crates/blob" }
 itertools = "0.15.0"
 ring = { version = "0.17.14", features = ["std"] }
+subtle = "2.6"
+argon2 = "0.5"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1.53", features = ["full"] }

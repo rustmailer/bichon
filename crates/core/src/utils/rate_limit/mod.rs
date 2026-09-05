@@ -100,3 +100,32 @@ impl UserRateLimiter {
             .clone()
     }
 }
+
+pub static LOGIN_RATE_LIMITER_MANAGER: LazyLock<LoginRateLimiter> = LazyLock::new(LoginRateLimiter::new);
+
+pub struct LoginRateLimiter {
+    limiters: Arc<
+        DashMap<
+            String,
+            Arc<RateLimiter<NotKeyed, InMemoryState, QuantaClock, NoOpMiddleware>>,
+        >,
+    >,
+}
+
+impl LoginRateLimiter {
+    pub fn new() -> Self {
+        LoginRateLimiter {
+            limiters: Arc::new(DashMap::new()),
+        }
+    }
+
+    pub async fn check(&self, ip: &str) -> Result<(), NotUntil<QuantaInstant>> {
+        let limiter = self.limiters.entry(ip.to_string()).or_insert_with(|| {
+            let quota = Quota::with_period(Duration::from_secs(600))
+                .unwrap()
+                .allow_burst(NonZero::new(10).unwrap());
+            Arc::new(RateLimiter::direct_with_clock(quota, QuantaClock::default()))
+        });
+        limiter.value().check()
+    }
+}

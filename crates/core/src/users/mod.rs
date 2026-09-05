@@ -21,7 +21,7 @@ use crate::{
         delete_impl, filter_impl, find_impl, list_all_impl, manager::DB_MANAGER, update_impl,
         with_transaction, MemDbModel,
     },
-    decrypt, encrypt,
+    decrypt,
     error::{code::ErrorCode, BichonResult},
     generate_token, id, raise_error,
     token::{AccessTokenModel, TokenType},
@@ -36,6 +36,11 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
+use subtle::ConstantTimeEq;
+use argon2::{
+    password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
+    Argon2,
+};
 use tracing::warn;
 
 pub mod acl;
@@ -218,7 +223,7 @@ impl BichonUserV2 {
                 id: DEFAULT_ADMIN_USER_ID,
                 username: "admin".into(),
                 email: "placeholder@example.com".into(),
-                password: Some(encrypt!("admin@bichon")?),
+                password: Some(hash_login_password("admin@bichon")?),
 
                 // Use global_roles as defined in our new schema
                 global_roles: vec![DEFAULT_ADMIN_ROLE_ID],
@@ -290,9 +295,49 @@ impl BichonUserV2 {
         };
 
         match user.password.as_ref() {
-            Some(encrypted_password) => {
-                let decrypted = decrypt!(encrypted_password)?;
-                if password == decrypted {
+            Some(stored_password) => {
+                let is_argon2 = stored_password.starts_with("$argon2id$");
+                let password_ok = if is_argon2 {
+                    match PasswordHash::new(stored_password) {
+                        Ok(parsed_hash) => Argon2::default()
+                            .verify_password(password.as_bytes(), &parsed_hash)
+                            .is_ok(),
+                        Err(_) => false,
+                    }
+                } else {
+                    let decrypted = decrypt!(stored_password)?;
+                    bool::from(password.as_bytes().ct_eq(decrypted.as_bytes()))
+                };
+
+                if password_ok {
+                    if !is_argon2 {
+                        let id_string = user.id.to_string();
+                        match hash_login_password(&password) {
+                            Ok(hashed) => {
+                                if let Err(e) = update_impl::<UserModel>(
+                                    DB_MANAGER.db(),
+                                    &id_string,
+                                    move |current| {
+                                        let mut updated = current.clone();
+                                        updated.password = Some(hashed);
+                                        updated.updated_at = utc_now!();
+                                        Ok(updated)
+                                    },
+                                ) {
+                                    warn!(
+                                        "Login succeeded but failed to upgrade password storage for user '{}': {:#?}",
+                                        user.username, e
+                                    );
+                                }
+                            }
+                            Err(e) => {
+                                warn!(
+                                    "Login succeeded but failed to hash password for user '{}': {:#?}",
+                                    user.username, e
+                                );
+                            }
+                        }
+                    }
                     let new_token = AccessTokenModel::reset_webui_token(user.id)?;
                     Ok(LoginResult {
                         success: true,
@@ -374,7 +419,7 @@ impl BichonUserV2 {
         Self::check_username_conflict(&request.username)?;
         Self::check_email_conflict(&request.email)?;
 
-        let password_hash = Some(encrypt!(&request.password)?);
+        let password_hash = Some(hash_login_password(&request.password)?);
         let now = utc_now!();
 
         let user = UserModel {
@@ -529,7 +574,7 @@ impl BichonUserV2 {
                 updated.description = Some(desc);
             }
             if let Some(password) = request.password {
-                updated.password = Some(encrypt!(&password)?);
+                updated.password = Some(hash_login_password(&password)?);
             }
 
             if let Some(global_roles) = request.global_roles {
@@ -597,4 +642,17 @@ impl BichonUserV2 {
 
         Ok(())
     }
+}
+
+fn hash_login_password(password: &str) -> BichonResult<String> {
+    let salt = SaltString::generate(&mut OsRng);
+    Argon2::default()
+        .hash_password(password.as_bytes(), &salt)
+        .map(|hash| hash.to_string())
+        .map_err(|_| {
+            raise_error!(
+                "Failed to hash password.".into(),
+                ErrorCode::InternalError
+            )
+        })
 }

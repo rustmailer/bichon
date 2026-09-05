@@ -19,6 +19,7 @@
 use bichon_core::ext::event_bus::{emit, Event};
 use bichon_core::token::AccessTokenModel;
 use bichon_core::users::UserModel;
+use bichon_core::utils::rate_limit::LOGIN_RATE_LIMITER_MANAGER;
 use poem::web::{Json, RealIp};
 use poem::{handler, FromRequest, IntoResponse, Request, Response};
 use serde::Deserialize;
@@ -37,6 +38,20 @@ pub struct LoginPayload {
 #[handler]
 pub async fn login(payload: Json<LoginPayload>, req: &Request) -> Response {
     let login_username = payload.0.username.clone();
+
+    let ip = RealIp::from_request_without_body(req)
+        .await
+        .ok()
+        .and_then(|r| r.0);
+    if let Some(ip_addr) = &ip {
+        if LOGIN_RATE_LIMITER_MANAGER.check(&ip_addr.to_string()).await.is_err() {
+            return Response::builder()
+                .status(http::StatusCode::TOO_MANY_REQUESTS)
+                .body("Too many login attempts. Please try again later.".to_string())
+                .into_response();
+        }
+    }
+
     match UserModel::authenticate_user(payload.0.username, payload.0.password) {
         Ok(result) => {
             // Audit: record the successful login (user + client IP).
@@ -46,15 +61,8 @@ pub async fn login(payload: Json<LoginPayload>, req: &Request) -> Response {
                 .and_then(|t| AccessTokenModel::resolve_user_from_token(t).ok())
                 .map(|u| u.username)
                 .unwrap_or(login_username);
-            let ip = RealIp::from_request_without_body(req)
-                .await
-                .ok()
-                .and_then(|r| r.0);
             if let Some(ip) = ip {
-                emit(Event::UserLoggedIn {
-                    user: username,
-                    ip,
-                });
+                emit(Event::UserLoggedIn { user: username, ip });
             }
             match serde_json::to_string(&result) {
                 Ok(json_string) => Response::builder()

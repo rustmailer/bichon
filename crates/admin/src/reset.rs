@@ -136,6 +136,9 @@ pub fn handle_reset_password(theme: &ColorfulTheme) {
             println!("{:<12} : {}", "Email", style(&user.email).cyan());
 
             let pwd_display = match &user.password {
+                Some(p) if p.starts_with("$argon2id$") => {
+                    style("(argon2id hash - cannot be displayed)").dim().italic().to_string()
+                }
                 Some(p) => {
                     let password = match internal_decrypt_string(&encryption_key, p) {
                         Ok(p) => p,
