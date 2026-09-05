@@ -724,6 +724,7 @@
     "ok": "OK",
     "op_failed": "Operation failed",
     "project_description": "Bichon is an open-source project.",
+    "project_description_pro": "Bichon Pro is a self-hosted email archiving platform.",
     "remove": "Remove",
     "reset": "Reset",
     "retry": "Retry",

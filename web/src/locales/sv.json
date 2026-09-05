@@ -724,6 +724,7 @@
     "ok": "OK",
     "op_failed": "Åtgärden misslyckades",
     "project_description": "Bichon är ett open-source-projekt.",
+    "project_description_pro": "Bichon Pro är en självhostad plattform för e-postarkivering.",
     "remove": "Ta bort",
     "reset": "Återställ",
     "retry": "Försök igen",

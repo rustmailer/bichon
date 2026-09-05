@@ -26,9 +26,11 @@ import {
 import { UserAuthForm } from './user-auth-form'
 import { useTranslation } from 'react-i18next'
 import { AuthLayout } from './auth-layout'
+import { useEdition } from '@/hooks/use-edition'
 
 export default function SignIn() {
   const { t } = useTranslation()
+  const { isPro } = useEdition()
   return (
     <AuthLayout>
       <Card className='gap-4'>
@@ -40,7 +42,12 @@ export default function SignIn() {
         </CardContent>
         <CardFooter>
           <p className="text-muted-foreground px-8 text-center text-sm">
-            {t('common.project_description')}
+            {isPro
+              ? t(
+                  'common.project_description_pro',
+                  'Bichon Pro is a self-hosted email archiving platform.',
+                )
+              : t('common.project_description')}
             <a
               href="https://github.com/rustmailer/bichon"
               className="hover:text-primary underline underline-offset-4 ml-1"

@@ -27,11 +27,13 @@ import {
 import { NavGroup } from '@/components/layout/nav-group'
 import Logo from '@/assets/logo.svg'
 import { useSidebarData } from './data/sidebar-data'
+import { useEdition } from '@/hooks/use-edition'
 import { Link } from '@tanstack/react-router';
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { open } = useSidebar();
   const sidebarData = useSidebarData();
+  const { isPro } = useEdition();
   return (
     <Sidebar collapsible='icon' variant='sidebar' {...props}>
       <SidebarHeader>
@@ -52,7 +54,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             </div>
             <div className='grid flex-1 text-left text-lg leading-tight'>
               <span className='truncate font-semibold'>
-                Bichon
+                {isPro ? 'Bichon Pro' : 'Bichon'}
               </span>
             </div>
           </Link>
