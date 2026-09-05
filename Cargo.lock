@@ -323,7 +323,7 @@ checksum = "2af50177e190e07a26ab74f8b1efbfe2ef87da2116221318cb1c2e82baf7de06"
 
 [[package]]
 name = "bichon-admin"
-version = "2.0.2"
+version = "2.0.3"
 dependencies = [
  "bichon-blob",
  "bichon-core",
@@ -370,7 +370,7 @@ dependencies = [
 
 [[package]]
 name = "bichon-cli"
-version = "2.0.2"
+version = "2.0.3"
 dependencies = [
  "base64 0.23.0",
  "bichon-core",
@@ -392,7 +392,7 @@ dependencies = [
 
 [[package]]
 name = "bichon-core"
-version = "2.0.2"
+version = "2.0.3"
 dependencies = [
  "argon2",
  "async-imap",
@@ -470,7 +470,7 @@ dependencies = [
 
 [[package]]
 name = "bichon-server"
-version = "2.0.2"
+version = "2.0.3"
 dependencies = [
  "bichon-core",
  "bichon-smtp",
@@ -495,7 +495,7 @@ dependencies = [
 
 [[package]]
 name = "bichon-smtp"
-version = "2.0.2"
+version = "2.0.3"
 dependencies = [
  "base64 0.23.0",
  "bichon-core",
@@ -5433,9 +5433,9 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 
 [[package]]
 name = "uuid"
-version = "1.24.0"
+version = "1.26.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf3923a6f5c4c6382e0b653c4117f48d631ea17f38ed86e2a828e6f7412f5239"
+checksum = "b5772d71c9be8a8a6ac2117d949c5b224c1b72241bb611d9a3012edcf8af7812"
 dependencies = [
  "getrandom 0.4.2",
  "js-sys",
