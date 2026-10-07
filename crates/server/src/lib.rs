@@ -69,22 +69,6 @@ pub async fn run() -> BichonResult<()> {
     // here: a fresh box has no data root yet, and this binary requires one
     // at the clap level (the non-optional `bichon_root_dir` field) before
     // `run` is ever reached.
-
-    rest::maintenance::serve_maintenance(
-                "Community Edition",
-                "Migration required",
-                &[
-                    "Your data was created by an older version of Bichon and must be migrated before use.".to_string(),
-                    "Docker: run `docker exec -it <bichon-container> bichon-admin` and choose the migration option matching your old version (v0.3.7 → v2.x via v1.x, or v1.x → v2.x).".to_string(),
-                    "Other installs: run `./bichon-admin` from the install directory.".to_string(),
-                    "Both migrations are non-destructive: legacy files are never modified.".to_string(),
-                    "After the migration completes, restart the service (e.g. `docker restart <bichon-container>`).".to_string(),
-                    "Documentation: https://github.com/rustmailer/bichon/wiki".to_string(),
-                ],
-            )
-            .await;
-    return Ok(());
-
     match check_data_status() {
         Ok(false) => {
             error!("Incompatible data format detected.");

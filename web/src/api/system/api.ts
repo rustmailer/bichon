@@ -90,6 +90,10 @@ export interface TimeBucket {
 export interface Group {
   key: string // Sender email or name
   count: number // Number of emails from this sender
+  // Set for top_accounts only: the account the bucket was grouped by. The
+  // account email (key) is not unique across accounts, so resolve names and
+  // search targets through this id when present.
+  account_id?: number
 }
 
 export interface LargestEmail {

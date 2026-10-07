@@ -107,6 +107,14 @@ pub struct TimeBucket {
 pub struct Group {
     pub key: String,
     pub count: u64, // Number of emails from this sender
+    /// Set for `top_accounts` only: the account the bucket was grouped by.
+    /// `key` holds the account email, which is NOT unique across accounts
+    /// (e.g. a NoSync import and an IMAP account for the same mailbox), so
+    /// clients must resolve names/search targets through this id. Aggregations
+    /// keyed by an inherently unique value (sender address, attachment type,
+    /// ...) leave it unset.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub account_id: Option<u64>,
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Deserialize, Serialize)]

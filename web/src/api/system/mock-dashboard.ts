@@ -28,11 +28,13 @@ export const MOCK_DASHBOARD_STATS: DashboardStats = {
     { key: 'invitations-events-calendar-reminders@social-network-app.io', count: 760 },
   ],
   top_accounts: [
-    { key: 'primary.work.mailbox@enterprise-long-domain-name.com', count: 78500 },
-    { key: 'personal.archive+all@very-lengthy-personal-domain.me', count: 42300 },
-    { key: 'secondary.backup@another-extremely-long-domain.co', count: 15100 },
-    { key: 'team-leads@department-of-engineering.corp.example.org', count: 8992 },
-    { key: 'short@x.co', count: 1000 },
+    { key: 'primary.work.mailbox@enterprise-long-domain-name.com', count: 78500, account_id: 1 },
+    // Two accounts sharing one address (import + live sync) must stay
+    // distinguishable in the dashboard: same key, different account_id.
+    { key: 'personal.archive+all@very-lengthy-personal-domain.me', count: 42300, account_id: 2 },
+    { key: 'personal.archive+all@very-lengthy-personal-domain.me', count: 15100, account_id: 3 },
+    { key: 'team-leads@department-of-engineering.corp.example.org', count: 8992, account_id: 4 },
+    { key: 'short@x.co', count: 1000, account_id: 5 },
   ],
   with_attachment_count: 18500,
   without_attachment_count: 15701,

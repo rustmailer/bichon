@@ -2112,6 +2112,7 @@ impl IndexManager {
                     top_senders.push(Group {
                         key: sender.clone(),
                         count: entry.doc_count,
+                        account_id: None,
                     });
                 }
             }
@@ -2129,6 +2130,7 @@ impl IndexManager {
                         Ok(account) => {
                             top_accounts.push(Group {
                                 key: account.email,
+                                account_id: Some(*account_id),
                                 count: entry.doc_count,
                             });
                         }
