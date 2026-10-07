@@ -51,6 +51,7 @@ use {
 
 pub mod api;
 pub mod assets;
+pub mod maintenance;
 pub mod public;
 
 pub type ApiResult<T, E = ApiErrorResponse> = std::result::Result<T, E>;

@@ -16,7 +16,6 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-
 pub mod common;
 pub mod error;
 pub mod export;
@@ -28,8 +27,8 @@ mod tests;
 use std::sync::LazyLock;
 
 use bichon_core::{
-    bichon_version,
     archive::imap::task::SYNC_TASKS,
+    bichon_version,
     common::{rustls::BichonTls, signal::SignalManager},
     context::{executors::BichonContext, Initialize},
     database::manager::DB_MANAGER,
@@ -71,6 +70,21 @@ pub async fn run() -> BichonResult<()> {
     // at the clap level (the non-optional `bichon_root_dir` field) before
     // `run` is ever reached.
 
+    rest::maintenance::serve_maintenance(
+                "Community Edition",
+                "Migration required",
+                &[
+                    "Your data was created by an older version of Bichon and must be migrated before use.".to_string(),
+                    "Docker: run `docker exec -it <bichon-container> bichon-admin` and choose the migration option matching your old version (v0.3.7 → v2.x via v1.x, or v1.x → v2.x).".to_string(),
+                    "Other installs: run `./bichon-admin` from the install directory.".to_string(),
+                    "Both migrations are non-destructive: legacy files are never modified.".to_string(),
+                    "After the migration completes, restart the service (e.g. `docker restart <bichon-container>`).".to_string(),
+                    "Documentation: https://github.com/rustmailer/bichon/wiki".to_string(),
+                ],
+            )
+            .await;
+    return Ok(());
+
     match check_data_status() {
         Ok(false) => {
             error!("Incompatible data format detected.");
@@ -80,14 +94,40 @@ pub async fn run() -> BichonResult<()> {
             error!("  - Legacy v0.3.7 → v2.x (via v1.x)");
             error!("  - v1.x (Fjall) → v2.x (bichon-blob)");
             error!("Documentation: https://github.com/rustmailer/bichon/wiki");
-            return Err(raise_error!(
-                "Legacy data layout detected".into(),
-                ErrorCode::InternalError
-            ));
+            // Do NOT exit here: under Docker an exited container cannot be
+            // `docker exec`-ed into, which is the only practical way to run
+            // the interactive bichon-admin migration. Stay in maintenance
+            // mode instead — the process keeps running and every HTTP
+            // request is answered with a 503 page explaining what to do.
+            rest::maintenance::serve_maintenance(
+                "Community Edition",
+                "Migration required",
+                &[
+                    "Your data was created by an older version of Bichon and must be migrated before use.".to_string(),
+                    "Docker: run `docker exec -it <bichon-container> bichon-admin` and choose the migration option matching your old version (v0.3.7 → v2.x via v1.x, or v1.x → v2.x).".to_string(),
+                    "Other installs: run `./bichon-admin` from the install directory.".to_string(),
+                    "Both migrations are non-destructive: legacy files are never modified.".to_string(),
+                    "After the migration completes, restart the service (e.g. `docker restart <bichon-container>`).".to_string(),
+                    "Documentation: https://github.com/rustmailer/bichon/wiki".to_string(),
+                ],
+            )
+            .await;
+            return Ok(());
         }
         Err(e) => {
             error!("Failed to check data layout: {:#?}", e);
-            return Err(raise_error!(format!("{:#?}", e), ErrorCode::InternalError));
+            rest::maintenance::serve_maintenance(
+                "Community Edition",
+                "Startup check failed",
+                &[
+                    format!("Checking the data layout failed: {e:#?}"),
+                    "Check the service logs (e.g. `docker logs <bichon-container>`) for details."
+                        .to_string(),
+                    "Fix the underlying problem, then restart the service.".to_string(),
+                ],
+            )
+            .await;
+            return Ok(());
         }
         Ok(true) => {}
     }
