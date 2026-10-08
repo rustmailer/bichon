@@ -89,9 +89,8 @@ pub static ENVELOPE_MANAGER: LazyLock<IndexManager> = LazyLock::new(IndexManager
 ///
 /// Loads every document of the mailbox into memory at once — the caller
 /// must not use this for mailboxes too large to hold in a full in-memory
-/// pass. Documents without a message-id are excluded by
-/// `get_envelope_snapshots_for_mailbox` since the diff relies on
-/// message-id / fingerprint matching.
+/// pass. Documents without a message-id are included with an empty
+/// `message_id`; the diff then matches them by uid or fingerprint.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct EnvelopeSnapshot {
     pub message_id: String,
@@ -457,13 +456,8 @@ impl IndexManager {
                 .and_then(|v| v.as_str())
                 .unwrap_or("")
                 .to_string();
-            // Skip documents without a message-id: they are useless for
-            // gap-fill (the diff matches on message-id / fingerprint) and
-            // would otherwise surface as spurious "missing" entries in the
-            // difference set. Other fields keep their fallback defaults.
-            if message_id.is_empty() {
-                continue;
-            }
+            // Envelopes without a message-id are kept: their uid and
+            // fingerprint still prove presence in the gap-fill diff (#368).
             let uid = doc
                 .get_first(fields.f_uid)
                 .and_then(|v| v.as_u64())

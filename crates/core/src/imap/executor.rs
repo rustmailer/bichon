@@ -1157,29 +1157,66 @@ fn empty_enumeration_anomaly(
 }
 
 fn parse_message_id_header(header_bytes: &[u8]) -> Option<String> {
-    let header = std::str::from_utf8(header_bytes).ok()?;
+    // Header names are case-insensitive and values may be folded onto
+    // continuation lines (RFC 5322 2.2.3), e.g. "Message-ID:\r\n <id@host>".
+    // Missing either case made gap-fill treat archived mail as new (#368).
+    let header = String::from_utf8_lossy(header_bytes);
+    let mut value: Option<String> = None;
     for line in header.lines() {
-        if let Some(value) = line
-            .strip_prefix("Message-ID:")
-            .or_else(|| line.strip_prefix("Message-Id:"))
-            .or_else(|| line.strip_prefix("Message-id:"))
-        {
-            // mail_parser strips angle brackets, so we must do the same
-            // to ensure comparisons against the Tantivy index match.
-            let trimmed = value.trim();
-            let stripped = trimmed.strip_prefix('<').unwrap_or(trimmed);
-            let stripped = stripped.strip_suffix('>').unwrap_or(stripped);
-            if !stripped.is_empty() {
-                return Some(stripped.to_string());
+        if line.starts_with([' ', '\t']) {
+            if let Some(v) = value.as_mut() {
+                v.push(' ');
+                v.push_str(line.trim());
             }
+            continue;
         }
+        if value.as_deref().is_some_and(|v| !v.trim().is_empty()) {
+            break;
+        }
+        value = line
+            .split_once(':')
+            .filter(|(name, _)| name.trim().eq_ignore_ascii_case("message-id"))
+            .map(|(_, v)| v.trim().to_string());
     }
-    None
+    // mail_parser strips angle brackets, so we must do the same
+    // to ensure comparisons against the Tantivy index match.
+    let value = value?;
+    let trimmed = value.trim();
+    let id = match (trimmed.find('<'), trimmed.find('>')) {
+        (Some(a), Some(b)) if a < b => &trimmed[a + 1..b],
+        _ => trimmed,
+    };
+    let id = id.trim();
+    (!id.is_empty()).then(|| id.to_string())
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
+
+    // ── parse_message_id_header (#368) ─────────────────────────────
+
+    #[test]
+    fn message_id_folded() {
+        assert_eq!(
+            parse_message_id_header(b"Message-ID:\r\n <folded@host.example>\r\n\r\n").as_deref(),
+            Some("folded@host.example")
+        );
+    }
+
+    #[test]
+    fn message_id_any_case() {
+        for h in [&b"message-id: <x@y>\r\n"[..], b"MESSAGE-ID: <x@y>\r\n", b"Message-Id:<x@y>\r\n"] {
+            assert_eq!(parse_message_id_header(h).as_deref(), Some("x@y"));
+        }
+    }
+
+    #[test]
+    fn message_id_absent_empty_or_other_header() {
+        assert_eq!(parse_message_id_header(b"Subject: hi\r\n"), None);
+        assert_eq!(parse_message_id_header(b"Message-ID:\r\n\r\n"), None);
+        assert_eq!(parse_message_id_header(b"X-Message-ID: <x@y>\r\n"), None);
+    }
     use crate::imap::session::SessionStream;
     use tokio_io_timeout::TimeoutStream;
 

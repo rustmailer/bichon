@@ -56,9 +56,22 @@ pub struct RemoteHeader {
 /// like Zoho/163 reuse the same message-id across different messages. A
 /// duplicated local message-id still counts as present: re-downloading would
 /// be deduplicated away anyway, so it can never repair the duplication.
-pub fn compute_missing_uids(remote: &[RemoteHeader], local: &[EnvelopeSnapshot]) -> Vec<u32> {
+///
+/// With `match_uids` (local and remote UIDVALIDITY are equal) a remote UID
+/// that is already stored locally is present regardless of its headers, so a
+/// header that fails to parse can never re-download archived mail (#368).
+pub fn compute_missing_uids(
+    remote: &[RemoteHeader],
+    local: &[EnvelopeSnapshot],
+    match_uids: bool,
+) -> Vec<u32> {
     let mut local_by_msg_id: HashMap<&str, usize> = HashMap::new();
     let mut local_by_fingerprint: HashSet<(u64, i64)> = HashSet::new();
+    let local_uids: HashSet<u64> = if match_uids {
+        local.iter().map(|s| s.uid).filter(|&u| u > 0).collect()
+    } else {
+        HashSet::new()
+    };
     for snap in local {
         if !snap.message_id.is_empty() {
             *local_by_msg_id.entry(snap.message_id.as_str()).or_insert(0) += 1;
@@ -68,6 +81,9 @@ pub fn compute_missing_uids(remote: &[RemoteHeader], local: &[EnvelopeSnapshot])
 
     let mut missing = Vec::new();
     for header in remote {
+        if local_uids.contains(&(header.uid as u64)) {
+            continue;
+        }
         let present = match &header.message_id {
             Some(msg_id) => local_by_msg_id
                 .get(msg_id.as_str())
@@ -102,10 +118,14 @@ pub async fn gap_fill_mailbox(
     let mut stats = GapFillFolderStats::default();
 
     let mut session = ImapExecutor::create_connection(account_id).await?;
-    session
+    let examined = session
         .examine(&remote_mailbox.encoded_name())
         .await
         .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;
+    // Local UIDs are only comparable while UIDVALIDITY is unchanged; a change
+    // is handled by the reconcile path in flow.rs.
+    let match_uids =
+        examined.uid_validity.is_some() && examined.uid_validity == local_mailbox.uid_validity;
 
     // Phase 1: enumerate every remote UID. A huge mailbox can make the server
     // take a while to answer `UID SEARCH ALL`; keep the UI informed instead of
@@ -209,7 +229,7 @@ pub async fn gap_fill_mailbox(
         .get_envelope_snapshots_for_mailbox(account_id, local_mailbox.id)?;
 
     // Phase 4: diff
-    let missing_uids = compute_missing_uids(&remote_headers, &local_snapshots);
+    let missing_uids = compute_missing_uids(&remote_headers, &local_snapshots, match_uids);
     stats.candidate_count = missing_uids.len() as u64;
     if missing_uids.is_empty() {
         info!(
@@ -416,7 +436,7 @@ mod test {
             rh(3, Some("c"), 30, 3000),
         ];
         let local = vec![snap("a", 1, 10, 1000), snap("c", 3, 30, 3000)];
-        let missing = compute_missing_uids(&remote, &local);
+        let missing = compute_missing_uids(&remote, &local, false);
         assert_eq!(missing, vec![2]);
     }
 
@@ -424,7 +444,7 @@ mod test {
     fn compute_missing_uids_fingerprint_fallback() {
         let remote = vec![rh(1, None, 10, 1000), rh(2, None, 20, 2000)];
         let local = vec![snap("generated-x", 1, 10, 1000)];
-        let missing = compute_missing_uids(&remote, &local);
+        let missing = compute_missing_uids(&remote, &local, false);
         assert_eq!(missing, vec![2]);
     }
 
@@ -432,7 +452,7 @@ mod test {
     fn compute_missing_uids_remote_duplicates_all_present() {
         let remote = vec![rh(1, Some("dup"), 10, 1000), rh(2, Some("dup"), 10, 1000)];
         let local = vec![snap("dup", 1, 10, 1000)];
-        let missing = compute_missing_uids(&remote, &local);
+        let missing = compute_missing_uids(&remote, &local, false);
         assert!(missing.is_empty());
     }
 
@@ -444,7 +464,7 @@ mod test {
         // away anyway, so it can never repair the duplication.
         let remote = vec![rh(1, Some("dup"), 10, 1000), rh(2, Some("dup"), 10, 1000)];
         let local = vec![snap("dup", 1, 10, 1000), snap("dup", 2, 10, 1000)];
-        let missing = compute_missing_uids(&remote, &local);
+        let missing = compute_missing_uids(&remote, &local, false);
         assert!(missing.is_empty());
     }
 
@@ -455,7 +475,7 @@ mod test {
         // the message is already stored and must NOT be re-downloaded.
         let remote = vec![rh(1, Some("remote-id@x.com"), 10, 1000)];
         let local = vec![snap("generated-random-id", 1, 10, 1000)];
-        let missing = compute_missing_uids(&remote, &local);
+        let missing = compute_missing_uids(&remote, &local, false);
         assert!(missing.is_empty());
     }
 
@@ -466,7 +486,25 @@ mod test {
             rh(2, Some("remote-id-2@x.com"), 20, 2000),
         ];
         let local = vec![snap("generated-random-id", 1, 10, 1000)];
-        let missing = compute_missing_uids(&remote, &local);
+        let missing = compute_missing_uids(&remote, &local, false);
         assert_eq!(missing, vec![2]);
+    }
+
+    #[test]
+    fn compute_missing_uids_same_uid_is_present_when_uidvalidity_matches() {
+        // #368: the remote Message-ID failed to parse (folded header) and the
+        // fingerprint differs, but the UID is already archived.
+        let remote = vec![rh(7, None, 11, 1000), rh(8, None, 22, 2000)];
+        let local = vec![snap("a@b", 7, 10, 999)];
+        assert_eq!(compute_missing_uids(&remote, &local, true), vec![8]);
+        assert_eq!(compute_missing_uids(&remote, &local, false), vec![7, 8]);
+    }
+
+    #[test]
+    fn compute_missing_uids_uid_zero_never_matches() {
+        // Imported mail is stored with uid 0 and must not mask remote uid 0.
+        let remote = vec![rh(0, None, 1, 1)];
+        let local = vec![snap("x", 0, 2, 2)];
+        assert_eq!(compute_missing_uids(&remote, &local, true), vec![0]);
     }
 }
