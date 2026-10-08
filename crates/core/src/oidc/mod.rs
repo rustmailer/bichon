@@ -16,29 +16,10 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::common::periodic::TaskHandle;
-use crate::context::BichonTask;
-use crate::oauth2::{refresh::OAuth2RefreshTask, task::OAuth2CleanTask};
-use crate::oidc::task::OidcCleanTask;
-use crate::store::tantivy::dedup::DedupTask;
-
-pub struct PeriodicTasks {
-    tasks: Vec<TaskHandle>,
-}
-
-impl PeriodicTasks {
-    pub fn setup() -> Self {
-        let mut tasks = Vec::new();
-        tasks.push(OAuth2CleanTask::start());
-        tasks.push(OAuth2RefreshTask::start());
-        tasks.push(OidcCleanTask::start());
-        tasks.push(DedupTask::start());
-        Self { tasks }
-    }
-
-    pub async fn shutdown(self) {
-        for handle in self.tasks {
-            handle.stop().await;
-        }
-    }
-}
+pub mod discovery;
+pub mod flow;
+pub mod handoff;
+pub mod id_token;
+pub mod jwks;
+pub mod pending;
+pub mod task;

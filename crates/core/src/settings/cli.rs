@@ -322,6 +322,48 @@ pub struct Settings {
     )]
     pub bichon_smtp_auth_required: bool,
 
+    /// Enable OIDC-based Single Sign-On (available in community edition in this fork).
+    #[clap(long, default_value = "false", env, help = "Enable OpenID Connect SSO")]
+    pub bichon_oidc_enabled: bool,
+
+    /// OIDC issuer URL (e.g. https://keycloak.example.com/realms/myorg).
+    #[clap(long, env, help = "OpenID Connect issuer URL")]
+    pub bichon_oidc_issuer_url: Option<String>,
+
+    /// OIDC client ID registered with the IdP.
+    #[clap(long, env, help = "OpenID Connect client ID")]
+    pub bichon_oidc_client_id: Option<String>,
+
+    /// OIDC client secret registered with the IdP.
+    #[clap(long, env, help = "OpenID Connect client secret")]
+    pub bichon_oidc_client_secret: Option<String>,
+
+    /// OIDC redirect URI (must match what's registered with the IdP).
+    #[clap(long, env, help = "OpenID Connect redirect URI")]
+    pub bichon_oidc_redirect_uri: Option<String>,
+
+    /// Role ID assigned to auto-provisioned OIDC users. Defaults to the built-in
+    /// Member role. Set to another built-in or custom role ID to change behaviour.
+    #[clap(
+        long,
+        env,
+        default_value_t = 100_200_000_000_000_u64,
+        help = "Global role ID assigned to auto-provisioned OIDC users (default: Member role)"
+    )]
+    pub bichon_oidc_default_role_id: u64,
+
+    /// When enabled and OIDC is configured, the sign-in page automatically
+    /// redirects the browser to the OIDC provider instead of showing the
+    /// username/password form. Users can still reach the local login by
+    /// visiting `/sign-in?local=1`.
+    #[clap(
+        long,
+        default_value = "false",
+        env,
+        help = "Automatically redirect the sign-in page to the OIDC provider"
+    )]
+    pub bichon_oidc_auto_redirect: bool,
+
     /// Maximum HTTP request body size in MB for file uploads (default: 1100 MB).
     /// Requests exceeding this limit are rejected at the framework level before
     /// the application reads the body, preventing memory exhaustion attacks.
