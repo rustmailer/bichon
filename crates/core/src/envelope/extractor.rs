@@ -822,16 +822,18 @@ async fn recover_message_blob(envelope: &Envelope) -> BichonResult<Bytes> {
     // Persist the recovered blob for future requests — unless a backup window
     // is open, in which case we still return the content to the caller but skip
     // the write so the blob store stays byte-stable for the running snapshot.
-    if !WRITE_GATE.is_paused() {
-        detach_and_store_attachments(
-            &raw_body,
-            &message,
-            &fetched_hash,
-            envelope.account_id,
-            envelope.mailbox_id,
-        )
-        .await;
-    }
+    // Hold admission through queueing and draining so a backup cannot pause
+    // between the check and the detached blob write.
+    let _write_guard = WRITE_GATE.acquire(BACKUP_ACQUIRE_TIMEOUT).await?;
+    detach_and_store_attachments(
+        &raw_body,
+        &message,
+        &fetched_hash,
+        envelope.account_id,
+        envelope.mailbox_id,
+    )
+    .await;
+    BLOB_MANAGER.drain().await;
 
     Ok(Bytes::from(raw_body))
 }
@@ -911,6 +913,11 @@ pub struct BlobRepairReport {
     pub envelope_id: String,
     /// `complete` (nothing missing), `repaired`, `partial` or `failed`.
     pub status: String,
+    /// Whether the email blob was missing before repair.
+    pub email_missing_before: bool,
+    /// Whether the email blob is still missing after repair.
+    pub email_missing_after: bool,
+    /// Backward-compatible alias for the pre-repair state.
     pub email_blob_missing: bool,
     pub missing_before: Vec<String>,
     pub missing_after: Vec<String>,
@@ -938,13 +945,30 @@ fn placeholder_hashes(detached_eml: &[u8]) -> Vec<String> {
     hashes
 }
 
+fn indexed_placeholder_hashes(
+    detached_eml: &[u8],
+    attachments: Option<&[AttachmentInfo]>,
+) -> Vec<String> {
+    let indexed = attachments
+        .into_iter()
+        .flat_map(|items| items.iter().map(|item| item.content_hash.as_str()))
+        .collect::<std::collections::HashSet<_>>();
+    placeholder_hashes(detached_eml)
+        .into_iter()
+        .filter(|hash| indexed.contains(hash.as_str()))
+        .collect()
+}
+
 /// (email blob missing, attachment hashes missing from the blob store)
-fn missing_blobs(envelope: &Envelope) -> BichonResult<(bool, Vec<String>)> {
+fn missing_blobs(
+    envelope: &Envelope,
+    attachments: Option<&[AttachmentInfo]>,
+) -> BichonResult<(bool, Vec<String>)> {
     let Some(eml) = BLOB_MANAGER.get_email(&envelope.content_hash)? else {
         return Ok((true, Vec::new()));
     };
     let mut missing = Vec::new();
-    for hash in placeholder_hashes(&eml) {
+    for hash in indexed_placeholder_hashes(&eml, attachments) {
         if BLOB_MANAGER.get_attachment(&hash)?.is_none() {
             missing.push(hash);
         }
@@ -960,30 +984,28 @@ pub async fn repair_envelope_blobs(
     account_id: u64,
     envelope_id: &str,
 ) -> BichonResult<BlobRepairReport> {
-    let envelope = ENVELOPE_MANAGER
+    let envelope_with_attachments = ENVELOPE_MANAGER
         .get_envelope_by_id(account_id, envelope_id)?
         .ok_or_else(|| {
             raise_error!(
                 format!("Envelope not found: account_id={account_id} envelope_id={envelope_id}"),
                 ErrorCode::ResourceNotFound
             )
-        })?
-        .envelope;
+        })?;
+    let attachments = envelope_with_attachments.attachments;
+    let envelope = envelope_with_attachments.envelope;
 
-    let (email_missing, missing_before) = missing_blobs(&envelope)?;
+    let (email_missing, missing_before) = missing_blobs(&envelope, attachments.as_deref())?;
     let mut report = BlobRepairReport {
         envelope_id: envelope_id.to_string(),
+        email_missing_before: email_missing,
+        email_missing_after: email_missing,
         email_blob_missing: email_missing,
         missing_before,
         ..Default::default()
     };
     if !email_missing && report.missing_before.is_empty() {
         report.status = "complete".into();
-        return Ok(report);
-    }
-    if WRITE_GATE.is_paused() {
-        report.status = "failed".into();
-        report.error = Some("backup window open, blob store is read-only".into());
         return Ok(report);
     }
     if let Err(e) = recover_message_blob(&envelope).await {
@@ -993,7 +1015,9 @@ pub async fn repair_envelope_blobs(
     }
     // recover_message_blob only queues the write; wait for it to land.
     let _ = tokio::time::timeout(std::time::Duration::from_secs(30), BLOB_MANAGER.drain()).await;
-    let (email_missing_after, missing_after) = missing_blobs(&envelope)?;
+    let (email_missing_after, missing_after) = missing_blobs(&envelope, attachments.as_deref())?;
+    report.email_missing_after = email_missing_after;
+    report.email_blob_missing = email_missing_after;
     report.missing_after = missing_after;
     report.status = if !email_missing_after && report.missing_after.is_empty() {
         "repaired"
@@ -1014,6 +1038,21 @@ mod test {
         assert_eq!(super::placeholder_hashes(eml), vec!["abc", "def"]);
         assert!(super::placeholder_hashes(b"no placeholders").is_empty());
         assert!(super::placeholder_hashes(b"<<BICHON_DETACH_HASH:unterminated").is_empty());
+    }
+
+    #[test]
+    fn indexed_placeholder_hashes_ignores_literal_body_markers() {
+        let attachments = vec![super::AttachmentInfo {
+            content_hash: "real".into(),
+            ..Default::default()
+        }];
+        assert_eq!(
+            super::indexed_placeholder_hashes(
+                b"<<BICHON_DETACH_HASH:literal>><<BICHON_DETACH_HASH:real>>",
+                Some(&attachments),
+            ),
+            vec!["real"]
+        );
     }
 
     #[test]
