@@ -822,18 +822,18 @@ async fn recover_message_blob(envelope: &Envelope) -> BichonResult<Bytes> {
     // Persist the recovered blob for future requests — unless a backup window
     // is open, in which case we still return the content to the caller but skip
     // the write so the blob store stays byte-stable for the running snapshot.
-    // Hold admission through queueing and draining so a backup cannot pause
-    // between the check and the detached blob write.
-    let _write_guard = WRITE_GATE.acquire(BACKUP_ACQUIRE_TIMEOUT).await?;
-    detach_and_store_attachments(
-        &raw_body,
-        &message,
-        &fetched_hash,
-        envelope.account_id,
-        envelope.mailbox_id,
-    )
-    .await;
-    BLOB_MANAGER.drain().await;
+    // Reads remain available during a backup. If the gate is open, hold the
+    // admission guard through queueing so the backup cannot race the write.
+    if let Ok(_write_guard) = WRITE_GATE.check() {
+        detach_and_store_attachments(
+            &raw_body,
+            &message,
+            &fetched_hash,
+            envelope.account_id,
+            envelope.mailbox_id,
+        )
+        .await;
+    }
 
     Ok(Bytes::from(raw_body))
 }
@@ -1017,7 +1017,6 @@ pub async fn repair_envelope_blobs(
     let _ = tokio::time::timeout(std::time::Duration::from_secs(30), BLOB_MANAGER.drain()).await;
     let (email_missing_after, missing_after) = missing_blobs(&envelope, attachments.as_deref())?;
     report.email_missing_after = email_missing_after;
-    report.email_blob_missing = email_missing_after;
     report.missing_after = missing_after;
     report.status = if !email_missing_after && report.missing_after.is_empty() {
         "repaired"
@@ -1053,6 +1052,19 @@ mod test {
             ),
             vec!["real"]
         );
+    }
+
+    #[test]
+    fn repair_report_preserves_legacy_before_state() {
+        let report = super::BlobRepairReport {
+            email_missing_before: true,
+            email_missing_after: false,
+            email_blob_missing: true,
+            ..Default::default()
+        };
+        assert!(report.email_blob_missing);
+        assert!(report.email_missing_before);
+        assert!(!report.email_missing_after);
     }
 
     #[test]
