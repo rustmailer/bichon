@@ -25,7 +25,7 @@ use uuid::Uuid;
 use crate::{
     account::migration::AccountModel,
     archive::imap::mailbox::MailBox,
-    backup::gate::{BACKUP_ACQUIRE_TIMEOUT, WRITE_GATE},
+    backup::gate::{BACKUP_ACQUIRE_TIMEOUT, WRITE_GATE, WriteGate},
     common::AddrVec,
     envelope::{meta::parse_bichon_metadata, utils::normalize_subject},
     error::{code::ErrorCode, BichonResult},
@@ -803,25 +803,10 @@ async fn recover_message_blob(envelope: &Envelope) -> BichonResult<Bytes> {
         })?;
 
     let mut session = ImapExecutor::create_connection(envelope.account_id).await?;
-    let result = ImapExecutor::fetch_single_message_body(
-        &mut session,
-        &mailbox.encoded_name(),
-        envelope.uid,
-    )
-    .await;
+    let result = fetch_archived_body(&mut session, &mailbox.encoded_name(), envelope).await;
     session.logout().await.ok();
     let raw_body = result?;
-
     let fetched_hash = compute_content_hash(&raw_body);
-    if fetched_hash != envelope.content_hash {
-        return Err(raise_error!(
-            format!(
-                "Fetched message does not match archived content: expected content_hash={} got={}",
-                envelope.content_hash, fetched_hash
-            ),
-            ErrorCode::ImapUnexpectedResult
-        ));
-    }
 
     // Re-create the detached blob (stripped EML + attachments) so the missing
     // blob is repopulated for future requests. The detached EML is queued under
@@ -837,23 +822,379 @@ async fn recover_message_blob(envelope: &Envelope) -> BichonResult<Bytes> {
     // Persist the recovered blob for future requests — unless a backup window
     // is open, in which case we still return the content to the caller but skip
     // the write so the blob store stays byte-stable for the running snapshot.
-    if !WRITE_GATE.is_paused() {
-        detach_and_store_attachments(
-            &raw_body,
-            &message,
-            &fetched_hash,
-            envelope.account_id,
-            envelope.mailbox_id,
-        )
-        .await;
-    }
+    // Reads remain available during a backup. If the gate is open, hold the
+    // admission guard through queueing so the backup cannot race the write.
+    persist_recovered_blob_if_allowed(
+        &raw_body,
+        &message,
+        &fetched_hash,
+        envelope.account_id,
+        envelope.mailbox_id,
+        &WRITE_GATE,
+    )
+    .await;
 
     Ok(Bytes::from(raw_body))
+}
+
+async fn persist_recovered_blob_if_allowed(
+    raw_body: &[u8],
+    message: &Message<'_>,
+    fetched_hash: &str,
+    account_id: u64,
+    mailbox_id: u64,
+    gate: &WriteGate,
+) -> bool {
+    let Ok(_write_guard) = gate.check() else {
+        return false;
+    };
+    detach_and_store_attachments(raw_body, message, fetched_hash, account_id, mailbox_id).await;
+    true
+}
+
+
+/// Fetches the archived message from IMAP and returns it only if its content
+/// hash equals the archived `content_hash`. Tries the stored UID first, then
+/// the UIDs returned by `UID SEARCH HEADER Message-ID` (UID changed or the
+/// message moved within the folder).
+async fn fetch_archived_body(
+    session: &mut async_imap::Session<Box<dyn crate::imap::session::SessionStream>>,
+    encoded_mailbox: &str,
+    envelope: &Envelope,
+) -> BichonResult<Vec<u8>> {
+    let mut last_err =
+        match ImapExecutor::fetch_single_message_body(session, encoded_mailbox, envelope.uid).await {
+            Ok(body) if compute_content_hash(&body) == envelope.content_hash => return Ok(body),
+            Ok(body) => raise_error!(
+                format!(
+                    "Fetched message does not match archived content: expected content_hash={} got={}",
+                    envelope.content_hash,
+                    compute_content_hash(&body)
+                ),
+                ErrorCode::ImapUnexpectedResult
+            ),
+            Err(e) => e,
+        };
+
+    let message_id = envelope.message_id.trim();
+    if message_id.is_empty() || message_id.contains(['"', '\\', '\r', '\n']) {
+        return Err(last_err);
+    }
+    let uids = session
+        .uid_search(format!("HEADER Message-ID \"{}\"", message_id))
+        .await
+        .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::ImapUnexpectedResult))?;
+    let uids = bounded_message_id_candidates(uids, envelope.uid);
+    for uid in uids {
+        match ImapExecutor::fetch_single_message_body(session, encoded_mailbox, uid).await {
+            Ok(body) if recovered_body_matches(&body, envelope) => return Ok(body),
+            Ok(_) => {}
+            Err(e) => last_err = e,
+        }
+    }
+    Err(last_err)
+}
+
+const MAX_MESSAGE_ID_CANDIDATES: usize = 32;
+
+fn bounded_message_id_candidates<I>(uids: I, stored_uid: u32) -> Vec<u32>
+where
+    I: IntoIterator<Item = u32>,
+{
+    let mut candidates: Vec<u32> = uids.into_iter().filter(|&uid| uid != stored_uid).collect();
+    candidates.sort_unstable();
+    candidates.truncate(MAX_MESSAGE_ID_CANDIDATES);
+    candidates
+}
+
+fn recovered_body_matches(body: &[u8], envelope: &Envelope) -> bool {
+    if compute_content_hash(body) != envelope.content_hash {
+        return false;
+    }
+    if envelope.message_id.is_empty() {
+        return true;
+    }
+    MessageParser::new()
+        .parse(body)
+        .and_then(|message| message.message_id().map(String::from))
+        .is_some_and(|message_id| message_id == envelope.message_id)
+}
+
+/// Outcome of [`repair_envelope_blobs`].
+#[derive(Clone, Debug, Default, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+#[cfg_attr(feature = "web-api", derive(poem_openapi::Object))]
+pub struct BlobRepairReport {
+    pub envelope_id: String,
+    /// `complete` (nothing missing), `repaired`, `partial` or `failed`.
+    pub status: String,
+    /// Whether the email blob was missing before repair.
+    pub email_missing_before: bool,
+    /// Whether the email blob is still missing after repair.
+    pub email_missing_after: bool,
+    /// Backward-compatible alias for the pre-repair state.
+    pub email_blob_missing: bool,
+    pub missing_before: Vec<String>,
+    pub missing_after: Vec<String>,
+    pub error: Option<String>,
+}
+
+fn complete_repair_report(
+    report: &mut BlobRepairReport,
+    email_missing_after: bool,
+    missing_after: Vec<String>,
+) {
+    report.email_missing_after = email_missing_after;
+    report.missing_after = missing_after;
+    report.status = if !email_missing_after && report.missing_after.is_empty() {
+        "repaired"
+    } else {
+        "partial"
+    }
+    .into();
+}
+
+/// Content hashes referenced by `<<BICHON_DETACH_HASH:...>>` placeholders in a
+/// detached EML.
+fn placeholder_hashes(detached_eml: &[u8]) -> Vec<String> {
+    const PREFIX: &[u8] = b"<<BICHON_DETACH_HASH:";
+    let mut hashes = Vec::new();
+    let mut rest = detached_eml;
+    while let Some(pos) = rest.windows(PREFIX.len()).position(|w| w == PREFIX) {
+        rest = &rest[pos + PREFIX.len()..];
+        let Some(end) = rest.windows(2).position(|w| w == b">>") else {
+            break;
+        };
+        if let Ok(h) = std::str::from_utf8(&rest[..end]) {
+            if !hashes.iter().any(|x| x == h) {
+                hashes.push(h.to_string());
+            }
+        }
+        rest = &rest[end + 2..];
+    }
+    hashes
+}
+
+fn indexed_placeholder_hashes(
+    detached_eml: &[u8],
+    attachments: Option<&[AttachmentInfo]>,
+) -> Vec<String> {
+    let indexed = attachments
+        .into_iter()
+        .flat_map(|items| items.iter().map(|item| item.content_hash.as_str()))
+        .collect::<std::collections::HashSet<_>>();
+    placeholder_hashes(detached_eml)
+        .into_iter()
+        .filter(|hash| indexed.contains(hash.as_str()))
+        .collect()
+}
+
+/// (email blob missing, attachment hashes missing from the blob store)
+fn missing_blobs(
+    envelope: &Envelope,
+    attachments: Option<&[AttachmentInfo]>,
+) -> BichonResult<(bool, Vec<String>)> {
+    let Some(eml) = BLOB_MANAGER.get_email(&envelope.content_hash)? else {
+        return Ok((true, Vec::new()));
+    };
+    let mut missing = Vec::new();
+    for hash in indexed_placeholder_hashes(&eml, attachments) {
+        if BLOB_MANAGER.get_attachment(&hash)?.is_none() {
+            missing.push(hash);
+        }
+    }
+    Ok((false, missing))
+}
+
+/// Re-fetches one archived message from IMAP and restores its missing email
+/// or attachment blobs **in place**: the envelope, its id and its index entry
+/// are kept, so no duplicate is created. Nothing is written unless the
+/// fetched message hashes to the archived `content_hash`.
+pub async fn repair_envelope_blobs(
+    account_id: u64,
+    envelope_id: &str,
+) -> BichonResult<BlobRepairReport> {
+    let envelope_with_attachments = ENVELOPE_MANAGER
+        .get_envelope_by_id(account_id, envelope_id)?
+        .ok_or_else(|| {
+            raise_error!(
+                format!("Envelope not found: account_id={account_id} envelope_id={envelope_id}"),
+                ErrorCode::ResourceNotFound
+            )
+        })?;
+    let attachments = envelope_with_attachments.attachments;
+    let envelope = envelope_with_attachments.envelope;
+
+    let (email_missing, missing_before) = missing_blobs(&envelope, attachments.as_deref())?;
+    let mut report = BlobRepairReport {
+        envelope_id: envelope_id.to_string(),
+        email_missing_before: email_missing,
+        email_missing_after: email_missing,
+        email_blob_missing: email_missing,
+        missing_before,
+        ..Default::default()
+    };
+    if !email_missing && report.missing_before.is_empty() {
+        report.status = "complete".into();
+        return Ok(report);
+    }
+    if let Err(e) = recover_message_blob(&envelope).await {
+        report.status = "failed".into();
+        report.error = Some(e.to_string());
+        return Ok(report);
+    }
+    // recover_message_blob only queues the write; wait for it to land.
+    let _ = tokio::time::timeout(std::time::Duration::from_secs(30), BLOB_MANAGER.drain()).await;
+    let (email_missing_after, missing_after) = missing_blobs(&envelope, attachments.as_deref())?;
+    complete_repair_report(&mut report, email_missing_after, missing_after);
+    Ok(report)
 }
 
 #[cfg(test)]
 mod test {
     use html2text::config;
+
+    #[test]
+    fn placeholder_hashes_finds_unique_hashes() {
+        let eml = b"a<<BICHON_DETACH_HASH:abc>>b<<BICHON_DETACH_HASH:def>>c<<BICHON_DETACH_HASH:abc>>";
+        assert_eq!(super::placeholder_hashes(eml), vec!["abc", "def"]);
+        assert!(super::placeholder_hashes(b"no placeholders").is_empty());
+        assert!(super::placeholder_hashes(b"<<BICHON_DETACH_HASH:unterminated").is_empty());
+    }
+
+    #[test]
+    fn indexed_placeholder_hashes_ignores_literal_body_markers() {
+        let attachments = vec![super::AttachmentInfo {
+            content_hash: "real".into(),
+            ..Default::default()
+        }];
+        assert_eq!(
+            super::indexed_placeholder_hashes(
+                b"<<BICHON_DETACH_HASH:literal>><<BICHON_DETACH_HASH:real>>",
+                Some(&attachments),
+            ),
+            vec!["real"]
+        );
+    }
+
+    #[test]
+    fn repair_report_updates_post_state_without_changing_legacy_alias() {
+        let mut report = super::BlobRepairReport {
+            email_missing_before: true,
+            email_blob_missing: true,
+            ..Default::default()
+        };
+        super::complete_repair_report(&mut report, false, Vec::new());
+        assert!(report.email_blob_missing);
+        assert!(report.email_missing_before);
+        assert!(!report.email_missing_after);
+        assert_eq!(report.status, "repaired");
+    }
+
+    #[tokio::test]
+    async fn paused_recovery_skips_persistence_and_releases_admission() {
+        let gate = super::WriteGate::new();
+        gate.pause();
+        let raw = b"From: sender@example.test\r\n\r\nbody";
+        let message = super::MessageParser::new().parse(raw).expect("fixture parses");
+
+        assert!(!super::persist_recovered_blob_if_allowed(
+            raw,
+            &message,
+            "paused-recovery-test",
+            0,
+            0,
+            &gate,
+        )
+        .await);
+        assert_eq!(gate.in_flight(), 0);
+
+        gate.resume();
+        assert!(super::persist_recovered_blob_if_allowed(
+            raw,
+            &message,
+            "admitted-recovery-test",
+            0,
+            0,
+            &gate,
+        )
+        .await);
+        assert_eq!(gate.in_flight(), 0);
+        super::BLOB_MANAGER.drain().await;
+    }
+
+    #[test]
+    fn recovery_guards_reject_wrong_hash_and_message_id() {
+        let body = b"From: sender@example.test\r\nMessage-ID: <original@example.test>\r\n\r\nbody";
+        let parsed_id = super::MessageParser::new()
+            .parse(body)
+            .and_then(|message| message.message_id().map(String::from))
+            .expect("message-id parses");
+        let mut envelope = super::Envelope {
+            message_id: parsed_id.clone(),
+            content_hash: super::compute_content_hash(body),
+            ..Default::default()
+        };
+        assert!(super::recovered_body_matches(body, &envelope));
+        envelope.message_id = "<other@example.test>".into();
+        assert!(!super::recovered_body_matches(body, &envelope));
+        envelope.message_id = parsed_id;
+        envelope.content_hash = super::compute_content_hash(b"different");
+        assert!(!super::recovered_body_matches(body, &envelope));
+    }
+
+    #[test]
+    fn message_id_candidates_are_bounded_and_exclude_stored_uid() {
+        let candidates = super::bounded_message_id_candidates((1..=100).rev(), 50);
+        assert_eq!(candidates.len(), 32);
+        assert_eq!(candidates.first(), Some(&1));
+        assert_eq!(candidates.last(), Some(&32));
+        assert!(!candidates.contains(&50));
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn detached_attachment_blob_is_idempotent_and_not_overwritten() {
+        use bytes::Bytes;
+
+        let raw = concat!(
+            "Message-ID: <fixture@example.test>\r\n",
+            "MIME-Version: 1.0\r\n",
+            "Content-Type: multipart/mixed; boundary=fixture\r\n",
+            "\r\n",
+            "--fixture\r\n",
+            "Content-Type: text/plain\r\n\r\n",
+            "hello\r\n",
+            "--fixture\r\n",
+            "Content-Type: application/octet-stream\r\n",
+            "Content-Disposition: attachment; filename=fixture.bin\r\n\r\n",
+            "fixture bytes\r\n",
+            "--fixture--\r\n",
+        )
+        .as_bytes();
+        let message = super::MessageParser::new().parse(raw).expect("fixture parses");
+        let email_hash = super::compute_content_hash(raw);
+        let infos = super::detach_and_store_attachments(raw, &message, &email_hash, 0, 0).await;
+        assert_eq!(infos.len(), 1);
+        super::BLOB_MANAGER.drain().await;
+        let original_email = super::BLOB_MANAGER
+            .get_email(&email_hash).expect("email lookup").expect("email blob");
+        let attachment_hash = infos[0].content_hash.clone();
+        let original_attachment = super::BLOB_MANAGER
+            .get_attachment(&attachment_hash).expect("attachment lookup").expect("attachment blob");
+
+        super::BLOB_MANAGER.queue(super::DetachedEmail {
+            email: (email_hash.clone(), Bytes::from_static(b"tampered email")),
+            attachments: Some(vec![(attachment_hash.clone(), Bytes::from_static(b"tampered attachment"))]),
+        }).await;
+        super::BLOB_MANAGER.drain().await;
+        assert_eq!(super::BLOB_MANAGER.get_email(&email_hash).unwrap(), Some(original_email.clone()));
+        assert_eq!(super::BLOB_MANAGER.get_attachment(&attachment_hash).unwrap(), Some(original_attachment));
+
+        let message = super::MessageParser::new().parse(raw).expect("fixture reparses");
+        super::detach_and_store_attachments(raw, &message, &email_hash, 0, 0).await;
+        super::BLOB_MANAGER.drain().await;
+        assert_eq!(super::BLOB_MANAGER.get_email(&email_hash).unwrap(), Some(original_email));
+    }
+
 
     #[test]
     fn test_various_html_with_overflow_enabled() {
