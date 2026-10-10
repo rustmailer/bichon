@@ -25,7 +25,7 @@ use uuid::Uuid;
 use crate::{
     account::migration::AccountModel,
     archive::imap::mailbox::MailBox,
-    backup::gate::{BACKUP_ACQUIRE_TIMEOUT, WRITE_GATE},
+    backup::gate::{BACKUP_ACQUIRE_TIMEOUT, WRITE_GATE, WriteGate},
     common::AddrVec,
     envelope::{meta::parse_bichon_metadata, utils::normalize_subject},
     error::{code::ErrorCode, BichonResult},
@@ -824,18 +824,32 @@ async fn recover_message_blob(envelope: &Envelope) -> BichonResult<Bytes> {
     // the write so the blob store stays byte-stable for the running snapshot.
     // Reads remain available during a backup. If the gate is open, hold the
     // admission guard through queueing so the backup cannot race the write.
-    if let Ok(_write_guard) = WRITE_GATE.check() {
-        detach_and_store_attachments(
-            &raw_body,
-            &message,
-            &fetched_hash,
-            envelope.account_id,
-            envelope.mailbox_id,
-        )
-        .await;
-    }
+    persist_recovered_blob_if_allowed(
+        &raw_body,
+        &message,
+        &fetched_hash,
+        envelope.account_id,
+        envelope.mailbox_id,
+        &WRITE_GATE,
+    )
+    .await;
 
     Ok(Bytes::from(raw_body))
+}
+
+async fn persist_recovered_blob_if_allowed(
+    raw_body: &[u8],
+    message: &Message<'_>,
+    fetched_hash: &str,
+    account_id: u64,
+    mailbox_id: u64,
+    gate: &WriteGate,
+) -> bool {
+    let Ok(_write_guard) = gate.check() else {
+        return false;
+    };
+    detach_and_store_attachments(raw_body, message, fetched_hash, account_id, mailbox_id).await;
+    true
 }
 
 
@@ -922,6 +936,21 @@ pub struct BlobRepairReport {
     pub missing_before: Vec<String>,
     pub missing_after: Vec<String>,
     pub error: Option<String>,
+}
+
+fn complete_repair_report(
+    report: &mut BlobRepairReport,
+    email_missing_after: bool,
+    missing_after: Vec<String>,
+) {
+    report.email_missing_after = email_missing_after;
+    report.missing_after = missing_after;
+    report.status = if !email_missing_after && report.missing_after.is_empty() {
+        "repaired"
+    } else {
+        "partial"
+    }
+    .into();
 }
 
 /// Content hashes referenced by `<<BICHON_DETACH_HASH:...>>` placeholders in a
@@ -1016,14 +1045,7 @@ pub async fn repair_envelope_blobs(
     // recover_message_blob only queues the write; wait for it to land.
     let _ = tokio::time::timeout(std::time::Duration::from_secs(30), BLOB_MANAGER.drain()).await;
     let (email_missing_after, missing_after) = missing_blobs(&envelope, attachments.as_deref())?;
-    report.email_missing_after = email_missing_after;
-    report.missing_after = missing_after;
-    report.status = if !email_missing_after && report.missing_after.is_empty() {
-        "repaired"
-    } else {
-        "partial"
-    }
-    .into();
+    complete_repair_report(&mut report, email_missing_after, missing_after);
     Ok(report)
 }
 
@@ -1055,16 +1077,49 @@ mod test {
     }
 
     #[test]
-    fn repair_report_preserves_legacy_before_state() {
-        let report = super::BlobRepairReport {
+    fn repair_report_updates_post_state_without_changing_legacy_alias() {
+        let mut report = super::BlobRepairReport {
             email_missing_before: true,
-            email_missing_after: false,
             email_blob_missing: true,
             ..Default::default()
         };
+        super::complete_repair_report(&mut report, false, Vec::new());
         assert!(report.email_blob_missing);
         assert!(report.email_missing_before);
         assert!(!report.email_missing_after);
+        assert_eq!(report.status, "repaired");
+    }
+
+    #[tokio::test]
+    async fn paused_recovery_skips_persistence_and_releases_admission() {
+        let gate = super::WriteGate::new();
+        gate.pause();
+        let raw = b"From: sender@example.test\r\n\r\nbody";
+        let message = super::MessageParser::new().parse(raw).expect("fixture parses");
+
+        assert!(!super::persist_recovered_blob_if_allowed(
+            raw,
+            &message,
+            "paused-recovery-test",
+            0,
+            0,
+            &gate,
+        )
+        .await);
+        assert_eq!(gate.in_flight(), 0);
+
+        gate.resume();
+        assert!(super::persist_recovered_blob_if_allowed(
+            raw,
+            &message,
+            "admitted-recovery-test",
+            0,
+            0,
+            &gate,
+        )
+        .await);
+        assert_eq!(gate.in_flight(), 0);
+        super::BLOB_MANAGER.drain().await;
     }
 
     #[test]
