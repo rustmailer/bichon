@@ -353,6 +353,13 @@ pub fn compute_content_hash(content: &[u8]) -> String {
     hash.to_hex().to_string()
 }
 
+/// Isolate raw MIME blobs from legacy decoded attachment and original EML keys.
+pub fn compute_raw_attachment_hash(content: &[u8]) -> String {
+    let mut hasher = blake3::Hasher::new_derive_key("bichon.raw-mime-attachment.v1");
+    hasher.update(content);
+    hasher.finalize().to_hex().to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
