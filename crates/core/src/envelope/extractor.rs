@@ -536,7 +536,7 @@ pub async fn detach_and_store_attachments(
         let raw_content_hash = if range_valid {
             let raw_bytes = &original_body[raw_start..raw_end];
             // Different transfer encodings of one file must not share a raw blob.
-            let raw_hash = compute_content_hash(raw_bytes);
+            let raw_hash = crate::utils::compute_raw_attachment_hash(raw_bytes);
             attachments.push((raw_hash.clone(), Bytes::copy_from_slice(raw_bytes)));
 
             // Replace raw attachment content with a hash-based placeholder
@@ -901,8 +901,8 @@ mod test {
         let plain = b"BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n";
         let base64 = b"QkVHSU46VkNBTEVOREFSDQpFTkQ6VkNBTEVOREFSDQo=\r\n";
         let decoded_hash = crate::utils::compute_content_hash(plain);
-        let plain_hash = crate::utils::compute_content_hash(plain);
-        let base64_hash = crate::utils::compute_content_hash(base64);
+        let plain_hash = crate::utils::compute_raw_attachment_hash(plain);
+        let base64_hash = crate::utils::compute_raw_attachment_hash(base64);
         let infos = vec![
             crate::message::content::AttachmentInfo {
                 content_hash: decoded_hash.clone(),
@@ -930,6 +930,12 @@ mod test {
             restored.as_ref(),
             [b"plain\r\n".as_slice(), plain, b"base64\r\n", base64].concat()
         );
+    }
+
+    #[test]
+    fn raw_blob_key_cannot_alias_legacy_attachment_or_email_key() {
+        let payload = b"same bytes in a legacy decoded attachment or original email";
+        assert_ne!(crate::utils::compute_raw_attachment_hash(payload), crate::utils::compute_content_hash(payload));
     }
 
     #[test]

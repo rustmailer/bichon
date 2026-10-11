@@ -100,7 +100,7 @@ pub fn detach_attachments_standalone(
         let range_valid = raw_start < raw_end;
 
         let raw_content_hash =
-            range_valid.then(|| compute_content_hash(&original_body[raw_start..raw_end]));
+            range_valid.then(|| bichon_core::utils::compute_raw_attachment_hash(&original_body[raw_start..raw_end]));
         if let Some(ref raw_hash) = raw_content_hash {
             blobs.push((
                 raw_hash.clone(),
