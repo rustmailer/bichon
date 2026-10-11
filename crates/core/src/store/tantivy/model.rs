@@ -53,6 +53,35 @@ pub struct EnvelopeWithAttachments {
     pub attachments: Option<Vec<AttachmentInfo>>,
 }
 
+#[cfg(test)]
+mod attachment_storage_tests {
+    use super::*;
+
+    #[test]
+    fn deletion_references_follow_raw_and_legacy_blob_keys() {
+        let envelope = EnvelopeWithAttachments {
+            envelope: Envelope::default(),
+            attachments: Some(vec![
+                AttachmentInfo {
+                    content_hash: "decoded-file".into(),
+                    raw_content_hash: Some("encoded-body".into()),
+                    ..Default::default()
+                },
+                AttachmentInfo {
+                    content_hash: "legacy-body".into(),
+                    ..Default::default()
+                },
+            ]),
+        };
+        let doc = envelope.to_document("", 0).expect("index attachments");
+        let keys: Vec<_> = doc
+            .get_all(SchemaTools::email_fields().f_attachment_content_hash)
+            .filter_map(|value| value.as_str())
+            .collect();
+        assert_eq!(keys, vec!["encoded-body", "legacy-body"]);
+    }
+}
+
 impl EnvelopeWithAttachments {
     pub fn to_document(&self, body_text: &str, shard_id: u64) -> BichonResult<TantivyDocument> {
         let fields = SchemaTools::email_fields();
@@ -106,7 +135,9 @@ impl EnvelopeWithAttachments {
                     let file_type = att.file_type.to_lowercase();
                     doc.add_text(fields.f_attachment_content_type, file_type);
                 }
-                doc.add_text(fields.f_attachment_content_hash, &att.content_hash);
+                // Blob deletion must follow the encoded storage key, including
+                // shared blobs referenced by other messages and legacy records.
+                doc.add_text(fields.f_attachment_content_hash, att.storage_hash());
             }
         }
 

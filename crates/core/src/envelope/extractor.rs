@@ -533,20 +533,23 @@ pub async fn detach_and_store_attachments(
         // which is always available regardless of raw offset validity.
         let content_hash = compute_content_hash(att.contents());
 
-        if range_valid {
+        let raw_content_hash = if range_valid {
             let raw_bytes = &original_body[raw_start..raw_end];
-            // The actual content stored in the blob is the raw undecoded data.
-            attachments.push((content_hash.clone(), Bytes::copy_from_slice(raw_bytes)));
+            // Different transfer encodings of one file must not share a raw blob.
+            let raw_hash = compute_content_hash(raw_bytes);
+            attachments.push((raw_hash.clone(), Bytes::copy_from_slice(raw_bytes)));
 
             // Replace raw attachment content with a hash-based placeholder
-            let placeholder = format!("<<BICHON_DETACH_HASH:{}>>", &content_hash);
+            let placeholder = format!("<<BICHON_DETACH_HASH:{}>>", &raw_hash);
             stripped_eml.splice(raw_start..raw_end, placeholder.as_bytes().iter().cloned());
+            Some(raw_hash)
         } else {
             // Invalid range: store a zero-length blob so the consistency
             // check passes; reattachment will log a warning for the missing
             // blob data but won't panic.
             attachments.push((content_hash.clone(), Bytes::new()));
-        }
+            None
+        };
 
         let inline = att
             .content_disposition()
@@ -605,6 +608,7 @@ pub async fn detach_and_store_attachments(
             file_type,
             content_id: att.content_id().map(|id| id.to_string()),
             content_hash: content_hash.clone(),
+            raw_content_hash,
             is_message: att.is_message(),
             extracted_text: None,
             extracted_page_count: None,
@@ -682,7 +686,6 @@ pub fn reattach_eml_content(
         return Ok((e.envelope, restored_eml));
     }
 
-    let mut restored_eml = restored_eml.to_vec();
     let actual_count = e.attachments.as_ref().map(|a| a.len()).unwrap_or(0);
     if e.envelope.attachment_count != actual_count {
         return Err(raise_error!(
@@ -695,9 +698,21 @@ pub fn reattach_eml_content(
         ));
     }
 
+    let restored = reattach_parts(restored_eml.to_vec(), e.attachments.unwrap(), |hash| {
+        BLOB_MANAGER.get_attachment(hash)
+    })?;
+    Ok((e.envelope, restored))
+}
+
+fn reattach_parts(
+    mut restored_eml: Vec<u8>,
+    attachments: Vec<AttachmentInfo>,
+    load: impl Fn(&str) -> BichonResult<Option<Bytes>>,
+) -> BichonResult<Bytes> {
     let mut tasks = Vec::new();
-    for detail in e.attachments.unwrap() {
-        let placeholder_str = format!("<<BICHON_DETACH_HASH:{}>>", &detail.content_hash);
+    for detail in attachments {
+        let storage_hash = detail.storage_hash();
+        let placeholder_str = format!("<<BICHON_DETACH_HASH:{}>>", storage_hash);
         let pattern = placeholder_str.as_bytes();
         let pattern_len = pattern.len();
 
@@ -709,22 +724,23 @@ pub fn reattach_eml_content(
             let absolute_start = search_cursor + pos;
             let absolute_end = absolute_start + pattern_len;
 
-            tasks.push((absolute_start, absolute_end, detail.content_hash.clone()));
+            tasks.push((absolute_start, absolute_end, storage_hash.to_string()));
             search_cursor = absolute_end;
         }
     }
 
     tasks.sort_by(|a, b| b.0.cmp(&a.0));
+    tasks.dedup_by(|a, b| a.0 == b.0 && a.1 == b.1);
 
     for (start, end, hash) in tasks {
-        if let Some(original_data) = BLOB_MANAGER.get_attachment(&hash)? {
+        if let Some(original_data) = load(&hash)? {
             restored_eml.splice(start..end, original_data.iter().cloned());
         } else {
             error!("[ERROR] Missing attachment blob for hash: {}", hash);
         }
     }
 
-    Ok((e.envelope, Bytes::from(restored_eml)))
+    Ok(Bytes::from(restored_eml))
 }
 
 /// Returns the raw EML for an indexed message, self-healing a missing content
@@ -854,6 +870,75 @@ async fn recover_message_blob(envelope: &Envelope) -> BichonResult<Bytes> {
 #[cfg(test)]
 mod test {
     use html2text::config;
+
+    #[test]
+    fn repeated_attachment_is_restored_once_per_placeholder() {
+        let payload = b"BEGIN:VCALENDAR\r\nDESCRIPTION:Repeated invitation\r\nEND:VCALENDAR\r\n";
+        let hash = crate::utils::compute_content_hash(payload);
+        let placeholder = format!("<<BICHON_DETACH_HASH:{hash}>>");
+        let stripped = format!("part-one\r\n{placeholder}\r\npart-two\r\n{placeholder}");
+        let info = crate::message::content::AttachmentInfo {
+            content_hash: hash,
+            ..Default::default()
+        };
+        let restored =
+            super::reattach_parts(stripped.into_bytes(), vec![info.clone(), info], |_| {
+                Ok(Some(bytes::Bytes::from_static(payload)))
+            })
+            .expect("reattach repeated invitation");
+        let expected = [
+            b"part-one\r\n".as_slice(),
+            payload,
+            b"\r\npart-two\r\n",
+            payload,
+        ]
+        .concat();
+        assert_eq!(restored.as_ref(), expected);
+    }
+
+    #[test]
+    fn distinct_transfer_encodings_keep_their_original_bytes() {
+        let plain = b"BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n";
+        let base64 = b"QkVHSU46VkNBTEVOREFSDQpFTkQ6VkNBTEVOREFSDQo=\r\n";
+        let decoded_hash = crate::utils::compute_content_hash(plain);
+        let plain_hash = crate::utils::compute_content_hash(plain);
+        let base64_hash = crate::utils::compute_content_hash(base64);
+        let infos = vec![
+            crate::message::content::AttachmentInfo {
+                content_hash: decoded_hash.clone(),
+                raw_content_hash: Some(plain_hash.clone()),
+                ..Default::default()
+            },
+            crate::message::content::AttachmentInfo {
+                content_hash: decoded_hash,
+                raw_content_hash: Some(base64_hash.clone()),
+                ..Default::default()
+            },
+        ];
+        let stripped = format!(
+            "plain\r\n<<BICHON_DETACH_HASH:{plain_hash}>>base64\r\n<<BICHON_DETACH_HASH:{base64_hash}>>"
+        );
+        let restored = super::reattach_parts(stripped.into_bytes(), infos, |hash| {
+            Ok(Some(if hash == plain_hash {
+                bytes::Bytes::from_static(plain)
+            } else {
+                bytes::Bytes::from_static(base64)
+            }))
+        })
+        .expect("reattach independently encoded copies");
+        assert_eq!(
+            restored.as_ref(),
+            [b"plain\r\n".as_slice(), plain, b"base64\r\n", base64].concat()
+        );
+    }
+
+    #[test]
+    fn legacy_metadata_uses_the_original_decoded_storage_key() {
+        let info: crate::message::content::AttachmentInfo = serde_json::from_str(
+            r#"{"file_type":"application/pdf","inline":false,"filename":"a.pdf","size":4,"content_id":null,"content_hash":"legacy-hash","is_message":false,"extracted_text":null,"extracted_page_count":null}"#
+        ).expect("read legacy attachment metadata");
+        assert_eq!(info.storage_hash(), "legacy-hash");
+    }
 
     #[test]
     fn test_various_html_with_overflow_enabled() {

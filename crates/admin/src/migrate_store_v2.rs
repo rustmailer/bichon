@@ -99,15 +99,17 @@ pub fn detach_attachments_standalone(
         let raw_end = raw_end.min(body_len);
         let range_valid = raw_start < raw_end;
 
-        if range_valid {
+        let raw_content_hash =
+            range_valid.then(|| compute_content_hash(&original_body[raw_start..raw_end]));
+        if let Some(ref raw_hash) = raw_content_hash {
             blobs.push((
-                content_hash.clone(),
+                raw_hash.clone(),
                 Bytes::copy_from_slice(&original_body[raw_start..raw_end]),
             ));
         }
 
-        if range_valid {
-            let placeholder = format!("<<BICHON_DETACH_HASH:{}>>", &content_hash);
+        if let Some(ref raw_hash) = raw_content_hash {
+            let placeholder = format!("<<BICHON_DETACH_HASH:{}>>", raw_hash);
             stripped_eml.splice(raw_start..raw_end, placeholder.as_bytes().iter().cloned());
         }
 
@@ -130,6 +132,7 @@ pub fn detach_attachments_standalone(
                 .unwrap_or_else(|| "application/octet-stream".to_string()),
             content_id: att.content_id().map(|id| id.to_string()),
             content_hash,
+            raw_content_hash,
             is_message: att.is_message(),
             extracted_text: None,
             extracted_page_count: None,
