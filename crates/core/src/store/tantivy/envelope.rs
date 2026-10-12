@@ -71,7 +71,10 @@ use tantivy::{
     },
     collector::{Count, DocSetCollector, FacetCollector, TopDocs},
     indexer::{LogMergePolicy, UserOperation},
-    query::{AllQuery, BooleanQuery, EmptyQuery, Occur, Query, QueryParser, RangeQuery, TermQuery},
+    query::{
+        AllQuery, BooleanQuery, EmptyQuery, ExistsQuery, Occur, Query, QueryParser, RangeQuery,
+        TermQuery,
+    },
     schema::{IndexRecordOption, Value},
     DocAddress, Index, IndexReader, IndexWriter, Order, TantivyDocument, Term,
 };
@@ -549,6 +552,24 @@ impl IndexManager {
         Box::new(boolean_query)
     }
 
+    /// Build the tag-presence query used by [`Self::filter_query`].
+    ///
+    /// Facet values live in a fast field, so `ExistsQuery` yields exactly the
+    /// set of messages carrying at least one tag, which is `has_tags = true`.
+    /// The complement needs an explicit `AllQuery`: a `BooleanQuery` made only
+    /// of `MustNot` clauses has no positive clause to subtract from and
+    /// matches nothing.
+    fn has_tags_query(has_tags: bool) -> Box<dyn Query> {
+        let tagged: Box<dyn Query> = Box::new(ExistsQuery::new(F_TAGS.to_string(), false));
+        if has_tags {
+            return tagged;
+        }
+        Box::new(BooleanQuery::new(vec![
+            (Occur::Must, Box::new(AllQuery)),
+            (Occur::MustNot, tagged),
+        ]))
+    }
+
     fn filter_query(
         &self,
         accounts: Option<HashSet<u64>>,
@@ -625,6 +646,13 @@ impl IndexManager {
                 }
                 subqueries.push((Occur::Must, Box::new(BooleanQuery::new(should_queries))));
             }
+        }
+
+        // Independent of `tags` above: `Some(true)` is then redundant with a
+        // non-empty selection, while `Some(false)` next to one is rejected by
+        // `EmailSearchRequest::validate`.
+        if let Some(has_tags) = filter.has_tags {
+            subqueries.push((Occur::Must, Self::has_tags_query(has_tags)));
         }
 
         for (field, opt_value) in [
@@ -3306,6 +3334,79 @@ mod tests {
             "target score {:.4} should exceed recent score {:.4}",
             score_top[0].0,
             score_top[1].0
+        );
+    }
+
+    /// `has_tags_query(false)` must return exactly the untagged messages.
+    ///
+    /// This is the part of the tag filter that is easy to get wrong: in
+    /// Tantivy a `BooleanQuery` holding a single `MustNot` clause has no
+    /// positive clause to subtract from and matches nothing, so "no tags"
+    /// is `AllQuery` minus the tagged set.
+    #[test]
+    fn has_tags_query_separates_tagged_from_untagged() {
+        let f = SchemaTools::email_fields();
+        let index = Index::create_in_ram(SchemaTools::email_schema());
+        index.tokenizers().register("euro", EuroTokenizer::new());
+
+        // A message with no facet value at all must coexist with tagged ones
+        // in the same segment: the fast field is then sparse, which is what
+        // the existence check has to interpret.
+        let messages: [(&str, &[&str]); 3] = [
+            ("id-untagged", &[]),
+            ("id-one-tag", &["/work"]),
+            ("id-two-tags", &["/work", "/important"]),
+        ];
+
+        {
+            let mut writer = index
+                .writer_with_num_threads(1, 15_000_000)
+                .expect("writer");
+
+            for (i, (id, tags)) in messages.iter().enumerate() {
+                let mut doc = TantivyDocument::new();
+                doc.add_text(f.f_id, *id);
+                doc.add_text(f.f_message_id, format!("<{id}@test>"));
+                doc.add_u64(f.f_account_id, 1);
+                doc.add_u64(f.f_mailbox_id, 10);
+                doc.add_u64(f.f_uid, i as u64 + 1);
+                doc.add_text(f.f_content_hash, format!("hash-{id}"));
+                for tag in tags.iter() {
+                    doc.add_facet(f.f_tags, *tag);
+                }
+                writer.add_document(doc).unwrap();
+            }
+
+            writer.commit().unwrap();
+        }
+
+        let reader = index.reader().expect("reader");
+        reader.reload().unwrap();
+        let searcher = reader.searcher();
+
+        let matching_ids = |query: Box<dyn Query>| -> Vec<String> {
+            let mut ids: Vec<String> = searcher
+                .search(&*query, &DocSetCollector)
+                .expect("search")
+                .into_iter()
+                .map(|addr| {
+                    let doc: TantivyDocument = searcher.doc(addr).unwrap();
+                    doc.get_first(f.f_id).unwrap().as_str().unwrap().to_string()
+                })
+                .collect();
+            ids.sort();
+            ids
+        };
+
+        assert_eq!(
+            matching_ids(IndexManager::has_tags_query(false)),
+            vec!["id-untagged".to_string()],
+            "has_tags=false must keep only messages carrying no tag"
+        );
+        assert_eq!(
+            matching_ids(IndexManager::has_tags_query(true)),
+            vec!["id-one-tag".to_string(), "id-two-tags".to_string()],
+            "has_tags=true must keep every tagged message"
         );
     }
 }
