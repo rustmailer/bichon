@@ -2660,6 +2660,7 @@
   "tag": {
     "clear_all": "清除所有標籤",
     "label": "標籤",
+    "no_tags": "無標籤",
     "no_tags_found": "未找到標籤",
     "search_placeholder": "搜尋標籤…"
   },

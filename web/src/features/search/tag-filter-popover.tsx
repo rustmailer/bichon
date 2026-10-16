@@ -35,45 +35,33 @@ import {
 import { useAvailableTags } from '@/hooks/use-available-tags'
 import { cn } from '@/lib/utils'
 import { useSearchContext } from './context'
+import {
+    clearTagFilter,
+    countTagFilters,
+    getSelectedTags,
+    isUntaggedOnly,
+    toggleNoTags,
+    toggleTag,
+} from './tag-filter'
 
 export function TagFilterPopover() {
     const { t } = useTranslation()
     const [search, setSearch] = React.useState('')
     const { filter, setFilter } = useSearchContext()
 
-    const selectedTags = (filter?.tags as string[]) || []
+    const selectedTags = getSelectedTags(filter)
+    const noTags = isUntaggedOnly(filter)
+    const activeCount = countTagFilters(filter)
     const {
         tagsCount = [],
         isLoading,
     } = useAvailableTags()
 
-    const handleTagToggle = (tag: string) => {
-        setFilter(prev => {
-            const next = { ...prev }
-            const currentTags = (next.tags as string[]) || []
-            const isSelected = currentTags.includes(tag)
+    const handleTagToggle = (tag: string) => setFilter(prev => toggleTag(prev, tag))
 
-            const nextTags = isSelected
-                ? currentTags.filter(t => t !== tag)
-                : [...currentTags, tag]
+    const handleNoTagsToggle = () => setFilter(prev => toggleNoTags(prev))
 
-            if (nextTags.length > 0) {
-                next.tags = nextTags
-            } else {
-                delete next.tags
-            }
-
-            return next
-        })
-    }
-
-    const clearAllTags = () => {
-        setFilter(prev => {
-            const next = { ...prev }
-            delete next.tags
-            return next
-        })
-    }
+    const clearAllTags = () => setFilter(prev => clearTagFilter(prev))
 
     const filteredTags = React.useMemo(() => {
         const q = search.toLowerCase()
@@ -99,18 +87,18 @@ export function TagFilterPopover() {
                     variant="outline"
                     className={cn(
                         'h-6 gap-1.5 px-3 rounded-none border-l-0',
-                        selectedTags.length > 0 &&
+                        activeCount > 0 &&
                         'bg-primary/10 border-primary text-primary'
                     )}
                 >
                     <Tag className="h-4 w-4" />
                     {t('tag.label')}
-                    {selectedTags.length > 0 && (
+                    {activeCount > 0 && (
                         <Badge
                             variant="secondary"
                             className="ml-1 h-5 px-1.5 text-xs"
                         >
-                            {selectedTags.length}
+                            {activeCount}
                         </Badge>
                     )}
                     <ChevronDown className="h-3.5 w-3.5 opacity-60" />
@@ -131,7 +119,31 @@ export function TagFilterPopover() {
                     />
                 </div>
                 <ScrollArea className="h-96 p-1">
-                    {!search && selectedTags.length > 0 && (
+                    {/*
+                     * Pinned above the searchable list: "no tags" is not a tag
+                     * value from the index, so matching the list against the
+                     * search box must not hide it.
+                     */}
+                    <div
+                        onClick={handleNoTagsToggle}
+                        className="flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer hover:bg-accent transition-colors"
+                    >
+                        <Checkbox
+                            id="no-tags-option"
+                            checked={noTags}
+                            onCheckedChange={handleNoTagsToggle}
+                            onClick={(e) => e.stopPropagation()}
+                        />
+
+                        <Label
+                            htmlFor="no-tags-option"
+                            className="flex-1 truncate text-xs cursor-pointer"
+                        >
+                            {t('tag.no_tags')}
+                        </Label>
+                    </div>
+                    <div className="my-1 h-px bg-border" />
+                    {!search && activeCount > 0 && (
                         <>
                             <div
                                 onClick={clearAllTags}
@@ -143,7 +155,7 @@ export function TagFilterPopover() {
                                 <span className="flex-1 text-xs font-medium">
                                     {t('tag.clear_all')}
                                 </span>
-                                <span className="text-[10px] opacity-60">({selectedTags.length})</span>
+                                <span className="text-[10px] opacity-60">({activeCount})</span>
                             </div>
                             <div className="my-1 h-px bg-border" />
                         </>

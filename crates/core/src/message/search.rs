@@ -64,10 +64,30 @@ pub struct EmailSearchFilter {
     pub message_id: Option<String>,
     pub has_attachment: Option<bool>,
     pub attachment_name: Option<String>,
+    /// Matches if the message carries at least one of the given facet tags
+    /// (OR semantics). An empty set is ignored.
     pub tags: Option<HashSet<String>>,
+    /// Tri-state tag-presence filter, mirroring `has_attachment`:
+    /// `Some(true)` keeps only tagged messages, `Some(false)` keeps only
+    /// messages with no tag at all, and `None` (the default) does not filter.
+    ///
+    /// A tag filter cannot express "untagged" — the absence of a value is not
+    /// a value — so this is a separate dimension rather than a special tag
+    /// name. `Some(false)` combined with a non-empty `tags` is a
+    /// contradiction and is rejected by [`EmailSearchRequest::validate`].
+    pub has_tags: Option<bool>,
     pub attachment_extension: Option<String>,
     pub attachment_category: Option<String>,
     pub attachment_content_type: Option<String>,
+}
+
+impl EmailSearchFilter {
+    /// Whether the filter carries a usable tag selection. An empty set is
+    /// treated as "no tag filter" by the query builder, so it does not
+    /// contradict `has_tags = Some(false)`.
+    fn has_tag_selection(&self) -> bool {
+        self.tags.as_ref().is_some_and(|tags| !tags.is_empty())
+    }
 }
 
 #[derive(Debug, Clone, Default, Eq, PartialEq, Serialize, Deserialize)]
@@ -131,6 +151,16 @@ impl EmailSearchRequest {
         if self.page_size > 500 {
             return Err(raise_error!(
                 "The page_size exceeds the maximum allowed limit of 500.".into(),
+                ErrorCode::InvalidParameter
+            ));
+        }
+
+        // "untagged" and "has one of these tags" cannot both hold, so the
+        // combination is a caller mistake rather than an empty result the
+        // user would have to interpret.
+        if self.filter.has_tags == Some(false) && self.filter.has_tag_selection() {
+            return Err(raise_error!(
+                "has_tags=false cannot be combined with tags: an untagged message matches none of the selected tags.".into(),
                 ErrorCode::InvalidParameter
             ));
         }
@@ -310,5 +340,62 @@ mod tests {
         assert!(with_text.text.is_some() || with_text.subject.is_some());
         assert!(with_subject.text.is_some() || with_subject.subject.is_some());
         assert!(no_text.text.is_none() && no_text.subject.is_none());
+    }
+
+    fn email_request(filter: EmailSearchFilter) -> EmailSearchRequest {
+        EmailSearchRequest {
+            filter,
+            page: 1,
+            page_size: 20,
+            sort_by: None,
+            desc: None,
+        }
+    }
+
+    #[test]
+    fn has_tags_alone_validates() {
+        for has_tags in [true, false] {
+            let request = email_request(EmailSearchFilter {
+                has_tags: Some(has_tags),
+                ..Default::default()
+            });
+            assert!(
+                request.validate().is_ok(),
+                "has_tags={has_tags} must be a valid filter on its own"
+            );
+        }
+    }
+
+    #[test]
+    fn untagged_combined_with_tags_is_rejected() {
+        let request = email_request(EmailSearchFilter {
+            has_tags: Some(false),
+            tags: Some(HashSet::from(["important".to_string()])),
+            ..Default::default()
+        });
+        let err = request.validate().unwrap_err();
+        assert_eq!(err.code(), ErrorCode::InvalidParameter);
+    }
+
+    #[test]
+    fn tagged_combined_with_tags_is_allowed() {
+        let request = email_request(EmailSearchFilter {
+            has_tags: Some(true),
+            tags: Some(HashSet::from(["important".to_string()])),
+            ..Default::default()
+        });
+        assert!(request.validate().is_ok());
+    }
+
+    #[test]
+    fn untagged_with_an_empty_tag_set_is_allowed() {
+        // An empty `tags` set is ignored by the query builder, so it does not
+        // contradict `has_tags=false`.
+        let request = email_request(EmailSearchFilter {
+            has_tags: Some(false),
+            tags: Some(HashSet::new()),
+            ..Default::default()
+        });
+        assert!(request.validate().is_ok());
     }
 }

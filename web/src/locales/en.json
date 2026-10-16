@@ -2660,6 +2660,7 @@
   "tag": {
     "clear_all": "Clear all tags",
     "label": "Tags",
+    "no_tags": "No tags",
     "no_tags_found": "No tags found",
     "search_placeholder": "Search tags..."
   },
