@@ -358,13 +358,13 @@ export function TabFilters({ collapsedByDefault = false }: TabFiltersProps = {})
             <p className="text-xs text-muted-foreground">
               {t(
                 'accounts.filters.overrideDesc',
-                'When one of these headers contains a valid email address, it replaces the sender address stored for new messages (for example the original sender behind an alias). Missing or invalid values fall back to the real From header.'
+                'When one of these headers contains a valid email address, it replaces the stored sender address (for example the original sender behind an alias). Missing or invalid values fall back to the real From header.'
               )}
             </p>
             <p className="text-xs text-muted-foreground">
               {t(
                 'accounts.filters.overrideUntrusted',
-                'These headers are set by the sender and are not verified. Changing this list only affects newly archived messages until the index is rebuilt.'
+                'These headers are set by the sender and are not verified. Changes apply to messages archived from now on; to apply them to messages that are already archived, rebuild the index.'
               )}
             </p>
 
