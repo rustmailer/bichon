@@ -23,6 +23,7 @@ import { toast } from '@/hooks/use-toast'
 import { useMutation } from '@tanstack/react-query'
 import { AxiosError } from 'axios'
 import { useTranslation } from 'react-i18next'
+import { formatSender } from '@/lib/utils'
 import { ToastAction } from '@/components/ui/toast'
 import { useSearchContext } from './context'
 import { EmailEnvelope } from '@/api'
@@ -38,8 +39,11 @@ function MessageSummary({ envelope, t }: { envelope: EmailEnvelope, t: (key: str
                 </div>
 
                 <span className="font-medium text-muted-foreground">{t("mail.from")}:</span>
-                <div className="break-all text-foreground/90">
-                    {envelope.from}
+                <div
+                    className="break-all text-foreground/90"
+                    title={envelope.wire_from ? `via ${envelope.wire_from}` : undefined}
+                >
+                    {formatSender(envelope.from_name, envelope.from)}
                 </div>
 
                 {envelope.to?.length > 0 && (

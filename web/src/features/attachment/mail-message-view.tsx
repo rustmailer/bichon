@@ -25,7 +25,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from '@/hooks/use-toast';
-import { formatBytes } from '@/lib/utils';
+import { formatBytes, formatSender } from '@/lib/utils';
 import EmailIframe from '@/components/mail-iframe';
 import {
   AttachmentInfo,
@@ -238,7 +238,10 @@ export function MailMessageView({
         {envelope.from && (
           <div className="flex space-x-2">
             <span className="font-medium text-gray-400">{t('mail.from')}:</span>
-            <span>{envelope.from}</span>
+            <span title={envelope.wire_from ? `via ${envelope.wire_from}` : undefined}>{formatSender(envelope.from_name, envelope.from)}</span>
+            {envelope.wire_from && (
+              <span className="text-gray-400 text-xs">via {envelope.wire_from}</span>
+            )}
           </div>
         )}
         {envelope.to && envelope.to.length > 0 && <Multilines title={t('mail.to')} lines={envelope.to} />}

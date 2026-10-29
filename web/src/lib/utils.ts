@@ -216,3 +216,18 @@ export function toSearchParams(obj: Record<string, any>): URLSearchParams {
   });
   return params;
 }
+
+/**
+ * Render a sender for display: `Name <address>` when a display name is known,
+ * the bare address otherwise. `address` is the resolved `from` (which an
+ * account-level header rule may have replaced).
+ */
+export function formatSender(
+  name?: string | null,
+  address?: string | null,
+): string {
+  const addr = address?.trim() ?? ''
+  const display = name?.trim() ?? ''
+  if (!addr) return display
+  return display ? `${display} <${addr}>` : addr
+}

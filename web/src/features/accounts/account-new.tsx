@@ -61,6 +61,7 @@ const defaultValues: AccountFormValues = {
   download_schedule: undefined,
   archive_rules: undefined,
   extraction_rules: undefined,
+  override_from_headers: undefined,
   retention_days: undefined,
 };
 
@@ -140,6 +141,9 @@ export function AccountNewPage() {
         account_type: "IMAP",
         archive_rules: data.archive_rules || null,
         extraction_rules: data.extraction_rules || null,
+        override_from_headers: data.override_from_headers?.length
+          ? data.override_from_headers
+          : null,
         // Empty / 0 = keep everything (retention disabled).
         retention_days: data.retention_days || 0,
       });

@@ -208,6 +208,8 @@ export interface AccountModel {
     download_schedule?: string;
     archive_rules?: ArchiveRules;
     extraction_rules?: ExtractionRules;
+    /** Ordered headers that may replace the stored `from` address. */
+    override_from_headers?: string[];
     deleting?: boolean;
     /** Retention window in days (0 / undefined = keep everything). */
     retention_days?: number;

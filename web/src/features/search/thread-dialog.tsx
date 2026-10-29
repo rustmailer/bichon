@@ -34,7 +34,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { get_thread_messages } from '@/api/mailbox/envelope/api';
 import { MailMessageView } from './mail-message-view';
 import { useSearchContext } from './context';
-import { useTranslation } from 'react-i18next';
+import { useTranslation } from 'react-i18next'
+import { formatSender } from '@/lib/utils';
 import { format } from 'date-fns';
 
 interface MailThreadDialogProps {
@@ -156,7 +157,7 @@ export function MailThreadDialog({ open, onOpenChange }: MailThreadDialogProps) 
                           >
                             <div className="flex items-start justify-between gap-3 mb-1 min-w-0">
                               <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-                                <span className="font-medium truncate text-sm">{msg.from}</span>
+                                <span className="font-medium truncate text-sm">{formatSender(msg.from_name, msg.from)}</span>
                                 <span className="text-muted-foreground text-sm">→</span>
                                 <span className="text-muted-foreground truncate text-sm">
                                   {msg.to.join(', ')}

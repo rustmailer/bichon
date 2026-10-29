@@ -22,7 +22,7 @@ import { useTranslation } from 'react-i18next'
 import { EmailEnvelope } from '@/api'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { cn } from '@/lib/utils'
+import { cn, formatSender } from '@/lib/utils'
 
 interface Props {
   items: EmailEnvelope[]
@@ -132,8 +132,11 @@ export function MessageList({
 
                 <span className="min-w-0 flex-1 overflow-hidden">
                   <span className="flex items-baseline justify-between gap-2">
-                    <span className="min-w-0 truncate text-xs font-medium">
-                      {envelope.from}
+                    <span
+                      className="min-w-0 truncate text-xs font-medium"
+                      title={envelope.wire_from ? `via ${envelope.wire_from}` : undefined}
+                    >
+                      {formatSender(envelope.from_name, envelope.from)}
                     </span>
                     <span className="shrink-0 whitespace-nowrap text-[10px] tabular-nums text-muted-foreground">
                       {formatMessageDate(date)}

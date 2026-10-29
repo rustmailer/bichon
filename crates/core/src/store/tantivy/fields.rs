@@ -33,6 +33,12 @@ pub const F_PREVIEW: &str = "preview";
 pub const F_CONTENT_HASH: &str = "content_hash";
 
 pub const F_FROM: &str = "from";
+/// Display name paired with [`F_FROM`] (decoded, verbatim). Empty = no name.
+pub const F_FROM_NAME: &str = "from_name";
+/// Original `From` address, kept only when an account's header rule replaced
+/// `F_FROM`. The raw message remains the source of truth; this exists for the
+/// UI's "via …" hint and for audits.
+pub const F_WIRE_FROM: &str = "wire_from";
 pub const F_TO: &str = "to";
 pub const F_CC: &str = "cc";
 pub const F_BCC: &str = "bcc";
@@ -130,6 +136,10 @@ pub struct EmailFields {
     pub f_attachment_content_type: Field,
     pub f_tags: Field,
     pub f_shard_id: Field,
+    /// Appended last: a `Field` is a position, so new fields may never be
+    /// inserted before existing ones.
+    pub f_from_name: Field,
+    pub f_wire_from: Field,
 }
 
 pub struct AttachmentFields {
@@ -161,4 +171,8 @@ pub struct AttachmentFields {
     pub f_shard_id: Field,
     pub f_tags: Field,
     pub f_auto_tags: Field,
+    /// Appended last: a `Field` is a position, so new fields may never be
+    /// inserted before existing ones.
+    pub f_from_name: Field,
+    pub f_wire_from: Field,
 }

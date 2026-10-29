@@ -17,7 +17,7 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-import { cn, dateFnsLocaleMap, formatBytes } from "@/lib/utils"
+import { cn, dateFnsLocaleMap, formatBytes, formatSender } from "@/lib/utils"
 import { format, formatDistanceToNow } from "date-fns"
 import { MessageSquareText, Paperclip } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -99,7 +99,7 @@ export function MailListTable({
       accessorKey: "source",
       header: t('search.source'),
       cell: ({ row }) => {
-        const { from, account_email, account_name, mailbox_name, account_id, mailbox_id } = row.original;
+        const { from, from_name, wire_from, account_email, account_name, mailbox_name, account_id, mailbox_id } = row.original;
         const { setFilter } = useSearchMessages();
         const accountPrefix = account_name || account_email.split('@')[0];//https://github.com/rustmailer/bichon/issues/306
         // A view's rows name the source account, which the viewer cannot filter
@@ -111,13 +111,14 @@ export function MailListTable({
           <div className="flex flex-col py-0.5 min-w-0 group">
             <div
               className="cursor-pointer hover:text-primary transition-colors flex items-center gap-1.5"
+              title={wire_from ? `via ${wire_from}` : undefined}
               onClick={(e) => {
                 e.stopPropagation();
                 setFilter((prev: any) => ({ ...prev, from: from }));
               }}
             >
               <LongText className="text-xs truncate">
-                {from}
+                {formatSender(from_name, from)}
               </LongText>
             </div>
 

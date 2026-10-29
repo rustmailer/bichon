@@ -16,8 +16,9 @@ use tantivy::{indexer::NoMergePolicy, Index, IndexWriter, TantivyDocument};
 use uuid::Uuid;
 
 use bichon_core::{
+    account::migration::AccountModel,
     common::AddrVec,
-    envelope::extractor::{compute_thread_id, generate_message_id},
+    envelope::extractor::{compute_thread_id, generate_message_id, resolve_sender},
     archive::imap::stable_uid::AccountUidAssigner,
     error::{code::ErrorCode, BichonResult},
     raise_error,
@@ -264,10 +265,16 @@ impl NewIndexWriterV2 {
                 .unwrap_or_default()
         };
 
-        let from = message
-            .from()
-            .and_then(|addr| AddrVec::from(addr).0.into_iter().next())
-            .and_then(|a| a.address)
+        let account = AccountModel::get(account_id).ok();
+        let sender = resolve_sender(
+            &message,
+            account
+                .as_ref()
+                .and_then(|a| a.override_from_headers.as_deref()),
+        );
+        let from = sender
+            .address
+            .clone()
             .unwrap_or_else(|| "unknown".to_string());
         let to = parse_addrs(message.to());
         let cc = parse_addrs(message.cc());
@@ -304,6 +311,8 @@ impl NewIndexWriterV2 {
                     subject: subject.clone(),
                     content_hash: a.content_hash.clone(),
                     from: from.clone(),
+                    from_name: sender.name.clone(),
+                    wire_from: sender.wire_from.clone(),
                     date,
                     ingest_at: now,
                     size: a.size as u64,
@@ -339,6 +348,8 @@ impl NewIndexWriterV2 {
             subject,
             preview,
             from,
+            from_name: sender.name,
+            wire_from: sender.wire_from,
             to,
             cc,
             bcc,

@@ -149,6 +149,19 @@ impl EnvelopeWithAttachments {
         doc.add_text(fields.f_from, &self.envelope.from);
         doc.add_text(fields.f_from_text, &self.envelope.from);
         doc.add_text(fields.f_from_text_tri, &self.envelope.from);
+        // Names and the pre-override address are searchable through the same
+        // text/trigram fields: "search the sender" must keep working for the
+        // alias the user actually received the mail at.
+        if let Some(name) = &self.envelope.from_name {
+            doc.add_text(fields.f_from_name, name);
+            doc.add_text(fields.f_from_text, name);
+            doc.add_text(fields.f_from_text_tri, name);
+        }
+        if let Some(wire_from) = &self.envelope.wire_from {
+            doc.add_text(fields.f_wire_from, wire_from);
+            doc.add_text(fields.f_from_text, wire_from);
+            doc.add_text(fields.f_from_text_tri, wire_from);
+        }
         doc.add_text(fields.f_body, body_text);
 
         for to in &self.envelope.to {
@@ -261,6 +274,8 @@ impl EnvelopeWithAttachments {
             subject: extract_string_field(doc, fields.f_subject, F_SUBJECT)?,
             preview: extract_string_field(doc, fields.f_preview, F_PREVIEW).unwrap_or_default(),
             from: extract_string_field(doc, fields.f_from, F_FROM)?,
+            from_name: extract_option_string_field(doc, fields.f_from_name)?,
+            wire_from: extract_option_string_field(doc, fields.f_wire_from)?,
             to: extract_vec_string_field(doc, fields.f_to)?,
             cc: extract_vec_string_field(doc, fields.f_cc)?,
             bcc: extract_vec_string_field(doc, fields.f_bcc)?,
@@ -429,6 +444,10 @@ pub struct AttachmentModel {
     pub subject: String,
     pub content_hash: String,
     pub from: String,
+    /// Display name paired with `from`; mirrors the parent envelope.
+    pub from_name: Option<String>,
+    /// Original `From` address when a header rule replaced `from`.
+    pub wire_from: Option<String>,
     pub date: i64,
     pub ingest_at: i64,
     pub size: u64,
@@ -462,6 +481,16 @@ impl AttachmentModel {
         doc.add_text(f.f_from, &self.from);
         doc.add_text(f.f_from_text, &self.from);
         doc.add_text(f.f_from_text_tri, &self.from);
+        if let Some(name) = &self.from_name {
+            doc.add_text(f.f_from_name, name);
+            doc.add_text(f.f_from_text, name);
+            doc.add_text(f.f_from_text_tri, name);
+        }
+        if let Some(wire_from) = &self.wire_from {
+            doc.add_text(f.f_wire_from, wire_from);
+            doc.add_text(f.f_from_text, wire_from);
+            doc.add_text(f.f_from_text_tri, wire_from);
+        }
         doc.add_i64(f.f_date, self.date);
         doc.add_i64(f.f_ingest_at, self.ingest_at);
         doc.add_u64(f.f_size, self.size);
@@ -546,6 +575,8 @@ impl AttachmentModel {
             subject: extract_string_field(doc, f.f_subject, F_SUBJECT)?,
             content_hash: extract_string_field(doc, f.f_content_hash, F_CONTENT_HASH)?,
             from: extract_string_field(doc, f.f_from, F_FROM)?,
+            from_name: extract_option_string_field(doc, f.f_from_name)?,
+            wire_from: extract_option_string_field(doc, f.f_wire_from)?,
             date: extract_i64_field(doc, f.f_date, F_DATE)?,
             ingest_at: extract_i64_field(doc, f.f_ingest_at, F_INGEST_AT)?,
             size: extract_u64_field(doc, f.f_size, F_SIZE)?,
@@ -567,5 +598,48 @@ impl AttachmentModel {
                 Some(auto_tags)
             },
         })
+    }
+}
+
+#[cfg(test)]
+mod sender_field_tests {
+    use super::*;
+
+    /// The display name and the pre-override address must be stored so the UI
+    /// can render them, and copied into `from_text` so sender search matches
+    /// them without a second query path.
+    #[test]
+    fn sender_name_and_wire_are_stored_and_searchable() {
+        let envelope = EnvelopeWithAttachments {
+            envelope: Envelope {
+                imap_uid: 1,
+                from: "jane@example.com".into(),
+                from_name: Some("Jane Doe".into()),
+                wire_from: Some("alias@addy.io".into()),
+                ..Default::default()
+            },
+            attachments: None,
+        };
+        let doc = envelope.to_document("body", 0).unwrap();
+        let f = SchemaTools::email_fields();
+
+        let name: Vec<&str> = doc
+            .get_all(f.f_from_name)
+            .filter_map(|v| v.as_str())
+            .collect();
+        let wire: Vec<&str> = doc
+            .get_all(f.f_wire_from)
+            .filter_map(|v| v.as_str())
+            .collect();
+        assert_eq!(name, vec!["Jane Doe"]);
+        assert_eq!(wire, vec!["alias@addy.io"]);
+
+        let text: Vec<&str> = doc
+            .get_all(f.f_from_text)
+            .filter_map(|v| v.as_str())
+            .collect();
+        for expected in ["jane@example.com", "Jane Doe", "alias@addy.io"] {
+            assert!(text.contains(&expected), "from_text is missing {expected:?}");
+        }
     }
 }

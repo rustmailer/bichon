@@ -32,6 +32,8 @@ export interface AttachmentModel {
     subject: string;
     content_hash: string;
     from: string;
+    from_name?: string;
+    wire_from?: string;
     date: number;
     ingest_at: number;
     size: number;

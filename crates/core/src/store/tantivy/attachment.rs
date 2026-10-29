@@ -187,6 +187,14 @@ fn rebuild_attachment_doc(
             new_doc.add_text(af.f_from_text_tri, s);
         }
     }
+    for field in [af.f_from_name, af.f_wire_from] {
+        for val in old_doc.get_all(field) {
+            if let Some(s) = val.as_str() {
+                new_doc.add_text(af.f_from_text, s);
+                new_doc.add_text(af.f_from_text_tri, s);
+            }
+        }
+    }
     if let Some(s) = old_doc.get_first(af.f_name_exact).and_then(|v| v.as_str()) {
         new_doc.add_text(af.f_name_text, s);
         new_doc.add_text(af.f_name_text_tri, s);

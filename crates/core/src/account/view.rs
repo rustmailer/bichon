@@ -60,6 +60,9 @@ pub struct AccountResp {
     pub archive_rules: Option<ArchiveRules>,
     /// Attachment text extraction rules (Pro feature); `None` = extract everything.
     pub extraction_rules: Option<ExtractionRules>,
+    /// Header names whose first valid mailbox replaces the stored sender.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub override_from_headers: Option<Vec<String>>,
     /// Account-level retention window in days (free/community). `None`/`0` = keep everything.
     pub retention_days: Option<u64>,
     /// Source-mailbox cleanup configuration (community); `None` = not configured.
@@ -119,6 +122,7 @@ impl AccountResp {
             download_schedule: account.download_schedule,
             archive_rules: account.archive_rules,
             extraction_rules: account.extraction_rules,
+            override_from_headers: account.override_from_headers,
             retention_days: account.retention_days,
             remote_cleanup: account.remote_cleanup,
             legal_hold: account.legal_hold,

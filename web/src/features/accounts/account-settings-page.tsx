@@ -67,6 +67,7 @@ function mapAccountToFormValues(account: AccountModel): AccountFormValues {
     download_schedule: account.download_schedule ?? undefined,
     archive_rules: account.archive_rules ?? undefined,
     extraction_rules: account.extraction_rules ?? undefined,
+    override_from_headers: account.override_from_headers ?? undefined,
     retention_days: account.retention_days ?? undefined,
   };
 }
@@ -183,6 +184,11 @@ export function AccountSettingsPage({ accountId }: AccountSettingsPageProps) {
       }
       if (!data.extraction_rules && account?.extraction_rules) {
         payload.clear_extraction_rules = true;
+      }
+      if (data.override_from_headers?.length) {
+        payload.override_from_headers = data.override_from_headers;
+      } else if (account?.override_from_headers?.length) {
+        payload.clear_override_from_headers = true;
       }
 
       updateMutation.mutate(payload);

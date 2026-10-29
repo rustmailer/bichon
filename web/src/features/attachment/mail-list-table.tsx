@@ -17,7 +17,7 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-import { dateFnsLocaleMap, formatBytes } from "@/lib/utils"
+import { dateFnsLocaleMap, formatBytes, formatSender } from "@/lib/utils"
 import { format, formatDistanceToNow } from "date-fns"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -85,7 +85,7 @@ export function AttachmentListTable({
       accessorKey: "source",
       header: t('attachment.source'),
       cell: ({ row }) => {
-        const { from, account_email, mailbox_name, account_id, mailbox_id } = row.original;
+        const { from, from_name, wire_from, account_email, mailbox_name, account_id, mailbox_id } = row.original;
         const { setFilter } = useSearchAttachments();
         const accountPrefix = account_email.split('@')[0];
 
@@ -93,13 +93,14 @@ export function AttachmentListTable({
           <div className="flex flex-col py-0.5 min-w-0 group">
             <div
               className="cursor-pointer hover:text-primary transition-colors flex items-center gap-1.5"
+              title={wire_from ? `via ${wire_from}` : undefined}
               onClick={(e) => {
                 e.stopPropagation();
                 setFilter((prev: any) => ({ ...prev, from: from }));
               }}
             >
               <LongText className="text-xs truncate">
-                {from}
+                {formatSender(from_name, from)}
               </LongText>
             </div>
 

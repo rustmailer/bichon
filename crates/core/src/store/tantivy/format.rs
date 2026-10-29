@@ -48,12 +48,14 @@ use crate::store::tantivy::fields::{F_CLEANUP_MOVED, F_IMAP_UID};
 /// - 2 = deterministic word tokenizer + trigram sibling fields
 /// - 3 = + imap_uid field (stable archive-side IMAP UID)
 ///       + cleanup_moved flag (source-mailbox cleanup marker)
+/// - 4 = + from_name / wire_from fields (sender display name and the original
+///       address behind an account's header override rule)
 ///
 /// Bump this whenever the schema changes **or** a reindex becomes necessary for
 /// any other reason (e.g. a future tokenizer change that leaves the schema
 /// untouched). The check compares the on-disk marker against this constant, so
 /// bumping it alone is enough to gate older indexes behind the reindex flow.
-pub const CURRENT_INDEX_FORMAT_VERSION: u32 = 3;
+pub const CURRENT_INDEX_FORMAT_VERSION: u32 = 4;
 
 const INDEX_FORMAT_FILE: &str = "INDEX_FORMAT";
 
@@ -103,11 +105,15 @@ pub fn heal_index_format_marker(dir: &Path) -> bool {
     let Ok(index) = tantivy::Index::open_in_dir(dir) else {
         return false;
     };
-    // Check for the field the *current* generation introduced, not an older
-    // one: a schema-3 index also has `imap_uid`, so testing only that would
-    // stamp a stale index as current and then fail at query time.
+    // Check for a field the *current* generation introduced, not an older one:
+    // a schema-3 index also has `imap_uid`, so testing only that would stamp a
+    // stale index as current and then fail at query time. `from_name` is the
+    // newest discriminator (generation 4).
     let schema = index.schema();
-    if schema.get_field(F_IMAP_UID).is_err() || schema.get_field(F_CLEANUP_MOVED).is_err() {
+    if schema.get_field(F_IMAP_UID).is_err()
+        || schema.get_field(F_CLEANUP_MOVED).is_err()
+        || schema.get_field("from_name").is_err()
+    {
         return false;
     }
     write_index_format_version(dir).is_ok()

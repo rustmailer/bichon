@@ -42,6 +42,11 @@ import { FilterRuleEditor } from "./filter-rule-editor";
 import { ExtensionPicker } from "./extension-picker";
 import { AccountFormValues } from "./schema";
 
+const SUGGESTED_OVERRIDE_HEADERS = [
+  'X-AnonAddy-Original-Sender',
+  'X-SimpleLogin-Original-From',
+];
+
 const SUGGESTED_SPAM_HEADERS = [
   'X-Spam-Flag',
   'X-Spam',
@@ -117,6 +122,37 @@ export function TabFilters({ collapsedByDefault = false }: TabFiltersProps = {})
       setValue('archive_rules.spam_headers', [...spamHeaders, trimmed]);
       setNewSpamHeader('');
     }
+  };
+
+  // Sender header override: hidden under its own collapsed section, because
+  // only alias/forwarding users need it. The backend silently falls back to
+  // the real From whenever a configured header is absent or invalid.
+  const overrideHeaders = useWatch({ control, name: 'override_from_headers' }) ?? [];
+  const [newOverrideHeader, setNewOverrideHeader] = useState('');
+
+  const addOverrideHeader = (header: string) => {
+    const trimmed = header.trim();
+    if (
+      trimmed &&
+      !overrideHeaders.some((h) => h.toLowerCase() === trimmed.toLowerCase())
+    ) {
+      setValue('override_from_headers', [...overrideHeaders, trimmed], {
+        shouldDirty: true,
+      });
+    }
+  };
+
+  const removeOverrideHeader = (header: string) => {
+    setValue(
+      'override_from_headers',
+      overrideHeaders.filter((h) => h !== header),
+      { shouldDirty: true }
+    );
+  };
+
+  const handleAddOverrideHeader = () => {
+    addOverrideHeader(newOverrideHeader);
+    setNewOverrideHeader('');
   };
 
   const BYTES_PER_MB = 1024 * 1024;
@@ -303,6 +339,101 @@ export function TabFilters({ collapsedByDefault = false }: TabFiltersProps = {})
           />
         </RuleGroup>
       )}
+
+      {/* Sender header override — defaults to collapsed. */}
+      <Collapsible defaultOpen={false}>
+        <CollapsibleTrigger asChild>
+          <button
+            type="button"
+            className="flex w-full items-center justify-between gap-3 rounded-md border bg-muted/30 px-4 py-3 text-left text-sm font-medium transition-colors hover:bg-muted/50"
+          >
+            <span>
+              {t('accounts.filters.overrideTitle', 'Sender header override')}
+            </span>
+            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform data-[state=open]:rotate-180" />
+          </button>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="pt-4">
+          <div className="space-y-4 rounded-md border p-5">
+            <p className="text-xs text-muted-foreground">
+              {t(
+                'accounts.filters.overrideDesc',
+                'When one of these headers contains a valid email address, it replaces the sender address stored for new messages (for example the original sender behind an alias). Missing or invalid values fall back to the real From header.'
+              )}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {t(
+                'accounts.filters.overrideUntrusted',
+                'These headers are set by the sender and are not verified. Changing this list only affects newly archived messages until the index is rebuilt.'
+              )}
+            </p>
+
+            <div className="space-y-2">
+              {overrideHeaders.length > 0 ? (
+                overrideHeaders.map((header) => (
+                  <div key={header} className="flex items-center gap-2">
+                    <div className="flex-1 rounded-md border bg-muted/50 px-3 py-1.5 text-sm font-mono">
+                      {header}
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 shrink-0"
+                      onClick={() => removeOverrideHeader(header)}
+                    >
+                      <span className="text-muted-foreground">&#x2715;</span>
+                    </Button>
+                  </div>
+                ))
+              ) : (
+                <p className="text-xs text-muted-foreground italic">
+                  {t('accounts.filters.noOverrideHeaders', 'No headers configured.')}
+                </p>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Input
+                className="h-8 text-sm max-w-[260px]"
+                placeholder="X-AnonAddy-Original-Sender"
+                value={newOverrideHeader}
+                onChange={(e) => setNewOverrideHeader(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAddOverrideHeader();
+                  }
+                }}
+              />
+              <Button
+                variant="outline"
+                type="button"
+                size="sm"
+                className="h-8 text-xs"
+                onClick={handleAddOverrideHeader}
+              >
+                <Plus className="h-3 w-3 mr-1" />
+                {t('accounts.filters.addHeader')}
+              </Button>
+            </div>
+
+            <div className="flex flex-wrap gap-1.5">
+              {SUGGESTED_OVERRIDE_HEADERS.filter(
+                (h) => !overrideHeaders.some((v) => v.toLowerCase() === h.toLowerCase())
+              ).map((header) => (
+                <button
+                  key={header}
+                  type="button"
+                  className="inline-flex items-center rounded-full border bg-background px-2.5 py-0.5 text-xs font-mono text-muted-foreground hover:text-foreground hover:border-primary/50 transition-colors"
+                  onClick={() => addOverrideHeader(header)}
+                >
+                  + {header}
+                </button>
+              ))}
+            </div>
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
     </div>
   );
 

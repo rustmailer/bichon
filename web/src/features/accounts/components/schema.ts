@@ -177,6 +177,7 @@ export const getAccountSchema = (isEdit: boolean, t: (key: string) => string) =>
       ),
     archive_rules: archiveRulesSchema(t).optional(),
     extraction_rules: extractionRulesSchema(t).optional(),
+    override_from_headers: z.array(nonEmptyRuleItem(t)).optional(),
     retention_days: z
       .number({
         invalid_type_error: t('validation.retentionDaysMustBeNumber'),

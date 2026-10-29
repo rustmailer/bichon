@@ -599,6 +599,12 @@ pub struct Account {
     /// `None` = extract everything (backward compatible).
     #[serde(default)]
     pub extraction_rules: Option<ExtractionRules>,
+    /// Ordered header names checked at ingest. The first one that parses to a
+    /// valid mailbox replaces the stored `from` address; the original address
+    /// is kept in `wire_from`. `None` = disabled, and it is also what every
+    /// account written before this field existed deserializes to.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub override_from_headers: Option<Vec<String>>,
     /// Account-level retention period in days (free/community feature).
     /// `None` or `0` = disabled (archive everything, never auto-purge).
     /// A background sweep purges envelopes whose effective date
@@ -730,6 +736,7 @@ impl Account {
             deleting: false,
             archive_rules: request.archive_rules,
             extraction_rules: request.extraction_rules,
+            override_from_headers: request.override_from_headers,
             retention_days: request.retention_days,
             remote_cleanup: request.remote_cleanup,
             legal_hold: false,
@@ -1312,6 +1319,21 @@ impl Account {
         if request.clear_archive_rules == Some(true) {
             new.archive_rules = None;
         }
+        if request.override_from_headers.is_some() {
+            new.override_from_headers =
+                crate::account::payload::normalize_override_from_headers(
+                    &request.override_from_headers,
+                )
+                .map_err(|e| {
+                    raise_error!(
+                        format!("override_from_headers: {e}"),
+                        ErrorCode::InvalidParameter
+                    )
+                })?;
+        }
+        if request.clear_override_from_headers == Some(true) {
+            new.override_from_headers = None;
+        }
         if request.clear_extraction_rules == Some(true) {
             new.extraction_rules = None;
         }
@@ -1891,6 +1913,7 @@ mod tests {
             download_schedule: None,
             archive_rules: None,
             extraction_rules: None,
+            override_from_headers: None,
             retention_days: None,
             remote_cleanup: None,
             kind: None,

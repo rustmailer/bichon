@@ -2858,6 +2858,16 @@ fn rebuild_envelope_doc(
             new_doc.add_text(f.f_from_text_tri, s);
         }
     }
+    // The stored name/original address are copied by the generic loop above;
+    // their searchable copies have to be rebuilt like `from`.
+    for field in [f.f_from_name, f.f_wire_from] {
+        for val in old_doc.get_all(field) {
+            if let Some(s) = val.as_str() {
+                new_doc.add_text(f.f_from_text, s);
+                new_doc.add_text(f.f_from_text_tri, s);
+            }
+        }
+    }
     for val in old_doc.get_all(f.f_to) {
         if let Some(s) = val.as_str() {
             new_doc.add_text(f.f_to_text, s);
@@ -4173,6 +4183,7 @@ mod tests {
             download_schedule: None,
             archive_rules: None,
             extraction_rules: None,
+            override_from_headers: None,
             retention_days: None,
             remote_cleanup: None,
             kind: None,

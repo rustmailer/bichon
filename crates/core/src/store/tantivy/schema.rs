@@ -28,8 +28,9 @@ use crate::store::tantivy::fields::{
     F_ATTACHMENT_NAME_EXACT, F_ATTACHMENT_NAME_TEXT, F_ATTACHMENT_NAME_TEXT_TRI, F_AUTO_TAGS,
     F_BCC, F_BCC_TEXT, F_BCC_TEXT_TRI, F_BODY, F_CC, F_CC_TEXT, F_CC_TEXT_TRI, F_CLEANUP_MOVED,
     F_CONTENT_HASH,
-    F_DATE, F_ENVELOPE_ID, F_FROM, F_FROM_TEXT, F_FROM_TEXT_TRI, F_HAS_TEXT, F_ID, F_IMAP_UID,
-    F_INGEST_AT, F_INTERNAL_DATE, F_IS_INDEXED, F_IS_MESSAGE, F_IS_OCR, F_MAILBOX_ID, F_MESSAGE_ID,
+    F_DATE, F_ENVELOPE_ID, F_FROM, F_FROM_NAME, F_FROM_TEXT, F_FROM_TEXT_TRI, F_HAS_TEXT, F_ID,
+    F_IMAP_UID, F_INGEST_AT, F_INTERNAL_DATE, F_IS_INDEXED, F_IS_MESSAGE, F_IS_OCR, F_MAILBOX_ID,
+    F_MESSAGE_ID, F_WIRE_FROM,
     F_NAME_EXACT,
     F_NAME_TEXT, F_NAME_TEXT_TRI, F_PAGE_COUNT, F_PREVIEW, F_REGULAR_ATTACHMENT_COUNT, F_SHARD_ID,
     F_SIZE, F_SUBJECT, F_SUBJECT_TRI, F_TAGS, F_TEXT, F_THREAD_ID, F_TO, F_TO_TEXT, F_TO_TEXT_TRI,
@@ -147,6 +148,11 @@ impl EmailSchema {
         // the wrong columns. STORED is what lets `rebuild_envelope_doc` and
         // `bichon-admin reindex` carry the flag forward.
         let f_cleanup_moved = b.add_bool_field(F_CLEANUP_MOVED, INDEXED | STORED | FAST);
+        // New fields are appended after everything that already existed: the
+        // field id is its position, so inserting earlier would shift them.
+        // STORED only — `from_text` carries the searchable copy.
+        let f_from_name = b.add_text_field(F_FROM_NAME, STORED);
+        let f_wire_from = b.add_text_field(F_WIRE_FROM, STORED);
 
         let fields = EmailFields {
             f_id,
@@ -190,6 +196,8 @@ impl EmailSchema {
             f_tags,
             f_shard_id,
             f_cleanup_moved,
+            f_from_name,
+            f_wire_from,
         };
 
         (b.build(), fields)
@@ -234,6 +242,9 @@ impl AttachmentSchema {
         let f_name_exact = b.add_text_field(F_NAME_EXACT, STRING | STORED);
         let f_tags = b.add_facet_field(F_TAGS, FacetOptions::default().set_stored());
         let f_auto_tags = b.add_facet_field(F_AUTO_TAGS, FacetOptions::default().set_stored());
+        // Appended last, like the email schema: see the comment there.
+        let f_from_name = b.add_text_field(F_FROM_NAME, STORED);
+        let f_wire_from = b.add_text_field(F_WIRE_FROM, STORED);
 
         let fields = AttachmentFields {
             f_id,
@@ -264,6 +275,8 @@ impl AttachmentSchema {
             f_name_exact,
             f_tags,
             f_auto_tags,
+            f_from_name,
+            f_wire_from,
         };
 
         (b.build(), fields)

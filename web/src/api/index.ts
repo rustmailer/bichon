@@ -38,6 +38,10 @@ export interface EmailEnvelope {
   subject: string;
   preview: string;
   from: string;
+  /** Display name paired with `from`, when the message carried one. */
+  from_name?: string;
+  /** Original From address when an account header rule replaced `from`. */
+  wire_from?: string;
   to: string[];
   cc: string[];
   bcc: string[];

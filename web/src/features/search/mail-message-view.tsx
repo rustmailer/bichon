@@ -27,7 +27,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from '@/hooks/use-toast';
-import { cn, formatBytes } from '@/lib/utils';
+import { cn, formatBytes, formatSender } from '@/lib/utils';
 import { copyToClipboard } from '@/lib/clipboard';
 import EmailIframe from '@/components/mail-iframe';
 import {
@@ -52,6 +52,8 @@ interface MailMessageViewProps {
     id: string;
     account_id: number,
     from?: string;
+    from_name?: string;
+    wire_from?: string;
     to?: string[];
     cc?: string[];
     bcc?: string[];
@@ -420,8 +422,19 @@ export function MailMessageView({
               </div>
               <div className="mt-0.5 flex items-baseline gap-2 text-[11px] text-muted-foreground">
                 {envelope.from && (
-                  <span className="min-w-0 truncate" title={envelope.from}>
-                    {envelope.from}
+                  <span
+                    className="min-w-0 truncate"
+                    title={envelope.wire_from ? `via ${envelope.wire_from}` : envelope.from}
+                  >
+                    {formatSender(envelope.from_name, envelope.from)}
+                  </span>
+                )}
+                {envelope.wire_from && (
+                  <span
+                    className="min-w-0 truncate text-[10px] text-muted-foreground/70"
+                    title={`Original From: ${envelope.wire_from}`}
+                  >
+                    via {envelope.wire_from}
                   </span>
                 )}
                 {envelope.internal_date && (

@@ -33,13 +33,17 @@
 //! is unreadable, an I/O error) still abort, and the partial `.rebuild` dirs are
 //! cleaned up; the live dirs are untouched until the final swap.
 
+use std::collections::HashMap;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use bichon_blob::{Codec, Config, Engine, Error as BlobError};
 use bichon_core::{
+    account::migration::AccountModel,
     archive::imap::stable_uid::AccountUidAssigner,
+    database::MemDbModel,
+    envelope::extractor::{resolve_sender, ResolvedSender},
     error::{code::ErrorCode, BichonResult},
     ext::text_extractor,
     message::content::AttachmentInfo,
@@ -367,6 +371,11 @@ fn execute(
     };
 
     // ── Phases A + B, building into the temp `.new` root. ──
+    // The rebuild re-evaluates each message's stored sender against the
+    // account's current header rules, so those rules are read up front. The
+    // database handle is dropped here: the wrap-up reopens it to persist UID
+    // counters, and only one handle may exist at a time.
+    let account_headers = load_account_headers(root)?;
     let mut uids = AccountUidAssigner::new();
     let mut report = match run_phases(
         old_email.as_ref(),
@@ -374,6 +383,7 @@ fn execute(
         &new_envelope,
         &new_attachment,
         blobs,
+        &account_headers,
         args.skip_attachment_text,
         &mut skip,
         &mut uids,
@@ -520,6 +530,27 @@ fn execute(
     Ok(0)
 }
 
+/// Read every account's `override_from_headers` before the rebuild starts.
+///
+/// The handle is dropped when this returns; the wrap-up opens the same database
+/// again to persist UID counters, and `MemDb` owns the directory while open.
+fn load_account_headers(root: &Path) -> BichonResult<HashMap<u64, Option<Vec<String>>>> {
+    let db = bichon_core::admin::meta::open_database(root.join("memdb"))?;
+    let accounts: Vec<AccountModel> = db
+        .collection(AccountModel::collection())
+        .list_all()
+        .map_err(|e| {
+            raise_error!(
+                format!("cannot read accounts from memdb: {e:#?}"),
+                ErrorCode::InternalError
+            )
+        })?;
+    Ok(accounts
+        .into_iter()
+        .map(|account| (account.id, account.override_from_headers))
+        .collect())
+}
+
 /// Run both rebuild phases and accumulate the report.
 fn run_phases(
     old_email: Option<&OldIndex>,
@@ -527,6 +558,7 @@ fn run_phases(
     email_target: &Path,
     attach_target: &Path,
     blobs: &Engine,
+    account_headers: &HashMap<u64, Option<Vec<String>>>,
     skip_text: bool,
     skip: &mut SkipReport,
     uids: &mut AccountUidAssigner,
@@ -544,6 +576,7 @@ fn run_phases(
             &of,
             email_target,
             blobs,
+            account_headers,
             &pb,
             skip,
             uids,
@@ -572,6 +605,7 @@ fn run_phases(
             email_ctx.as_ref().map(|(s, f)| (*s, f)),
             attach_target,
             blobs,
+            account_headers,
             skip_text,
             &pb,
             skip,
@@ -677,6 +711,10 @@ struct OldEmailFields {
     attachments: Field,
     tags: Field,
     shard_id: Field,
+    /// Absent before index format 4; the rebuild recomputes both from the raw
+    /// message, so a missing field is not an error.
+    from_name: Option<Field>,
+    wire_from: Option<Field>,
 }
 
 impl OldEmailFields {
@@ -715,6 +753,8 @@ impl OldEmailFields {
             attachments: g("attachments")?,
             tags: g("tags")?,
             shard_id: g("shard_id")?,
+            from_name: schema.get_field("from_name").ok(),
+            wire_from: schema.get_field("wire_from").ok(),
         })
     }
 }
@@ -742,6 +782,10 @@ struct OldAttachmentFields {
     name_exact: Field,
     tags: Field,
     auto_tags: Field,
+    /// Absent before index format 4; recomputed from the parent email when
+    /// possible, otherwise carried from the old document.
+    from_name: Option<Field>,
+    wire_from: Option<Field>,
 }
 
 impl OldAttachmentFields {
@@ -777,6 +821,8 @@ impl OldAttachmentFields {
             name_exact: g("name_exact")?,
             tags: g("tags")?,
             auto_tags: g("auto_tags")?,
+            from_name: schema.get_field("from_name").ok(),
+            wire_from: schema.get_field("wire_from").ok(),
         })
     }
 }
@@ -790,6 +836,7 @@ fn rebuild_email(
     of: &OldEmailFields,
     rebuild_dir: &Path,
     blobs: &Engine,
+    account_headers: &HashMap<u64, Option<Vec<String>>>,
     pb: &ProgressBar,
     skip: &mut SkipReport,
     uids: &mut AccountUidAssigner,
@@ -819,7 +866,7 @@ fn rebuild_email(
     // Memoize the last content_hash → body (`None` = blob missing). Deduplicated
     // messages share a hash, so this avoids re-fetching; a memo hit still reports
     // a missing body per document, so the report stays complete.
-    let mut last_body: Option<(String, Option<String>)> = None;
+    let mut last_body: Option<((u64, String), Option<(String, ResolvedSender)>)> = None;
 
     for seg in old_searcher.segment_readers() {
         let seg_id = seg.segment_id().uuid_string();
@@ -879,17 +926,34 @@ fn rebuild_email(
                 envelope.imap_uid = uids.assign(envelope.account_id)?;
             }
 
-            let body = match &last_body {
-                Some((h, b)) if h == &envelope.content_hash => b.clone(),
+            // Recompute the stored sender from the raw message with the
+            // account's *current* rule list. The old document only carries the
+            // value produced at ingest time, which is exactly what a reindex
+            // must not trust when the configuration has changed.
+            let cache_key = (envelope.account_id, envelope.content_hash.clone());
+            let content = match &last_body {
+                Some((k, v)) if k == &cache_key => v.clone(),
                 _ => {
-                    let b = extract_body(blobs, &envelope.content_hash);
-                    last_body = Some((envelope.content_hash.clone(), b.clone()));
-                    b
+                    let headers = account_headers
+                        .get(&envelope.account_id)
+                        .and_then(|h| h.as_deref());
+                    let v = extract_content(blobs, &envelope.content_hash, headers);
+                    last_body = Some((cache_key, v.clone()));
+                    v
                 }
             };
-            let body = match body {
-                Some(b) => b,
+            let body = match content {
+                Some((body, sender)) => {
+                    envelope.from = sender
+                        .address
+                        .unwrap_or_else(|| "unknown".to_string());
+                    envelope.from_name = sender.name;
+                    envelope.wire_from = sender.wire_from;
+                    body
+                }
                 None => {
+                    // Keep the old sender fields: without the blob there is
+                    // nothing to re-derive them from.
                     stats.empty_bodies += 1;
                     warn!(hash = %envelope.content_hash, "blob missing, leaving body empty");
                     skip.record(skip_record(
@@ -967,6 +1031,7 @@ fn rebuild_attachments(
     email_ctx: Option<(&Searcher, &OldEmailFields)>,
     rebuild_dir: &Path,
     blobs: &Engine,
+    account_headers: &HashMap<u64, Option<Vec<String>>>,
     skip_text: bool,
     pb: &ProgressBar,
     skip: &mut SkipReport,
@@ -994,6 +1059,9 @@ fn rebuild_attachments(
     let extract = !skip_text && !text_extractor::is_noop();
     let mut stats = PhaseStats::default();
     let mut processed = 0u64;
+    // Attachments of one message are usually adjacent; a one-entry cache keeps
+    // the parent lookup + blob parse out of the hot path.
+    let mut last_sender: Option<((u64, String), Option<ResolvedSender>)> = None;
 
     for seg in old_searcher.segment_readers() {
         let seg_id = seg.segment_id().uuid_string();
@@ -1040,6 +1108,29 @@ fn rebuild_attachments(
                     continue;
                 }
             };
+
+            // Keep the attachment's sender in step with its parent envelope:
+            // re-derive it from the parent's raw message and current rules.
+            if let Some((account_id, content_hash)) = parent_email_meta(email_ctx, &model.envelope_id)
+            {
+                let key = (account_id, content_hash);
+                let sender = match &last_sender {
+                    Some((k, v)) if k == &key => v.clone(),
+                    _ => {
+                        let headers = account_headers.get(&account_id).and_then(|h| h.as_deref());
+                        let v = extract_content(blobs, &key.1, headers).map(|(_, s)| s);
+                        last_sender = Some((key, v.clone()));
+                        v
+                    }
+                };
+                if let Some(sender) = sender {
+                    model.from = sender
+                        .address
+                        .unwrap_or_else(|| "unknown".to_string());
+                    model.from_name = sender.name;
+                    model.wire_from = sender.wire_from;
+                }
+            }
 
             if extract {
                 match reextract_attachment_text(email_ctx, &model, blobs) {
@@ -1131,6 +1222,23 @@ fn reextract_attachment_text(
     text_extractor::extract_text(&model.content_type, &ext, &bytes)
 }
 
+/// Locate the parent email document and return its `(account_id, content_hash)`.
+/// Used to re-derive an attachment's sender from the message it belongs to.
+fn parent_email_meta(
+    email_ctx: Option<(&Searcher, &OldEmailFields)>,
+    envelope_id: &str,
+) -> Option<(u64, String)> {
+    let (email_searcher, of) = email_ctx?;
+    let term = Term::from_field_text(of.id, envelope_id);
+    let query = TermQuery::new(term, IndexRecordOption::Basic);
+    let hits = email_searcher
+        .search(&query, &TopDocs::with_limit(1).order_by_score())
+        .ok()?;
+    let (_, addr) = hits.first()?;
+    let doc: TantivyDocument = email_searcher.doc(*addr).ok()?;
+    Some((opt_u64(&doc, of.account_id)?, opt_str(&doc, of.content_hash)?))
+}
+
 /// Point-lookup the parent email → parse its f_attachments JSON → match by
 /// content_hash → fetch the blob.
 fn parent_attachment_bytes(
@@ -1196,6 +1304,8 @@ fn envelope_from_old_doc(
         subject: req_str(doc, of.subject, "subject")?,
         preview: opt_str(doc, of.preview).unwrap_or_default(),
         from: req_str(doc, of.from, "from")?,
+        from_name: of.from_name.and_then(|f| opt_str(doc, f)),
+        wire_from: of.wire_from.and_then(|f| opt_str(doc, f)),
         to: vec_str(doc, of.to),
         cc: vec_str(doc, of.cc),
         bcc: vec_str(doc, of.bcc),
@@ -1244,6 +1354,8 @@ fn attachment_from_old_doc(
         subject: req_str(doc, af.subject, "subject")?,
         content_hash: req_str(doc, af.content_hash, "content_hash")?,
         from: req_str(doc, af.from, "from")?,
+        from_name: af.from_name.and_then(|f| opt_str(doc, f)),
+        wire_from: af.wire_from.and_then(|f| opt_str(doc, f)),
         date: req_i64(doc, af.date, "date")?,
         ingest_at: req_i64(doc, af.ingest_at, "ingest_at")?,
         size: req_u64(doc, af.size, "size")?,
@@ -1448,7 +1560,16 @@ fn hex_to_key(hex: &str) -> BichonResult<[u8; 32]> {
     Ok(key)
 }
 
-fn extract_body(blobs: &Engine, content_hash: &str) -> Option<String> {
+/// Rebuild the body text and the stored sender from the raw message blob.
+///
+/// The sender is resolved with the account's current header rules, which is
+/// what lets a reindex apply a newly configured (or changed) rule to mail that
+/// was archived before the rule existed.
+fn extract_content(
+    blobs: &Engine,
+    content_hash: &str,
+    override_headers: Option<&[String]>,
+) -> Option<(String, ResolvedSender)> {
     let key = hex_to_key(content_hash).ok()?;
     let bytes = blobs.get(&key).ok()??;
     let message = MessageParser::new().parse(&bytes)?;
@@ -1457,7 +1578,11 @@ fn extract_body(blobs: &Engine, content_hash: &str) -> Option<String> {
         .map(|cow| cow.into_owned())
         .or_else(|| message.body_html(0).map(|cow| extract_text(cow.into_owned())))
         .unwrap_or_default();
-    Some(text.split_whitespace().collect::<Vec<_>>().join(" "))
+    let sender = resolve_sender(&message, override_headers);
+    Some((
+        text.split_whitespace().collect::<Vec<_>>().join(" "),
+        sender,
+    ))
 }
 
 // ─── wrap-up helpers ──────────────────────────────────────────────────────────
