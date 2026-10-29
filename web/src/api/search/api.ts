@@ -41,8 +41,15 @@ export const update_tags = async (data: Record<string, any>) => {
 };
 
 
+/** One entry of the contact suggestion list. `name` is only known for
+ *  addresses that arrived as a sender with a decoded display name. */
+export interface Contact {
+    email: string;
+    name?: string;
+}
+
 export const get_contacts = async () => {
-    const response = await axiosInstance.get<string[]>("api/v1/all-contacts");
+    const response = await axiosInstance.get<Contact[]>("api/v1/all-contacts");
     return response.data;
 }
 

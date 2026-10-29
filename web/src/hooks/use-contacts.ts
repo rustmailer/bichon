@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { get_contacts } from '@/api/search/api';
+import { Contact, get_contacts } from '@/api/search/api';
 
 export const useContacts = (searchTerm: string = "") => {
     const { data: allContacts = [], isLoading, isError } = useQuery({
@@ -11,10 +11,13 @@ export const useContacts = (searchTerm: string = "") => {
     });
 
     const filtered = useMemo(() => {
-        if (!searchTerm) return allContacts;
-        const lower = searchTerm.toLowerCase();
-        return allContacts.filter(email =>
-            email.toLowerCase().includes(lower)
+        const term = searchTerm.trim().toLowerCase();
+        if (!term) return allContacts;
+        // Match the display name too: users look for "Alice", not necessarily
+        // the address behind it.
+        return allContacts.filter((contact: Contact) =>
+            contact.email.toLowerCase().includes(term) ||
+            (contact.name ?? '').toLowerCase().includes(term)
         );
     }, [allContacts, searchTerm]);
 

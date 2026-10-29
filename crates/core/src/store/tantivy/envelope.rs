@@ -48,7 +48,7 @@ use crate::{
                 F_ACCOUNT_ID, F_DATE, F_FROM, F_ID, F_INGEST_AT, F_INTERNAL_DATE,
                 F_REGULAR_ATTACHMENT_COUNT, F_SIZE, F_TAGS, F_THREAD_ID, F_UID,
             },
-            model::{extract_contacts, EnvelopeWithAttachments},
+            model::{extract_contacts, merge_contact, EnvelopeWithAttachments},
             schema::SchemaTools,
             tokenizers::{
                 any_term_parser, text_parser, tri_analyzer, word_or_tri, word_or_tri_any,
@@ -1938,7 +1938,7 @@ impl IndexManager {
     pub fn get_all_contacts(
         &self,
         accounts: Option<HashSet<u64>>,
-    ) -> BichonResult<HashSet<String>> {
+    ) -> BichonResult<HashMap<String, Option<String>>> {
         let searcher = self.create_searcher()?;
 
         let query: Box<dyn Query> = match accounts {
@@ -1957,7 +1957,7 @@ impl IndexManager {
             None => Box::new(AllQuery),
         };
 
-        let mut contacts_set: HashSet<String> = HashSet::new();
+        let mut contacts_set: HashMap<String, Option<String>> = HashMap::new();
 
         let top_docs = searcher
             .search(&query, &TopDocs::with_limit(1_000_000).order_by_score())
@@ -1967,9 +1967,8 @@ impl IndexManager {
             let doc: TantivyDocument = searcher
                 .doc(doc_address)
                 .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;
-            let contacts = extract_contacts(&doc)?;
-            for value in contacts {
-                contacts_set.insert(value);
+            for (address, name) in extract_contacts(&doc)? {
+                merge_contact(&mut contacts_set, address, name);
             }
         }
         Ok(contacts_set)

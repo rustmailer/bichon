@@ -34,8 +34,24 @@ interface Props {
   emptyMessage?: string
 }
 
-/** First two letters of the sender's local part, e.g. `john.doe@x` -> `JO`. */
-function avatarInitials(from: string | undefined): string {
+/** Avatar initials from the sender's display name when the archive has one:
+ *  `John Doe` -> `JD`, `John` -> `JO`, `张三` -> `张三`. Falls back to the
+ *  address' local part when there is no name. */
+function avatarInitials(
+  fromName: string | undefined,
+  from: string | undefined
+): string {
+  const words = (fromName ?? '').trim().split(/\s+/).filter(Boolean)
+  if (words.length > 0) {
+    const letters =
+      words.length === 1
+        ? Array.from(words[0]).slice(0, 2).join('')
+        : words
+            .slice(0, 2)
+            .map((word) => Array.from(word)[0])
+            .join('')
+    if (letters.trim()) return letters.toUpperCase()
+  }
   const local = (from ?? '').split('@')[0] ?? ''
   const letters = local.replace(/[^a-zA-Z0-9]/g, '')
   return letters.slice(0, 2).toUpperCase() || '?'
@@ -127,7 +143,7 @@ export function MessageList({
                   className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold"
                   style={avatarStyle(envelope.from)}
                 >
-                  {avatarInitials(envelope.from)}
+                  {avatarInitials(envelope.from_name, envelope.from)}
                 </span>
 
                 <span className="min-w-0 flex-1 overflow-hidden">

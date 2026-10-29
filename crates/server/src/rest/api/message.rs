@@ -30,6 +30,7 @@ use bichon_core::message::attachment::retrieve_attachment_content;
 use bichon_core::message::attachment::retrieve_nested_attachment_content;
 use bichon_core::message::content::retrieve_nested_eml_content;
 use bichon_core::message::content::FullNestedMessageContent;
+use bichon_core::message::contacts::Contact;
 use bichon_core::message::content::{retrieve_email_content, FullMessageContent};
 use bichon_core::message::delete::{
     delete_messages_impl, emit_delete_audit, plan_delete_audit,
@@ -50,7 +51,6 @@ use poem_openapi::param::{Path, Query};
 use poem_openapi::payload::{Attachment, AttachmentType, Json};
 use poem_openapi::OpenApi;
 use std::collections::HashMap;
-use std::collections::HashSet;
 
 pub struct MessageApi;
 
@@ -606,19 +606,21 @@ impl MessageApi {
         Ok(())
     }
 
-    /// Retrieves a unique list of all contact email addresses across authorized accounts.
+    /// Retrieves the contact addresses visible to the caller, each with the
+    /// sender display name the archive recorded for it (when known).
     #[oai(
         path = "/all-contacts",
         method = "get",
         operation_id = "get_all_contacts"
     )]
-    async fn get_all_contacts(&self, context: WrappedContext) -> ApiResult<Json<HashSet<String>>> {
+    async fn get_all_contacts(&self, context: WrappedContext) -> ApiResult<Json<Vec<Contact>>> {
         // Views are expanded, and a filtered source is sampled rather than
-        // aggregated — see `contacts_in_scope`, which the MCP tool calls too so
-        // the two cannot answer differently.
-        Ok(Json(bichon_core::message::search::contacts_in_scope(
-            &context,
-        )?))
+        // aggregated — see `contact_suggestions_in_scope`, which shares its
+        // scope logic with `contacts_in_scope` (the MCP tool's address-only
+        // view), so the two cannot answer differently.
+        Ok(Json(
+            bichon_core::message::search::contact_suggestions_in_scope(&context)?,
+        ))
     }
 }
 

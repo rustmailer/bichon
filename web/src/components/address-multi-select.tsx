@@ -26,10 +26,11 @@
 // Selected addresses are shown **first** in the list — including ones that are
 // not in the contact list (free text) or that the current search would filter
 // out — so removing a choice never requires clearing the search box first.
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Check, Plus, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useContacts } from '@/hooks/use-contacts'
+import type { Contact } from '@/api/search/api'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import {
   Command,
@@ -66,6 +67,18 @@ export function AddressMultiSelect({
   // but not matching the current search still render (they stay at the top).
   const { contacts, isLoading, isError } = useContacts('')
 
+  // Display names are only known for senders, and only in the contact list —
+  // a free-text address has none.
+  const nameByEmail = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const contact of contacts) {
+      if (contact.name) map.set(contact.email.toLowerCase(), contact.name)
+    }
+    return map
+  }, [contacts])
+  const displayName = (email: string) =>
+    nameByEmail.get(email.toLowerCase()) ?? email.split('@')[0]
+
   const toggle = (email: string) => {
     const address = email.trim()
     if (!address) return
@@ -78,8 +91,11 @@ export function AddressMultiSelect({
 
   const typed = search.trim()
   const lower = typed.toLowerCase()
-  const matchesSearch = (email: string) =>
-    !lower || email.toLowerCase().includes(lower)
+  // Address or display name: users look for "Alice", not always the address.
+  const matchesSearch = (contact: Contact) =>
+    !lower ||
+    contact.email.toLowerCase().includes(lower) ||
+    (contact.name ?? '').toLowerCase().includes(lower)
 
   const isSelected = (email: string) =>
     value.some((v) => v.toLowerCase() === email.toLowerCase())
@@ -88,13 +104,13 @@ export function AddressMultiSelect({
   // contact list — then the unselected contacts matching the search.
   const selectedRows = value
   const candidateRows = contacts
-    .filter((email) => !isSelected(email) && matchesSearch(email))
+    .filter((contact) => !isSelected(contact.email) && matchesSearch(contact))
     .slice(0, MAX_CANDIDATES)
 
   const canAddTyped =
     typed.includes('@') &&
     !isSelected(typed) &&
-    !contacts.some((c) => c.toLowerCase() === lower)
+    !contacts.some((c) => c.email.toLowerCase() === lower)
 
   // A field with ten addresses would otherwise grow its row without bound.
   const visibleChips = value.slice(0, VISIBLE_CHIPS)
@@ -188,7 +204,7 @@ export function AddressMultiSelect({
                   className='flex items-center justify-between gap-3 py-2 text-xs'
                 >
                   <div className='flex min-w-0 flex-col'>
-                    <span className='font-medium'>{email.split('@')[0]}</span>
+                    <span className='font-medium'>{displayName(email)}</span>
                     <span className='max-w-[220px] truncate text-xs text-muted-foreground'>
                       {email}
                     </span>
@@ -199,17 +215,17 @@ export function AddressMultiSelect({
               {selectedRows.length > 0 && candidateRows.length > 0 && (
                 <CommandSeparator />
               )}
-              {candidateRows.map((email) => (
+              {candidateRows.map((contact) => (
                 <CommandItem
-                  key={email}
-                  value={email}
-                  onSelect={() => toggle(email)}
+                  key={contact.email}
+                  value={contact.email}
+                  onSelect={() => toggle(contact.email)}
                   className='flex items-center justify-between gap-3 py-2 text-xs'
                 >
                   <div className='flex min-w-0 flex-col'>
-                    <span className='font-medium'>{email.split('@')[0]}</span>
+                    <span className='font-medium'>{displayName(contact.email)}</span>
                     <span className='max-w-[220px] truncate text-xs text-muted-foreground'>
-                      {email}
+                      {contact.email}
                     </span>
                   </div>
                 </CommandItem>

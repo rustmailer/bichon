@@ -18,17 +18,20 @@
 
 //use poem_openapi::{Enum, Object};
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use crate::{
     common::auth::ClientContext,
     common::paginated::DataPage,
     error::{code::ErrorCode, BichonResult},
+    message::contacts::Contact,
     raise_error,
     store::{
         envelope::Envelope,
         tantivy::{
-            attachment::ATTACHMENT_MANAGER, envelope::ENVELOPE_MANAGER, model::AttachmentModel,
+            attachment::ATTACHMENT_MANAGER,
+            envelope::ENVELOPE_MANAGER,
+            model::{merge_contact, AttachmentModel},
         },
     },
 };
@@ -316,12 +319,14 @@ pub fn search_attachment_scoped(
     )
 }
 
-/// The contact addresses a caller can see — the search UI's suggestion list.
+/// The contact addresses a caller can see, without display names.
+///
+/// This address-only view is what the MCP tool exposes; the REST suggestion
+/// endpoint uses [`contact_suggestions_in_scope`] instead. Both share
+/// `contacts_by_address`, so the scope rules below cannot drift apart.
 ///
 /// Views are expanded, because a view owns no documents: aggregating by the
-/// caller's account ids alone returned an empty list to every viewer. One
-/// implementation for the REST endpoint and the MCP tool, so the two cannot
-/// answer differently.
+/// caller's account ids alone returned an empty list to every viewer.
 ///
 /// * An **unfiltered** source is aggregated straight from the index.
 /// * A **filtered** source is sampled instead (the most recent matching
@@ -330,12 +335,35 @@ pub fn search_attachment_scoped(
 ///   suggested. This is a suggestion list, not a completeness claim — which is
 ///   why sampling is acceptable here and would not be in a search result.
 pub fn contacts_in_scope(context: &ClientContext) -> BichonResult<HashSet<String>> {
+    Ok(contacts_by_address(context)?.into_keys().collect())
+}
+
+/// The search UI's contact suggestions: every visible address paired with the
+/// sender display name the archive recorded for it, sorted by address so the
+/// picker's order is stable between calls.
+pub fn contact_suggestions_in_scope(context: &ClientContext) -> BichonResult<Vec<Contact>> {
+    let mut contacts: Vec<Contact> = contacts_by_address(context)?
+        .into_iter()
+        .map(|(email, name)| Contact { email, name })
+        .collect();
+    contacts.sort_by(|a, b| a.email.to_lowercase().cmp(&b.email.to_lowercase()));
+    Ok(contacts)
+}
+
+/// Every visible address with its display name, when one is known.
+///
+/// Only senders carry a name (`from_name`); recipients contribute a bare
+/// address. The same address seen as a recipient in one message and as a
+/// sender in another keeps the name — see [`merge_contact`].
+fn contacts_by_address(
+    context: &ClientContext,
+) -> BichonResult<HashMap<String, Option<String>>> {
     let Some(groups) = crate::account::access::search_scope(context, None)? else {
         // Unrestricted reader: every account.
         return ENVELOPE_MANAGER.get_all_contacts(None);
     };
 
-    let mut contacts: HashSet<String> = HashSet::new();
+    let mut contacts: HashMap<String, Option<String>> = HashMap::new();
 
     let unbounded: HashSet<u64> = groups
         .iter()
@@ -343,7 +371,9 @@ pub fn contacts_in_scope(context: &ClientContext) -> BichonResult<HashSet<String
         .map(|group| group.account_id)
         .collect();
     if !unbounded.is_empty() {
-        contacts.extend(ENVELOPE_MANAGER.get_all_contacts(Some(unbounded))?);
+        for (address, name) in ENVELOPE_MANAGER.get_all_contacts(Some(unbounded))? {
+            merge_contact(&mut contacts, address, name);
+        }
     }
 
     const CONTACT_SAMPLE: u64 = 2_000;
@@ -365,15 +395,15 @@ pub fn contacts_in_scope(context: &ClientContext) -> BichonResult<HashSet<String
 }
 
 /// Collect every address that appears in an envelope's participant headers.
-fn collect_contacts(envelope: &Envelope, out: &mut HashSet<String>) {
-    for address in std::iter::once(&envelope.from)
-        .chain(envelope.to.iter())
+fn collect_contacts(envelope: &Envelope, out: &mut HashMap<String, Option<String>>) {
+    merge_contact(out, envelope.from.clone(), envelope.from_name.clone());
+    for address in envelope
+        .to
+        .iter()
         .chain(envelope.cc.iter())
         .chain(envelope.bcc.iter())
     {
-        if !address.is_empty() {
-            out.insert(address.clone());
-        }
+        merge_contact(out, address.clone(), None);
     }
 }
 

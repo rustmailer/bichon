@@ -18,7 +18,7 @@
 
 //use poem_openapi::Object;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{hash_map::Entry, HashMap, HashSet};
 use tantivy::{
     schema::{Facet, Value},
     TantivyDocument,
@@ -394,14 +394,44 @@ fn extract_vec_string_field(
     Ok(value)
 }
 
-pub fn extract_contacts(doc: &TantivyDocument) -> BichonResult<HashSet<String>> {
-    let fields = SchemaTools::email_fields();
-    let mut all_contacts = HashSet::new();
-
-    if let Ok(from_val) = extract_string_field(doc, fields.f_from, F_FROM) {
-        if !from_val.is_empty() {
-            all_contacts.insert(from_val);
+/// Insert an address into a contact map, keeping the first display name seen
+/// for it.
+///
+/// The same address can arrive as a recipient (no name) in one message and as
+/// the sender (with `from_name`) in another, so a later named insertion
+/// upgrades an earlier bare one.
+pub fn merge_contact(
+    contacts: &mut HashMap<String, Option<String>>,
+    address: String,
+    name: Option<String>,
+) {
+    if address.is_empty() {
+        return;
+    }
+    match contacts.entry(address) {
+        Entry::Occupied(mut entry) => {
+            if entry.get().is_none() && name.is_some() {
+                *entry.get_mut() = name;
+            }
         }
+        Entry::Vacant(entry) => {
+            entry.insert(name);
+        }
+    }
+}
+
+/// Collect every address in the document's participant fields, paired with the
+/// sender's display name when the document records one.
+pub fn extract_contacts(doc: &TantivyDocument) -> BichonResult<HashMap<String, Option<String>>> {
+    let fields = SchemaTools::email_fields();
+    let mut all_contacts: HashMap<String, Option<String>> = HashMap::new();
+
+    let from_name = extract_option_string_field(doc, fields.f_from_name)
+        .ok()
+        .flatten()
+        .filter(|name| !name.is_empty());
+    if let Ok(from_val) = extract_string_field(doc, fields.f_from, F_FROM) {
+        merge_contact(&mut all_contacts, from_val, from_name);
     }
 
     let multi_fields = [fields.f_to, fields.f_cc, fields.f_bcc];
@@ -409,9 +439,7 @@ pub fn extract_contacts(doc: &TantivyDocument) -> BichonResult<HashSet<String>> 
     for field in multi_fields {
         if let Ok(vals) = extract_vec_string_field(doc, field) {
             for v in vals {
-                if !v.is_empty() {
-                    all_contacts.insert(v);
-                }
+                merge_contact(&mut all_contacts, v, None);
             }
         }
     }
@@ -641,5 +669,63 @@ mod sender_field_tests {
         for expected in ["jane@example.com", "Jane Doe", "alias@addy.io"] {
             assert!(text.contains(&expected), "from_text is missing {expected:?}");
         }
+    }
+}
+
+#[cfg(test)]
+mod contact_suggestion_tests {
+    use super::*;
+
+    /// The suggestion list pairs the sender with its display name; recipients
+    /// contribute a bare address, and an address that is both a sender and a
+    /// recipient appears once, with the name.
+    #[test]
+    fn contacts_pair_senders_with_their_display_name() {
+        let envelope = EnvelopeWithAttachments {
+            envelope: Envelope {
+                imap_uid: 1,
+                from: "jane@example.com".into(),
+                from_name: Some("Jane Doe".into()),
+                to: vec!["bob@example.com".into(), "jane@example.com".into()],
+                ..Default::default()
+            },
+            attachments: None,
+        };
+        let doc = envelope.to_document("body", 0).unwrap();
+        let contacts = extract_contacts(&doc).unwrap();
+
+        assert_eq!(
+            contacts.get("jane@example.com"),
+            Some(&Some("Jane Doe".to_string()))
+        );
+        assert_eq!(contacts.get("bob@example.com"), Some(&None));
+        assert_eq!(contacts.len(), 2, "one entry per address");
+    }
+
+    /// A later named merge upgrades a bare entry, but a different name never
+    /// overwrites the one already kept.
+    #[test]
+    fn merge_keeps_the_first_display_name() {
+        let mut contacts = HashMap::new();
+        merge_contact(&mut contacts, "jane@example.com".into(), None);
+        merge_contact(
+            &mut contacts,
+            "jane@example.com".into(),
+            Some("Jane Doe".into()),
+        );
+        assert_eq!(
+            contacts.get("jane@example.com"),
+            Some(&Some("Jane Doe".into()))
+        );
+
+        merge_contact(
+            &mut contacts,
+            "jane@example.com".into(),
+            Some("J. Doe".into()),
+        );
+        assert_eq!(
+            contacts.get("jane@example.com"),
+            Some(&Some("Jane Doe".into()))
+        );
     }
 }
