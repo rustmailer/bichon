@@ -381,7 +381,7 @@ export function MailListTable({
 
   if (isLoading) {
     return (
-      <div className="divide-y divide-border">
+      <div className="divide-y divide-border max-h-[calc(100vh-18rem)] overflow-hidden">
         {Array.from({ length: 30 }).map((_, i) => (
           <div key={i} className="flex items-center gap-2 px-2 py-1.5">
             <Skeleton className="h-3 w-3" />

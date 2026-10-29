@@ -43,7 +43,7 @@ export function DataTableToolbar<TData>({
   ])
   return (
     <div className='flex flex-col gap-1 p-1 bg-background'>
-      <div className='mb-4 flex items-center justify-center w-full'>
+      <div className='mb-2 flex items-center justify-center w-full'>
         <div className='w-full max-w-3xl'>
           <TextSearchInput />
         </div>

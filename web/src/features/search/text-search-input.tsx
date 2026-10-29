@@ -183,7 +183,7 @@ export function TextSearchInput() {
                     {t("search_input.button")}
                 </Button>
             </div>
-            <p className="mt-1 px-1 text-[10px] leading-relaxed text-muted-foreground/70">
+            <p className="mt-0.5 px-1 text-[10px] leading-relaxed text-muted-foreground/70">
                 {t("search_input.hint")}
             </p>
             {showHistory && (
