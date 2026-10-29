@@ -145,7 +145,7 @@ export function EditTagsDialog({ open, onOpenChange }: Props) {
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent aria-describedby={undefined} className="sm:max-w-md">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                         <TagIcon className="h-5 w-5" />

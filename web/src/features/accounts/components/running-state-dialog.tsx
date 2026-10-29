@@ -265,7 +265,7 @@ export function RunningStateDialog({ currentRow, open, onOpenChange }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl w-[95vw] sm:w-full p-0 flex flex-col h-[90vh] sm:h-[85vh] overflow-hidden gap-0 rounded-t-2xl sm:rounded-xl">
+      <DialogContent aria-describedby={undefined} className="max-w-5xl w-[95vw] sm:w-full p-0 flex flex-col h-[90vh] sm:h-[85vh] overflow-hidden gap-0 rounded-t-2xl sm:rounded-xl">
         <DialogHeader className="px-4 py-3 sm:px-6 sm:py-4 border-b bg-muted/20 shrink-0">
           <div className="space-y-0.5">
             <DialogTitle className="text-base sm:text-xl font-bold flex items-center gap-2 text-primary truncate">

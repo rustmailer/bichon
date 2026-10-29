@@ -222,7 +222,7 @@ export function UserActionDialog({ currentRow, open, onOpenChange }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl h-[80vh] flex flex-col p-0 overflow-hidden">
+      <DialogContent aria-describedby={undefined} className="max-w-5xl h-[80vh] flex flex-col p-0 overflow-hidden">
         <DialogHeader className="p-6 pb-0 shrink-0">
           <div className="flex items-center gap-4 mb-4">
             {isEdit && currentRow?.avatar ? (

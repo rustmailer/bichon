@@ -226,7 +226,7 @@ export default function AttachmentPreview({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
+      <DialogContent aria-describedby={undefined}
         className="w-screen h-screen max-w-none rounded-none p-0 gap-0 border-0 bg-slate-700/10"
         hideClose
         hideFullscreen

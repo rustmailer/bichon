@@ -157,7 +157,7 @@ export function NestedEmailDialog({ open, onOpenChange, accountId, envelopeId, f
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-4xl h-[90vh] flex flex-col p-0 overflow-hidden border-none shadow-2xl">
+            <DialogContent aria-describedby={undefined} className="max-w-4xl h-[90vh] flex flex-col p-0 overflow-hidden border-none shadow-2xl">
                 <div className="text-white px-4 py-3 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                         <Mail className="h-4 w-4 text-blue-400" />

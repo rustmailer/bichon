@@ -42,7 +42,7 @@ export function MailDisplayDrawer({ open, onOpenChange }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='w-full md:max-w-6xl mx-auto h-full'>
+      <DialogContent aria-describedby={undefined} className='w-full md:max-w-6xl mx-auto h-full'>
         <div className="flex flex-col h-full overflow-hidden -m-6">
           <DialogHeader className="p-4 pb-3 border-b shrink-0 m-0">
             <DialogTitle>{t('mail.emailViewer')}</DialogTitle>

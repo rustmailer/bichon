@@ -211,7 +211,7 @@ export const TokenCardList: React.FC<Props> = ({ tokens, userId }) => {
                 open={!!deleteTarget}
                 onOpenChange={(open) => !open && setDeleteTarget(null)}
             >
-                <DialogContent className="max-w-sm">
+                <DialogContent aria-describedby={undefined} className="max-w-sm">
                     <DialogHeader>
                         <DialogTitle>{t('apiTokens.deleteDialog.title')}</DialogTitle>
                     </DialogHeader>
