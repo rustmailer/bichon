@@ -123,7 +123,8 @@ Corruption is **contained** — a bad segment entry or index record produces an 
 
 - Temp files from interrupted GC are cleaned up on open.
 - Any segment data beyond `indexed_up_to_offset` is scanned and inserted into the index.
-- Partial writes at the tail of a segment (detected via CRC32 mismatch near EOF) are truncated.
+- Partial writes at the tail of a segment (detected via CRC32 mismatch or a short read near EOF) are truncated.
+- Appends that fail mid-write are rolled back to the last complete entry, so a graceful ENOSPC does not leave a torn tail in the first place.
 - redb's WAL ensures the index is always consistent — no manual reload or rebuild needed.
 
 ## Background threads
@@ -134,8 +135,14 @@ Set `Config.flush_interval_secs` and `Config.gc_interval_secs` to positive value
 |---|---|---|---|
 | `blob-flush` | `flush_interval_secs` | `0` (off) | Fsync the active segment and save metadata |
 | `blob-gc` | `gc_interval_secs` | `0` (off) | Check deleted-ratio, compact one segment if needed |
+| `blob-disk-watch` | `disk_check_interval_secs` | `0` (off) | Invoke the low-disk handler when free space drops below `min_free_bytes` |
 
-The two threads are independent — a long GC run never blocks fsync.
+The threads are independent — a long GC run never blocks fsync.
+
+The disk watchdog never terminates the process by itself. Register a handler with
+`Engine::set_low_disk_callback` to decide what happens; call
+`Engine::allow_writes_below_free_floor(true)` from that handler if draining during
+the shutdown should still be able to write into the reserve.
 
 ## Config
 
@@ -147,6 +154,8 @@ The two threads are independent — a long GC run never blocks fsync.
 | `gc_deleted_ratio` | 0.30 | Trigger GC when a sealed segment exceeds this |
 | `flush_interval_secs` | 0 | 0 = disabled; ≥ 5 for periodic background fsync |
 | `gc_interval_secs` | 0 | 0 = disabled; ≥ 10 for periodic background GC |
+| `min_free_bytes` | 0 | Free-space floor. Appends that would breach it are refused before writing; 0 = off |
+| `disk_check_interval_secs` | 0 | 0 = disabled; ≥ 5. Call `set_low_disk_callback`'s handler when free space falls below `min_free_bytes` |
 
 ## Basic usage
 

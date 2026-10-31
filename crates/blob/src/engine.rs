@@ -26,6 +26,7 @@ pub struct Engine {
     shared: Arc<EngineShared>,
     flush_handle: Mutex<Option<FlushHandle>>,
     gc_handle: Mutex<Option<GcHandle>>,
+    disk_handle: Mutex<Option<DiskHandle>>,
 }
 
 struct EngineShared {
@@ -37,6 +38,11 @@ struct EngineShared {
     /// When set, the background GC thread skips its pass. Used to keep the
     /// store byte-stable while an external backup tool copies the segments.
     gc_paused: AtomicBool,
+    /// Invoked once per low-disk episode. The engine never terminates the
+    /// process itself; the handler decides how to shut down.
+    low_disk_callback: RwLock<Option<Arc<dyn Fn() + Send + Sync>>>,
+    low_disk: AtomicBool,
+    low_disk_notified: AtomicBool,
     #[allow(dead_code)]
     lock_file: File,
 }
@@ -51,10 +57,20 @@ struct GcHandle {
     stop: Arc<AtomicBool>,
 }
 
+struct DiskHandle {
+    handle: JoinHandle<()>,
+    stop: Arc<AtomicBool>,
+}
+
 struct EngineInner {
     root: PathBuf,
     meta: GlobalMeta,
     active_writer: SegmentWriter,
+    /// Free-space floor copied from `Config::min_free_bytes`.
+    min_free_bytes: u64,
+    /// While true, appends may leave the volume below `min_free_bytes`.
+    /// Enabled while draining during a graceful shutdown.
+    allow_below_floor: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -162,11 +178,16 @@ impl Engine {
                 root: path.to_path_buf(),
                 meta,
                 active_writer,
+                min_free_bytes: config.min_free_bytes,
+                allow_below_floor: false,
             }),
             index_store,
             write_mutex: Mutex::new(()),
             file_pool: FilePool::new(8),
             gc_paused: AtomicBool::new(false),
+            low_disk_callback: RwLock::new(None),
+            low_disk: AtomicBool::new(false),
+            low_disk_notified: AtomicBool::new(false),
             lock_file,
         });
 
@@ -253,10 +274,59 @@ impl Engine {
             None
         };
 
+        let disk_handle = if config.disk_check_interval_secs > 0 && config.min_free_bytes > 0 {
+            let root = path.to_path_buf();
+            let min_free = config.min_free_bytes;
+            let shared4 = Arc::clone(&shared);
+            let stop = Arc::new(AtomicBool::new(false));
+            let stop2 = Arc::clone(&stop);
+            let interval = Duration::from_secs(config.disk_check_interval_secs);
+
+            let handle = thread::Builder::new()
+                .name("blob-disk-watch".into())
+                .spawn(move || loop {
+                    if stop2.load(Ordering::Acquire) {
+                        break;
+                    }
+                    match fs2::available_space(&root) {
+                        Ok(free) if free < min_free => {
+                            if !shared4.low_disk.swap(true, Ordering::AcqRel) {
+                                tracing::error!(
+                                    path = %root.display(),
+                                    free_bytes = free,
+                                    min_free_bytes = min_free,
+                                    "blob store volume is below the free-space floor; refusing new appends"
+                                );
+                            }
+                            // Fires the registered handler once per episode.
+                            // Without a handler the engine keeps refusing new
+                            // appends but does not terminate the process.
+                            shared4.notify_low_disk();
+                        }
+                        Ok(_) => {
+                            if shared4.low_disk.swap(false, Ordering::AcqRel) {
+                                shared4.low_disk_notified.store(false, Ordering::Release);
+                                tracing::info!(
+                                    "blob store volume is back above the free-space floor"
+                                );
+                            }
+                        }
+                        Err(e) => tracing::warn!(error = %e, "disk-space check failed"),
+                    }
+                    thread::park_timeout(interval);
+                })
+                .expect("failed to spawn blob-disk-watch thread");
+
+            Some(DiskHandle { handle, stop })
+        } else {
+            None
+        };
+
         Ok(Self {
             shared,
             flush_handle: Mutex::new(flush_handle),
             gc_handle: Mutex::new(gc_handle),
+            disk_handle: Mutex::new(disk_handle),
         })
     }
 
@@ -469,6 +539,29 @@ impl Engine {
         self.shared.gc_paused.load(Ordering::Acquire)
     }
 
+    /// Register the handler invoked when the store volume falls below
+    /// [`Config::min_free_bytes`]. It fires at most once per low-disk episode
+    /// and is expected to start a graceful shutdown; the engine itself never
+    /// terminates the process.
+    pub fn set_low_disk_callback<F>(&self, callback: F)
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        *self.shared.low_disk_callback.write().unwrap() = Some(Arc::new(callback));
+        // The watchdog may have fired before this handler was registered
+        // (for example, a volume that is already below the floor at open).
+        if self.shared.low_disk.load(Ordering::Acquire) {
+            self.shared.notify_low_disk();
+        }
+    }
+
+    /// While `true`, appends may leave the volume below the free-space floor.
+    /// Enable this when draining during a graceful shutdown: the data is
+    /// already queued, so refusing it would only discard it.
+    pub fn allow_writes_below_free_floor(&self, allow: bool) {
+        self.shared.inner.write().unwrap().allow_below_floor = allow;
+    }
+
     /// Bring the store into a copy-safe, fully durable state.
     ///
     /// Runs inside a backup write window (no writers active):
@@ -599,6 +692,11 @@ impl Engine {
             gh.handle.thread().unpark();
             let _ = gh.handle.join();
         }
+        if let Some(dh) = self.disk_handle.lock().unwrap().take() {
+            dh.stop.store(true, Ordering::Release);
+            dh.handle.thread().unpark();
+            let _ = dh.handle.join();
+        }
 
         let mut inner = self.shared.inner.write().unwrap();
         inner.flush_active()?;
@@ -625,12 +723,29 @@ impl Drop for Engine {
             gh.handle.thread().unpark();
             let _ = gh.handle.join();
         }
+        if let Some(dh) = self.disk_handle.lock().ok().and_then(|mut g| g.take()) {
+            dh.stop.store(true, Ordering::Release);
+            dh.handle.thread().unpark();
+            let _ = dh.handle.join();
+        }
     }
 }
 
 // ── EngineShared ────────────────────────────────────────────────────────────
 
 impl EngineShared {
+    /// Invoke the low-disk handler, at most once per low-disk episode.
+    fn notify_low_disk(&self) {
+        let callback = self.low_disk_callback.read().unwrap().clone();
+        let Some(callback) = callback else {
+            return;
+        };
+        if self.low_disk_notified.swap(true, Ordering::AcqRel) {
+            return;
+        }
+        callback();
+    }
+
     /// Seal the active segment if its deleted-ratio exceeds the GC threshold,
     /// so that the upcoming GC pass can compact it.  Called periodically by
     /// the background GC thread.
@@ -736,6 +851,27 @@ impl EngineShared {
 // ── EngineInner ───────────────────────────────────────────────────────────
 
 impl EngineInner {
+    /// Reject an append that would leave less than `min_free_bytes` on the
+    /// store volume. Checked before writing so a refusal cannot tear an entry.
+    fn ensure_space_for(&self, entry_bytes: u64) -> Result<()> {
+        if self.min_free_bytes == 0 || self.allow_below_floor {
+            return Ok(());
+        }
+        let free = fs2::available_space(&self.root)?;
+        let required = entry_bytes.saturating_add(self.min_free_bytes);
+        if free < required {
+            return Err(Error::DiskFull(format!(
+                "{}: {} bytes free, need {} ({} floor + {} entry)",
+                self.root.display(),
+                free,
+                required,
+                self.min_free_bytes,
+                entry_bytes
+            )));
+        }
+        Ok(())
+    }
+
     fn append_entry(
         &mut self,
         key: [u8; 32],
@@ -754,6 +890,11 @@ impl EngineInner {
         } else {
             Entry::new(key, data, raw_size, flags, codec)
         };
+
+        // Refuse the write before touching the file when it would breach the
+        // free-space floor. A mid-entry ENOSPC is what leaves a torn tail;
+        // catching it here makes that impossible for graceful failures.
+        self.ensure_space_for(ENTRY_HEADER_SIZE as u64 + entry.data.len() as u64)?;
 
         let data_size = entry.data.len() as u32;
         let segment_id = self.active_writer.id();
@@ -852,6 +993,50 @@ mod tests {
             flush_interval_secs: 0,
             ..Config::default()
         }
+    }
+
+    #[test]
+    fn put_rejected_below_free_space_floor_without_touching_segment() {
+        let dir = TempDir::new().unwrap();
+        let mut config = no_background_config();
+        // Any real free-space reading is below this, so every append must be
+        // refused before it writes a byte.
+        config.min_free_bytes = u64::MAX;
+        let engine = Engine::open(dir.path(), config).unwrap();
+
+        let err = engine
+            .put(test_key(1), b"hello", Codec::None)
+            .unwrap_err();
+        assert!(matches!(err, Error::DiskFull(_)), "unexpected error: {err:?}");
+        assert!(!engine.exists(&test_key(1)).unwrap());
+
+        let seg_path = dir
+            .path()
+            .join("segments")
+            .join(segment::segment_filename(1));
+        assert_eq!(
+            fs::metadata(&seg_path).unwrap().len(),
+            0,
+            "a refused append must not write into the segment"
+        );
+    }
+
+    #[test]
+    fn writes_allowed_below_floor_during_shutdown_drain() {
+        let dir = TempDir::new().unwrap();
+        let mut config = no_background_config();
+        config.min_free_bytes = u64::MAX;
+        let engine = Engine::open(dir.path(), config).unwrap();
+
+        assert!(matches!(
+            engine.put(test_key(1), b"hello", Codec::None).unwrap_err(),
+            Error::DiskFull(_)
+        ));
+
+        // The graceful-shutdown drain must be able to flush queued blobs.
+        engine.allow_writes_below_free_floor(true);
+        engine.put(test_key(1), b"hello", Codec::None).unwrap();
+        assert_eq!(engine.get(&test_key(1)).unwrap().unwrap(), b"hello");
     }
 
     /// M1 round-trip: write → prepare_for_backup → reopen → read.

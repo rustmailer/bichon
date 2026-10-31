@@ -102,9 +102,28 @@ impl SegmentWriter {
     /// Append an entry. Returns the offset where it was written.
     pub fn append(&mut self, entry: &Entry) -> Result<u64> {
         let offset = self.bytes_written;
-        self.write_entry(entry)
-            .map_err(|e| map_io_err(e, &self.path))?;
+        if let Err(e) = self.write_entry(entry) {
+            let e = map_io_err(e, &self.path);
+            // A failed write (ENOSPC, I/O error) can leave a partial entry at
+            // the tail. Cut it back to the last complete entry so the segment
+            // stays clean and a later scan doesn't have to repair it.
+            if let Err(rb) = self.rollback_to(offset) {
+                tracing::warn!(
+                    path = %self.path.display(),
+                    error = %rb,
+                    "failed to roll back a partial segment write"
+                );
+            }
+            return Err(e);
+        }
         Ok(offset)
+    }
+
+    /// Truncate the segment back to `len` and continue appending from there.
+    fn rollback_to(&mut self, len: u64) -> std::io::Result<()> {
+        self.file.set_len(len)?;
+        self.file.seek(SeekFrom::End(0))?;
+        Ok(())
     }
 
     fn write_entry(&mut self, entry: &Entry) -> Result<()> {
@@ -417,6 +436,21 @@ impl SegmentReader {
                         });
                     }
                 }
+                Err(Error::Io(ref e)) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
+                    // The file ends inside this entry: a torn write at the
+                    // tail (typically the volume filled up mid-append). An
+                    // entry is at most MAX_VALUE_SIZE + one header, so this
+                    // can only be the last entry; recover exactly like a bad
+                    // tail CRC — stop the scan and let the caller truncate or
+                    // compact away the partial entry.
+                    tracing::warn!(
+                        path = %self.path.display(),
+                        offset,
+                        file_size,
+                        "truncated tail entry; stopping scan"
+                    );
+                    break;
+                }
                 Err(e) => return Err(e),
             }
         }
@@ -539,6 +573,61 @@ mod tests {
         let reader = SegmentReader::open(path, 1).unwrap();
         let result = reader.read_entry_at(0);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_scan_entries_stops_at_truncated_tail() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_segment_path(&dir, 1);
+        let first = Entry::new([0x11u8; 32], b"first", 5, 0, Codec::None);
+        let second = Entry::new([0x22u8; 32], b"second-entry-data", 17, 0, Codec::None);
+
+        let second_offset = {
+            let mut writer = SegmentWriter::create(path.clone(), 1).unwrap();
+            writer.append(&first).unwrap();
+            let offset = writer.append(&second).unwrap();
+            writer.fsync().unwrap();
+            offset
+        };
+
+        // Simulate running out of disk mid-append: the 50-byte header of the
+        // second entry is complete, but its data is only partially written.
+        let truncated = second_offset + ENTRY_HEADER_SIZE as u64 + 4;
+        fs_util::truncate(&path, truncated).unwrap();
+
+        let reader = SegmentReader::open(path, 1).unwrap();
+        let mut seen = Vec::new();
+        let end = reader
+            .scan_entries(0, |entry, offset| {
+                seen.push((offset, entry.key[0]));
+                Ok(())
+            })
+            .expect("a truncated tail must not fail the scan");
+
+        assert_eq!(seen, vec![(0, 0x11)]);
+        assert_eq!(end, second_offset);
+    }
+
+    #[test]
+    fn test_rollback_removes_partial_tail() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_segment_path(&dir, 1);
+        let entry = Entry::new([0x33u8; 32], b"complete", 8, 0, Codec::None);
+
+        let mut writer = SegmentWriter::create(path.clone(), 1).unwrap();
+        writer.append(&entry).unwrap();
+        let good_len = writer.bytes_written();
+
+        // Simulate a write that died mid-entry.
+        writer.file.write_all(&[0xABu8; 30]).unwrap();
+        writer.rollback_to(good_len).unwrap();
+
+        assert_eq!(fs::metadata(&path).unwrap().len(), good_len);
+        assert_eq!(writer.bytes_written(), good_len);
+
+        // The writer must stay usable at the same offset.
+        writer.append(&entry).unwrap();
+        assert_eq!(writer.bytes_written(), good_len * 2);
     }
 
     #[test]

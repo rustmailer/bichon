@@ -56,6 +56,18 @@ pub struct Config {
     /// When set, a background thread checks whether any sealed segment
     /// exceeds the deleted-ratio threshold and compacts it if needed.
     pub gc_interval_secs: u64,
+    /// Free-space floor in bytes on the store volume (0 = no floor).
+    /// Appends that would leave less than this much free space are rejected
+    /// with [`crate::error::Error::DiskFull`] *before* any byte is written, so
+    /// a full volume can never leave a partially written entry behind.
+    pub min_free_bytes: u64,
+    /// Interval in seconds for the disk-space watchdog (0 = disabled).
+    /// When the free space on the store volume drops below `min_free_bytes`,
+    /// the watchdog invokes the handler registered with
+    /// [`crate::Engine::set_low_disk_callback`]; the engine never terminates
+    /// the process itself. Call [`crate::Engine::allow_writes_below_free_floor`]
+    /// from that handler if the shutdown drain should still be able to write.
+    pub disk_check_interval_secs: u64,
 }
 
 impl Default for Config {
@@ -67,6 +79,8 @@ impl Default for Config {
             gc_deleted_ratio: DEFAULT_GC_DELETED_RATIO,
             flush_interval_secs: 0,
             gc_interval_secs: 0,
+            min_free_bytes: 0,
+            disk_check_interval_secs: 0,
         }
     }
 }
@@ -91,6 +105,11 @@ impl Config {
         if self.gc_interval_secs > 0 && self.gc_interval_secs < 10 {
             return Err(crate::error::Error::InvalidConfig(
                 "gc_interval_secs must be 0 (disabled) or >= 10".into(),
+            ));
+        }
+        if self.disk_check_interval_secs > 0 && self.disk_check_interval_secs < 5 {
+            return Err(crate::error::Error::InvalidConfig(
+                "disk_check_interval_secs must be 0 (disabled) or >= 5".into(),
             ));
         }
         Ok(())

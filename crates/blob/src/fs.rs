@@ -98,7 +98,21 @@ pub fn pread_exact(file: &File, offset: u64, buf: &mut [u8]) -> Result<()> {
     #[cfg(windows)]
     {
         use std::os::windows::fs::FileExt;
-        file.seek_read(buf, offset)?;
+        // `seek_read` may return a short read; keep reading until the buffer
+        // is full so this matches `read_exact_at` on Unix.
+        let mut filled = 0;
+        while filled < buf.len() {
+            match file.seek_read(&mut buf[filled..], offset + filled as u64)? {
+                0 => {
+                    return Err(io::Error::new(
+                        io::ErrorKind::UnexpectedEof,
+                        "failed to fill whole buffer",
+                    )
+                    .into())
+                }
+                n => filled += n,
+            }
+        }
     }
     #[cfg(not(any(unix, windows)))]
     {
@@ -154,6 +168,27 @@ mod tests {
         create_atomic(&path, b"first").unwrap();
         create_atomic(&path, b"second").unwrap();
         assert_eq!(std::fs::read(&path).unwrap(), b"second");
+    }
+
+    #[test]
+    fn test_pread_exact_short_read_at_eof() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("data.bin");
+        std::fs::write(&path, b"1234567890").unwrap();
+        let file = File::open(&path).unwrap();
+
+        let mut full = [0u8; 10];
+        pread_exact(&file, 0, &mut full).unwrap();
+        assert_eq!(&full, b"1234567890");
+
+        let mut past_end = [0u8; 20];
+        let err = pread_exact(&file, 0, &mut past_end).unwrap_err();
+        match err {
+            crate::error::Error::Io(e) => {
+                assert_eq!(e.kind(), io::ErrorKind::UnexpectedEof);
+            }
+            other => panic!("expected UnexpectedEof, got {:?}", other),
+        }
     }
 
     #[test]

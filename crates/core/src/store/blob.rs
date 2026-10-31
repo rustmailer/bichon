@@ -38,6 +38,14 @@ use tokio::{
 
 pub static BLOB_MANAGER: LazyLock<BlobManager> = LazyLock::new(BlobManager::new);
 
+/// Free-space floor on the blob volume. Writes that would breach it are
+/// refused, and the watchdog requests a graceful shutdown when the volume
+/// falls below it.
+pub const MIN_FREE_BYTES: u64 = 1024 * 1024 * 1024;
+
+/// How often the blob engine checks the volume against [`MIN_FREE_BYTES`].
+pub const DISK_CHECK_INTERVAL_SECS: u64 = 5;
+
 pub struct DetachedEmail {
     pub email: (String, Bytes),
     pub attachments: Option<Vec<(String, Bytes)>>,
@@ -134,11 +142,33 @@ impl BlobManager {
         config.compress_threshold = 1024;
         config.flush_interval_secs = 60;
         config.gc_interval_secs = 300;
+        // Leave 1 GiB of headroom: refuse writes that would breach it, and
+        // request a graceful shutdown if the volume falls below it. The
+        // shutdown path is still allowed to flush queued blobs into the
+        // reserve; a genuinely full volume will surface as write errors.
+        config.min_free_bytes = MIN_FREE_BYTES;
+        config.disk_check_interval_secs = DISK_CHECK_INTERVAL_SECS;
 
         let engine = Engine::open(&blob_dir, config)
             .expect("Failed to initialize blob engine: Check disk space and permissions.");
 
         let engine = Arc::new(engine);
+
+        // Low disk does not kill the process: it requests the normal graceful
+        // shutdown, and the drain path below is allowed to keep writing even
+        // though the volume is below the reserve.
+        engine.set_low_disk_callback({
+            let engine = Arc::downgrade(&engine);
+            move || {
+                tracing::error!(
+                    "Blob storage is below the free-space floor; requesting a graceful shutdown"
+                );
+                if let Some(engine) = engine.upgrade() {
+                    engine.allow_writes_below_free_floor(true);
+                }
+                SIGNAL_MANAGER.trigger_shutdown();
+            }
+        });
 
         let (sender, mut receiver) = mpsc::channel::<DetachedEmail>(100);
 
@@ -174,6 +204,9 @@ impl BlobManager {
                         }
                     }
                     _ = shutdown.recv() => {
+                        // Graceful shutdown: queued blobs must still be
+                        // flushed even if the volume is below the reserve.
+                        engine_bg.allow_writes_below_free_floor(true);
                         receiver.close();
                         let mut remaining = Vec::new();
                         while let Some(eml) = receiver.recv().await {

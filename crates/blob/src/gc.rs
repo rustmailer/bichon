@@ -37,6 +37,31 @@ pub struct GcPrepare {
     pub sha256: [u8; 32],
     temp_path: PathBuf,
     seg_path: PathBuf,
+    /// Removes the temp file if this prepare is dropped before `gc_finish`
+    /// renamed it into place (scan, fsync, hashing or rename failure).
+    _temp_guard: TempSegmentGuard,
+}
+
+/// Deletes a GC temp segment when dropped, unless it has already been renamed
+/// over the original. `gc_prepare` has several early `?` returns; without this
+/// each failure leaked one `temp_*.seg`, and the background GC retried the
+/// same failing segment every cycle until the disk filled up.
+struct TempSegmentGuard {
+    path: PathBuf,
+}
+
+impl Drop for TempSegmentGuard {
+    fn drop(&mut self) {
+        match fs::remove_file(&self.path) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => tracing::warn!(
+                path = %self.path.display(),
+                error = %e,
+                "failed to remove GC temp segment"
+            ),
+        }
+    }
 }
 
 /// Phase 1: pick the sealed segment with the highest deleted_ratio, then for
@@ -81,6 +106,10 @@ pub fn gc_prepare(
     let temp_name = format!("temp_{:016x}.seg", timestamp);
     let temp_path = store_root.join("segments").join(&temp_name);
     let mut writer = SegmentWriter::create(temp_path.clone(), target.segment_id)?;
+    // From here on, any error path below removes the partial temp segment.
+    let temp_guard = TempSegmentGuard {
+        path: temp_path.clone(),
+    };
 
     let mut kept_records: Vec<IndexRecord> = Vec::new();
     let mut deleted_keys: Vec<[u8; 32]> = Vec::new();
@@ -142,6 +171,7 @@ pub fn gc_prepare(
         sha256,
         temp_path,
         seg_path,
+        _temp_guard: temp_guard,
     }))
 }
 
@@ -156,4 +186,30 @@ pub fn gc_finish(prep: GcPrepare) -> Result<GcStats> {
         entries_skipped: prep.entries_skipped,
         sha256: prep.sha256,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[test]
+    fn temp_guard_removes_partial_segment_on_drop() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("temp_0000deadbeef.seg");
+        fs::write(&path, b"partial").unwrap();
+
+        {
+            let _guard = TempSegmentGuard { path: path.clone() };
+        }
+
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn temp_guard_ignores_already_renamed_segment() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("temp_0000cafebabe.seg");
+        drop(TempSegmentGuard { path });
+    }
 }
