@@ -62,7 +62,7 @@ use bichon_core::{
             tokenizers::{tri_analyzer, EuroTokenizer},
         },
     },
-    utils::html::extract_text,
+    utils::{html::extract_text, normalize_whitespace},
 };
 
 use clap::Parser;
@@ -87,6 +87,27 @@ const DISK_SAFETY_FACTOR: f64 = 1.15;
 /// batches bounds the writer's memory, but the progress bar is updated for
 /// every document (see `progress_bar`), so a slow batch still looks alive.
 const COMMIT_BATCH: u64 = 10_000;
+
+/// Tantivy's indexing arena budget split across the writer threads. The two
+/// values used to be hardcoded (3 × ~85 MiB); they can now be chosen in the
+/// interactive flow (or given as flags for scripts) so a reindex can run on a
+/// memory-constrained host.
+const DEFAULT_WRITER_MEMORY_MB: usize = 256;
+const DEFAULT_WRITER_THREADS: usize = 3;
+/// Per-thread arena bounds, in MiB. Tantivy rejects a thread below 15 MB and
+/// above ~4 GiB; rounding the upper bound down to whole MiB keeps the message
+/// simple and is still within its limit.
+const WRITER_MIN_MB_PER_THREAD: usize = 15;
+const WRITER_MAX_MB_PER_THREAD: usize = 4095;
+
+/// Resolved tantivy writer budget. Each indexing thread gets
+/// `memory_bytes / threads`, so a small budget automatically lowers the thread
+/// count instead of failing inside tantivy.
+#[derive(Clone, Copy)]
+struct WriterBudget {
+    threads: usize,
+    memory_bytes: usize,
+}
 
 /// The whole index root is rebuilt into a sibling `<name>.new` directory (same
 /// volume, so the final swap is an atomic rename), and the previous root is
@@ -137,6 +158,26 @@ pub struct ReindexArgs {
     /// message metadata, so treat it like the archive itself.
     #[clap(long, help = "NDJSON file for skipped/degraded documents; contains plain-text message metadata (default: <root>/reindex-skipped.ndjson)")]
     pub report: Option<String>,
+
+    /// Tantivy writer memory budget in MiB (default 256). The interactive
+    /// flow asks for this with the default shown; the flag is for scripts and
+    /// non-interactive callers. Each thread needs at least 15 MiB.
+    #[clap(
+        long = "writer-memory-mb",
+        value_name = "MIB",
+        help = "Writer memory budget in MiB (default 256; asked interactively when omitted)"
+    )]
+    pub writer_memory_mb: Option<usize>,
+
+    /// Tantivy indexing threads (default 3). The interactive flow asks for
+    /// this with the default shown; the flag is for scripts. More threads
+    /// index faster but each one gets a slice of the memory budget.
+    #[clap(
+        long = "writer-threads",
+        value_name = "N",
+        help = "Indexing thread count (default 3; asked interactively when omitted)"
+    )]
+    pub writer_threads: Option<usize>,
 }
 
 #[derive(Default)]
@@ -176,9 +217,11 @@ fn run(args: ReindexArgs) -> BichonResult<i32> {
     let theme = ColorfulTheme::default();
     let root = resolve_root(&args, &theme)?;
     // A bare `bichon-admin reindex` must be enough: ask for the two optional
-    // directories right here, exactly like the v1.x migration does. Anything
-    // supplied by flag or env var is taken as-is and not asked again.
+    // directories and the writer budget right here, exactly like the v1.x
+    // migration does. Anything supplied by flag or env var is taken as-is and
+    // not asked again.
     let args = prompt_missing_dirs(args, &theme, &root);
+    let args = prompt_writer_budget(args, &theme);
     let dirs = resolve_dirs(
         &root,
         args.index_parent.as_deref().map(Path::new),
@@ -300,6 +343,158 @@ fn prompt_optional_dir(theme: &ColorfulTheme, env: &str, prompt: &str) -> Option
     (!trimmed.is_empty()).then(|| trimmed.to_string())
 }
 
+/// Ask for the tantivy writer budget in the interactive flow. The prompt shows
+/// the default and Enter accepts it, exactly like the directory prompts. Input
+/// is validated against tantivy's per-thread bounds, and the offered thread
+/// default shrinks or grows when the chosen budget cannot feed the configured
+/// thread count. The flags remain available for scripts and non-interactive
+/// callers; a value supplied by flag is never asked again.
+fn prompt_writer_budget(mut args: ReindexArgs, theme: &ColorfulTheme) -> ReindexArgs {
+    // No terminal (scripts, `docker exec` without `-it`): keep the flags or the
+    // defaults and let `resolve_writer_budget` apply the clamping.
+    if !std::io::stdin().is_terminal() {
+        return args;
+    }
+    if args.writer_memory_mb.is_some() && args.writer_threads.is_some() {
+        return args;
+    }
+
+    let given_threads = args.writer_threads;
+    let known_threads = given_threads.unwrap_or(DEFAULT_WRITER_THREADS).max(1);
+
+    let memory_mb = match args.writer_memory_mb {
+        Some(mb) => mb,
+        None => Input::<usize>::with_theme(theme)
+            .with_prompt("Writer memory budget in MiB")
+            .default(DEFAULT_WRITER_MEMORY_MB)
+            .validate_with(|mb: &usize| validate_writer_memory_mb(*mb, given_threads))
+            .interact_text()
+            .unwrap_or(DEFAULT_WRITER_MEMORY_MB),
+    };
+
+    // Show a thread default that is valid for the chosen budget, so pressing
+    // Enter always works: a small budget lowers it, an absurdly large one
+    // raises it to keep each arena under tantivy's ceiling.
+    let max_threads_for_min = (memory_mb / WRITER_MIN_MB_PER_THREAD).max(1);
+    let min_threads_for_max = memory_mb.div_ceil(WRITER_MAX_MB_PER_THREAD).max(1);
+    let default_threads = known_threads.clamp(
+        min_threads_for_max,
+        max_threads_for_min.max(min_threads_for_max),
+    );
+
+    let threads = match given_threads {
+        Some(n) => n,
+        None => Input::<usize>::with_theme(theme)
+            .with_prompt(format!(
+                "Writer threads (about {} MiB each)",
+                memory_mb / default_threads
+            ))
+            .default(default_threads)
+            .validate_with(|n: &usize| validate_writer_threads(memory_mb, *n))
+            .interact_text()
+            .unwrap_or(default_threads),
+    };
+
+    args.writer_memory_mb = Some(memory_mb);
+    args.writer_threads = Some(threads);
+    args
+}
+
+/// Validate an interactive memory answer. `fixed_threads` is `Some` when the
+/// thread count came from a flag, in which case the pair must be compatible.
+fn validate_writer_memory_mb(
+    memory_mb: usize,
+    fixed_threads: Option<usize>,
+) -> Result<(), String> {
+    if memory_mb < WRITER_MIN_MB_PER_THREAD {
+        return Err(format!(
+            "At least {WRITER_MIN_MB_PER_THREAD} MiB is required."
+        ));
+    }
+    if let Some(threads) = fixed_threads {
+        let threads = threads.max(1);
+        let per_thread = memory_mb / threads;
+        if per_thread < WRITER_MIN_MB_PER_THREAD {
+            return Err(format!(
+                "With {threads} thread(s) at least {} MiB is needed.",
+                threads * WRITER_MIN_MB_PER_THREAD
+            ));
+        }
+        if per_thread > WRITER_MAX_MB_PER_THREAD {
+            return Err(format!(
+                "With {threads} thread(s) at most {} MiB is allowed.",
+                threads * WRITER_MAX_MB_PER_THREAD
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Validate an interactive thread-count answer against the chosen budget.
+fn validate_writer_threads(memory_mb: usize, threads: usize) -> Result<(), String> {
+    if threads == 0 {
+        return Err("At least 1 thread is required.".to_string());
+    }
+    let per_thread = memory_mb / threads;
+    if per_thread < WRITER_MIN_MB_PER_THREAD {
+        return Err(format!(
+            "Each thread needs at least {WRITER_MIN_MB_PER_THREAD} MiB — use at most {} thread(s).",
+            memory_mb / WRITER_MIN_MB_PER_THREAD
+        ));
+    }
+    if per_thread > WRITER_MAX_MB_PER_THREAD {
+        return Err(format!(
+            "Each thread allows at most {WRITER_MAX_MB_PER_THREAD} MiB — use at least {} thread(s).",
+            memory_mb.div_ceil(WRITER_MAX_MB_PER_THREAD)
+        ));
+    }
+    Ok(())
+}
+
+/// Resolve `--writer-memory-mb` / `--writer-threads` into the tantivy writer
+/// budget, applying the defaults and lowering the thread count when the
+/// requested memory cannot give every thread tantivy's 15 MB minimum.
+fn resolve_writer_budget(args: &ReindexArgs) -> BichonResult<WriterBudget> {
+    let memory_mb = args.writer_memory_mb.unwrap_or(DEFAULT_WRITER_MEMORY_MB);
+    let requested_threads = args.writer_threads.unwrap_or(DEFAULT_WRITER_THREADS);
+    if requested_threads == 0 {
+        return Err(raise_error!(
+            "--writer-threads must be at least 1".into(),
+            ErrorCode::InvalidParameter
+        ));
+    }
+    let memory_bytes = memory_mb.saturating_mul(1024 * 1024);
+    if memory_mb < WRITER_MIN_MB_PER_THREAD {
+        return Err(raise_error!(
+            format!(
+                "--writer-memory-mb {memory_mb} is too small: tantivy needs at least {WRITER_MIN_MB_PER_THREAD} MiB per writer thread"
+            ),
+            ErrorCode::InvalidParameter
+        ));
+    }
+    let max_threads = (memory_mb / WRITER_MIN_MB_PER_THREAD).max(1);
+    let threads = requested_threads.min(max_threads);
+    if memory_mb / threads > WRITER_MAX_MB_PER_THREAD {
+        return Err(raise_error!(
+            format!(
+                "--writer-memory-mb {memory_mb} is too large for {threads} thread(s): tantivy allows at most {WRITER_MAX_MB_PER_THREAD} MiB per thread"
+            ),
+            ErrorCode::InvalidParameter
+        ));
+    }
+    if threads != requested_threads {
+        println!(
+            "{} {} MiB is only enough for {threads} writer thread(s); using {threads} instead of {requested_threads}.",
+            style("·").dim(),
+            memory_mb
+        );
+    }
+    Ok(WriterBudget {
+        threads,
+        memory_bytes,
+    })
+}
+
 /// Non-interactive body (pre-checks → both phases → swap → report).
 /// `confirm=false` lets tests drive it directly.
 fn execute(
@@ -309,6 +504,7 @@ fn execute(
     confirm: bool,
 ) -> BichonResult<i32> {
     let start = std::time::Instant::now();
+    let writer = resolve_writer_budget(args)?;
 
     // ── Pre-check 1: are both index directories tantivy indexes? ──
     let email_ok = is_tantivy_index_dir(&dirs.envelope_dir).unwrap_or(false);
@@ -456,7 +652,7 @@ fn execute(
     // ── Pre-check 8: summary + confirmation ──
     let backup = backup_path(index_root);
     println!(
-        "\n{}\n  {:<18} {}\n  {:<18} {}\n  {:<18} {}\n  {:<18} {}",
+        "\n{}\n  {:<18} {}\n  {:<18} {}\n  {:<18} {}\n  {:<18} {}\n  {:<18} {} MiB / {} thread(s)",
         style("REINDEX PLAN").bold().bright().cyan(),
         "index root:",
         index_root.display(),
@@ -466,6 +662,9 @@ fn execute(
         backup.display(),
         "blob store:",
         dirs.blobs_dir.display(),
+        "writer memory:",
+        writer.memory_bytes / (1024 * 1024),
+        writer.threads,
     );
     println!(
         "{}",
@@ -521,6 +720,7 @@ fn execute(
         blobs,
         &account_headers,
         args.skip_attachment_text,
+        writer,
         &mut skip,
         &mut uids,
     ) {
@@ -547,6 +747,15 @@ fn execute(
             None,
         ));
     }
+
+    // ── The rebuild has read everything it needs from the old indexes. Drop
+    // them now, BEFORE the validation pass opens the rebuilt index: their
+    // memory-mapped files would otherwise stay in the process working set for
+    // the whole validation, which is exactly when memory is tightest. The
+    // final swap needs them closed anyway (on Windows a rename fails while
+    // handles are open). ──
+    drop(old_attach);
+    drop(old_email);
 
     // ── Wrap-up 1: stamp the format marker, sanity-check the freshly built
     // indexes, and persist the UID counters BEFORE anything is swapped in. A
@@ -596,12 +805,7 @@ fn execute(
         return Err(e);
     }
 
-    // ── Wrap-up 2: explicitly drop every old index handle (on Windows a rename
-    // fails while handles are open) ──
-    drop(old_attach);
-    drop(old_email);
-
-    // ── Wrap-up 3: swap the whole index root with two same-volume atomic
+    // ── Wrap-up 2: swap the whole index root with two same-volume atomic
     // renames. The previous root is renamed aside — never deleted — so it can be
     // restored manually at any time. ──
     rename_with_retry(index_root, &backup).map_err(|e| {
@@ -628,7 +832,7 @@ fn execute(
         ));
     }
 
-    // ── Wrap-up 4: blob flush + shutdown (the Drop guard releases the lock) ──
+    // ── Wrap-up 3: blob flush + shutdown (the Drop guard releases the lock) ──
     if let Some(e) = engine_guard.0.take() {
         let _ = e.flush();
         let _ = e.shutdown();
@@ -696,6 +900,7 @@ fn run_phases(
     blobs: &Engine,
     account_headers: &HashMap<u64, Option<Vec<String>>>,
     skip_text: bool,
+    writer_budget: WriterBudget,
     skip: &mut SkipReport,
     uids: &mut AccountUidAssigner,
 ) -> BichonResult<ReindexReport> {
@@ -718,6 +923,7 @@ fn run_phases(
             email_target,
             blobs,
             account_headers,
+            writer_budget,
             &pb,
             skip,
             uids,
@@ -753,6 +959,7 @@ fn run_phases(
             blobs,
             account_headers,
             skip_text,
+            writer_budget,
             &pb,
             skip,
         )?;
@@ -983,6 +1190,7 @@ fn rebuild_email(
     rebuild_dir: &Path,
     blobs: &Engine,
     account_headers: &HashMap<u64, Option<Vec<String>>>,
+    writer_budget: WriterBudget,
     pb: &ProgressBar,
     skip: &mut SkipReport,
     uids: &mut AccountUidAssigner,
@@ -1003,7 +1211,7 @@ fn rebuild_email(
     new_index.tokenizers().register("tri", tri_analyzer());
 
     let mut writer = new_index
-        .writer_with_num_threads(3, 256 * 1024 * 1024)
+        .writer_with_num_threads(writer_budget.threads, writer_budget.memory_bytes)
         .map_err(|e| raise_error!(format!("cannot create writer: {e:#?}"), ErrorCode::InternalError))?;
     writer.set_merge_policy(Box::new(NoMergePolicy));
 
@@ -1186,6 +1394,7 @@ fn rebuild_attachments(
     blobs: &Engine,
     account_headers: &HashMap<u64, Option<Vec<String>>>,
     skip_text: bool,
+    writer_budget: WriterBudget,
     pb: &ProgressBar,
     skip: &mut SkipReport,
 ) -> BichonResult<PhaseStats> {
@@ -1205,7 +1414,7 @@ fn rebuild_attachments(
     new_index.tokenizers().register("tri", tri_analyzer());
 
     let mut writer = new_index
-        .writer_with_num_threads(3, 256 * 1024 * 1024)
+        .writer_with_num_threads(writer_budget.threads, writer_budget.memory_bytes)
         .map_err(|e| raise_error!(format!("cannot create writer: {e:#?}"), ErrorCode::InternalError))?;
     writer.set_merge_policy(Box::new(NoMergePolicy));
 
@@ -1731,16 +1940,25 @@ fn extract_content(
     let key = hex_to_key(content_hash).ok()?;
     let bytes = blobs.get(&key).ok()??;
     let message = MessageParser::new().parse(&bytes)?;
-    let text = message
-        .body_text(0)
-        .map(|cow| cow.into_owned())
-        .or_else(|| message.body_html(0).map(|cow| extract_text(cow.into_owned())))
-        .unwrap_or_default();
+    // Normalize straight from the parsed body. For a plain (borrowed) body this
+    // avoids the full copy `into_owned()` would make, and for every body it
+    // avoids the `Vec<&str>` that `split_whitespace().collect()` builds — on a
+    // large newsletter that vector is several bytes per word, i.e. comparable
+    // to the text itself, and it exists only to be joined.
+    let text = match message.body_text(0) {
+        Some(body) => normalize_whitespace(body.as_ref()),
+        None => match message.body_html(0) {
+            Some(html) => normalize_whitespace(&extract_text(html.as_ref())),
+            None => String::new(),
+        },
+    };
     let sender = resolve_sender(&message, override_headers);
-    Some((
-        text.split_whitespace().collect::<Vec<_>>().join(" "),
-        sender,
-    ))
+    // The raw EML includes every attachment and can be tens of megabytes.
+    // Release it (and the parser borrows it) before the caller builds the next
+    // document instead of carrying it to the end of the iteration.
+    drop(message);
+    drop(bytes);
+    Some((text, sender))
 }
 
 // ─── wrap-up helpers ──────────────────────────────────────────────────────────
@@ -2541,6 +2759,86 @@ mod tests {
     #[test]
     fn progress_template_is_valid() {
         assert!(ProgressStyle::with_template(PROGRESS_TEMPLATE).is_ok());
+    }
+
+    /// The writer budget is the one knob that bounds reindex heap use: the
+    /// defaults must match the old hardcoded values, a small budget must lower
+    /// the thread count instead of failing inside tantivy, and a budget below
+    /// tantivy's 15 MB floor must be rejected with a clear error.
+    #[test]
+    fn writer_budget_defaults_and_clamps() {
+        let args = ReindexArgs::try_parse_from([
+            "reindex",
+            "--writer-memory-mb",
+            "128",
+            "--writer-threads",
+            "2",
+        ])
+        .expect("writer flags parse");
+        assert_eq!(args.writer_memory_mb, Some(128));
+        assert_eq!(args.writer_threads, Some(2));
+
+        let default = resolve_writer_budget(&ReindexArgs::default()).unwrap();
+        assert_eq!(default.threads, DEFAULT_WRITER_THREADS);
+        assert_eq!(default.memory_bytes, DEFAULT_WRITER_MEMORY_MB * 1024 * 1024);
+
+        // 32 MiB only leaves room for two 15 MB arenas.
+        let clamped = resolve_writer_budget(&ReindexArgs {
+            writer_memory_mb: Some(32),
+            ..ReindexArgs::default()
+        })
+        .unwrap();
+        assert_eq!(clamped.threads, 2);
+
+        // One thread is allowed with a small budget.
+        let one = resolve_writer_budget(&ReindexArgs {
+            writer_memory_mb: Some(32),
+            writer_threads: Some(1),
+            ..ReindexArgs::default()
+        })
+        .unwrap();
+        assert_eq!(one.threads, 1);
+
+        // Below tantivy's per-thread floor and zero threads are errors.
+        assert!(resolve_writer_budget(&ReindexArgs {
+            writer_memory_mb: Some(10),
+            ..ReindexArgs::default()
+        })
+        .is_err());
+        assert!(resolve_writer_budget(&ReindexArgs {
+            writer_threads: Some(0),
+            ..ReindexArgs::default()
+        })
+        .is_err());
+        // Above tantivy's per-thread ceiling is rejected up front too.
+        assert!(resolve_writer_budget(&ReindexArgs {
+            writer_memory_mb: Some(8 * 1024),
+            writer_threads: Some(1),
+            ..ReindexArgs::default()
+        })
+        .is_err());
+    }
+
+    /// The interactive prompts must reject values tantivy would reject, and
+    /// accept the boundary values either side of them.
+    #[test]
+    fn writer_prompt_validation() {
+        assert!(validate_writer_memory_mb(256, None).is_ok());
+        assert!(validate_writer_memory_mb(WRITER_MIN_MB_PER_THREAD - 1, None).is_err());
+        assert!(validate_writer_memory_mb(WRITER_MIN_MB_PER_THREAD, None).is_ok());
+
+        // A thread count fixed by a flag makes the pair checkable up front.
+        assert!(validate_writer_memory_mb(40, Some(3)).is_err());
+        assert!(validate_writer_memory_mb(45, Some(3)).is_ok());
+        assert!(validate_writer_memory_mb(8192, Some(1)).is_err());
+        assert!(validate_writer_memory_mb(8192, Some(3)).is_ok());
+
+        assert!(validate_writer_threads(256, 0).is_err());
+        assert!(validate_writer_threads(256, 1).is_ok());
+        assert!(validate_writer_threads(256, 17).is_ok());
+        assert!(validate_writer_threads(256, 18).is_err());
+        assert!(validate_writer_threads(8192, 2).is_err());
+        assert!(validate_writer_threads(8192, 3).is_ok());
     }
 
     #[test]

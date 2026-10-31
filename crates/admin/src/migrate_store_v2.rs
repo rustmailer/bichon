@@ -225,10 +225,10 @@ impl NewIndexWriterV2 {
             .or_else(|| {
                 message
                     .body_html(0)
-                    .map(|html| bichon_core::utils::html::extract_text(html.into_owned()))
+                    .map(|html| bichon_core::utils::html::extract_text(html.as_ref()))
             })
             .unwrap_or_default();
-        let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
+        let text = bichon_core::utils::normalize_whitespace(&text);
         let preview = if text.chars().count() > 100 {
             text.chars().take(100).collect::<String>() + "..."
         } else {

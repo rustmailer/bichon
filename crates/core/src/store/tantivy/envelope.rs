@@ -2928,9 +2928,9 @@ fn rebuild_envelope_doc(
                 let text = message
                     .body_text(0)
                     .map(|cow| cow.into_owned())
-                    .or_else(|| message.body_html(0).map(|cow| extract_text(cow.into_owned())))
+                    .or_else(|| message.body_html(0).map(|cow| extract_text(cow.as_ref())))
                     .unwrap_or_default();
-                let body_text = text.split_whitespace().collect::<Vec<_>>().join(" ");
+                let body_text = crate::utils::normalize_whitespace(&text);
                 if !body_text.is_empty() {
                     new_doc.add_text(f.f_body, &body_text);
                 }

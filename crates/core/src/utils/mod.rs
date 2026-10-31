@@ -33,6 +33,23 @@ pub mod totp;
 pub mod shutdown;
 pub mod tls;
 
+/// Collapse every run of whitespace to a single space.
+///
+/// Equivalent to `text.split_whitespace().collect::<Vec<_>>().join(" ")`
+/// without the intermediate vector: on a large HTML body that vector costs
+/// several bytes per word — comparable to the text itself — and exists only
+/// long enough to be joined.
+pub fn normalize_whitespace(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for word in text.split_whitespace() {
+        if !out.is_empty() {
+            out.push(' ');
+        }
+        out.push_str(word);
+    }
+    out
+}
+
 #[macro_export]
 macro_rules! bichon_version {
     () => {

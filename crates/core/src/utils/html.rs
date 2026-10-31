@@ -74,7 +74,12 @@ pub fn block_remote_content(html: &str) -> String {
     result
 }
 
-pub fn extract_text(html: String) -> String {
+/// Convert an HTML body to plain text.
+///
+/// Takes `&str` rather than an owned `String`: callers hold the body as a
+/// `Cow` borrowed from the raw message, and an owned signature forced a full
+/// copy of the HTML just to convert it — a large one on newsletters.
+pub fn extract_text(html: &str) -> String {
     let result = panic::catch_unwind(|| {
         html2text::config::plain()
             .allow_width_overflow()
@@ -85,7 +90,7 @@ pub fn extract_text(html: String) -> String {
         Ok(Ok(text)) => text,
         Ok(Err(err)) => {
             error!("html2text error: {}", err);
-            html
+            html.to_string()
         }
         Err(err) => {
             if let Some(s) = err.downcast_ref::<&str>() {
@@ -95,7 +100,7 @@ pub fn extract_text(html: String) -> String {
             } else {
                 error!("html2text panic: unknown error");
             }
-            html
+            html.to_string()
         }
     }
 }
@@ -107,14 +112,14 @@ mod tests {
     #[test]
     fn extract_text_from_plain_html() {
         let html = "<html><body><p>Hello World</p></body></html>".to_string();
-        let text = extract_text(html);
+        let text = extract_text(&html);
         assert!(text.contains("Hello World"));
     }
 
     #[test]
     fn extract_text_strips_tags() {
         let html = "<div><h1>Title</h1><p>Paragraph with <b>bold</b> text.</p></div>".to_string();
-        let text = extract_text(html);
+        let text = extract_text(&html);
         assert!(text.contains("Title"));
         assert!(text.contains("Paragraph"));
         assert!(text.contains("bold"));
@@ -125,21 +130,21 @@ mod tests {
     #[test]
     fn extract_text_empty_string() {
         let html = "".to_string();
-        let text = extract_text(html);
+        let text = extract_text(&html);
         assert!(text.is_empty());
     }
 
     #[test]
     fn extract_text_plain_text_passthrough() {
         let html = "Just some plain text without any HTML tags.".to_string();
-        let text = extract_text(html);
+        let text = extract_text(&html);
         assert!(text.contains("plain text"));
     }
 
     #[test]
     fn extract_text_with_links() {
         let html = "<a href=\"https://example.com\">Click here</a>".to_string();
-        let text = extract_text(html);
+        let text = extract_text(&html);
         assert!(text.contains("Click here"));
     }
 

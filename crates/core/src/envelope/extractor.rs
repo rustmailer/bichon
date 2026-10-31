@@ -410,13 +410,13 @@ async fn extract_envelope_core(
     let preview_limit = 100;
     let text = if let Some(text) = message.body_text(0).map(|cow| cow.into_owned()) {
         text
-    } else if let Some(html) = message.body_html(0).map(|cow| cow.into_owned()) {
-        extract_text(html)
+    } else if let Some(html) = message.body_html(0) {
+        extract_text(html.as_ref())
     } else {
         String::new()
     };
 
-    let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    let text = crate::utils::normalize_whitespace(&text);
 
     let preview = if text.chars().count() > preview_limit {
         text.chars().take(preview_limit).collect::<String>() + "..."
@@ -633,8 +633,8 @@ pub fn extract_envelope_from_nested_message(
 ) -> BichonResult<Envelope> {
     let text = if let Some(text) = message.body_text(0).map(|cow| cow.into_owned()) {
         text
-    } else if let Some(html) = message.body_html(0).map(|cow| cow.into_owned()) {
-        extract_text(html)
+    } else if let Some(html) = message.body_html(0) {
+        extract_text(html.as_ref())
     } else {
         String::new()
     };
