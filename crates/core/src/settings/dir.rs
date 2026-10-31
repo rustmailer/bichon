@@ -150,10 +150,10 @@ pub fn resolve_dirs(
     data_parent: Option<&Path>,
 ) -> ResolvedDirs {
     let index_dir = index_parent
-        .map(|p| p.join(INDICES))
+        .map(|p| append_default_leaf(p, INDICES))
         .unwrap_or_else(|| root.join(INDICES));
     let storage_dir = data_parent
-        .map(|p| p.join(STORAGE))
+        .map(|p| append_default_leaf(p, STORAGE))
         .unwrap_or_else(|| root.join(STORAGE));
 
     ResolvedDirs {
@@ -161,6 +161,17 @@ pub fn resolve_dirs(
         attachment_dir: index_dir.join(ATTACHMENT_METADATA),
         blobs_dir: storage_dir.join("blobs"),
         index_root: index_dir,
+    }
+}
+
+/// Append `leaf` to `parent` unless `parent` already names it. Operators
+/// routinely paste the resolved directory shown by the prompts
+/// (`<root>/bichon-indices`, `<root>/bichon-storage`) instead of the parent,
+/// and appending twice would silently look at (or create) an empty directory.
+fn append_default_leaf(parent: &Path, leaf: &str) -> PathBuf {
+    match parent.file_name().and_then(|name| name.to_str()) {
+        Some(name) if name.eq_ignore_ascii_case(leaf) => parent.to_path_buf(),
+        _ => parent.join(leaf),
     }
 }
 
@@ -252,6 +263,26 @@ mod tests {
         migrate_from_root(&root, &dir, "audit.db");
         assert_eq!(std::fs::read_to_string(dir.join("audit.db")).unwrap(), "db");
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn resolve_dirs_accepts_parent_or_already_resolved_dir() {
+        let root = Path::new("/data");
+        let as_parent = resolve_dirs(root, Some(Path::new("/ssd")), Some(Path::new("/hdd")));
+        assert_eq!(
+            as_parent.index_root,
+            Path::new("/ssd").join("bichon-indices")
+        );
+        assert_eq!(
+            as_parent.blobs_dir,
+            Path::new("/hdd").join("bichon-storage").join("blobs")
+        );
+
+        let index = Path::new("/ssd").join("bichon-indices");
+        let storage = Path::new("/hdd").join("bichon-storage");
+        let as_dir = resolve_dirs(root, Some(&index), Some(&storage));
+        assert_eq!(as_dir.index_root, as_parent.index_root);
+        assert_eq!(as_dir.blobs_dir, as_parent.blobs_dir);
     }
 
     #[test]

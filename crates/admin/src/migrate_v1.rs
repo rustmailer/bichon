@@ -301,10 +301,12 @@ pub fn handle_migrate_v1(theme: &ColorfulTheme) {
     let rebuilt = want_rebuild
         && crate::reindex::run_without_confirm(crate::reindex::ReindexArgs {
             root: Some(root_dir.to_string_lossy().into_owned()),
-            // Same env names the server reads, so a customized index/data
-            // directory is picked up automatically.
+            // Same env names the server reads, so a customized index directory
+            // is picked up automatically. The data parent is the one just
+            // answered above (or the root when left blank) — using the env
+            // fallback here would ignore a directory the operator typed.
             index_parent: std::env::var("BICHON_INDEX_DIR").ok(),
-            data_parent: std::env::var("BICHON_DATA_DIR").ok(),
+            data_parent: Some(data_base.to_string_lossy().into_owned()),
             ..Default::default()
         }) == 0;
 

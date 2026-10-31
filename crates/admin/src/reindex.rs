@@ -34,7 +34,7 @@
 //! cleaned up; the live dirs are untouched until the final swap.
 
 use std::collections::HashMap;
-use std::io::Write;
+use std::io::{IsTerminal, Write};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -83,6 +83,11 @@ use tracing::warn;
 /// same volume, so room for the rebuild must be available.
 const DISK_SAFETY_FACTOR: f64 = 1.15;
 
+/// Commit the rebuild writer every this many *source* documents. Committing in
+/// batches bounds the writer's memory, but the progress bar is updated for
+/// every document (see `progress_bar`), so a slow batch still looks alive.
+const COMMIT_BATCH: u64 = 10_000;
+
 /// The whole index root is rebuilt into a sibling `<name>.new` directory (same
 /// volume, so the final swap is an atomic rename), and the previous root is
 /// renamed to `<name>.old-<timestamp>`. The tool never deletes either of them —
@@ -93,15 +98,30 @@ const DEFAULT_REPORT_FILE: &str = "reindex-skipped.ndjson";
 #[derive(Parser, Debug, Default)]
 pub struct ReindexArgs {
     /// bichon data root (prompted interactively when omitted).
-    #[clap(long, env = "BICHON_ROOT_DIR", help = "Path of the bichon data root")]
+    #[clap(
+        long,
+        visible_aliases = ["root-dir", "bichon-root-dir"],
+        env = "BICHON_ROOT_DIR",
+        help = "Path of the bichon data root (same value as the server's --bichon-root-dir)"
+    )]
     pub root: Option<String>,
 
     /// Index parent directory (default: `<root>/bichon-indices`).
-    #[clap(long, env = "BICHON_INDEX_DIR", help = "Index parent directory (default: <root>/bichon-indices)")]
+    #[clap(
+        long = "index-dir",
+        visible_aliases = ["index-parent", "bichon-index-dir"],
+        env = "BICHON_INDEX_DIR",
+        help = "Parent directory of bichon-indices (default: <root>); same value as the server's --bichon-index-dir"
+    )]
     pub index_parent: Option<String>,
 
     /// Blob data parent directory (default: `<root>/bichon-storage`).
-    #[clap(long, env = "BICHON_DATA_DIR", help = "Blob data parent directory (default: <root>/bichon-storage)")]
+    #[clap(
+        long = "data-dir",
+        visible_aliases = ["data-parent", "bichon-data-dir"],
+        env = "BICHON_DATA_DIR",
+        help = "Parent directory of bichon-storage (default: <root>); same value as the server's --bichon-data-dir"
+    )]
     pub data_parent: Option<String>,
 
     /// Skip attachment text re-extraction (already a noop in the community edition).
@@ -155,6 +175,10 @@ pub fn run_cli(args: ReindexArgs) -> i32 {
 fn run(args: ReindexArgs) -> BichonResult<i32> {
     let theme = ColorfulTheme::default();
     let root = resolve_root(&args, &theme)?;
+    // A bare `bichon-admin reindex` must be enough: ask for the two optional
+    // directories right here, exactly like the v1.x migration does. Anything
+    // supplied by flag or env var is taken as-is and not asked again.
+    let args = prompt_missing_dirs(args, &theme, &root);
     let dirs = resolve_dirs(
         &root,
         args.index_parent.as_deref().map(Path::new),
@@ -185,6 +209,97 @@ pub fn run_without_confirm(args: ReindexArgs) -> i32 {
     }
 }
 
+/// Arguments for the interactive menu's "Rebuild Search Indexes" entry.
+///
+/// The menu never parses a command line, so clap's env fallbacks never run —
+/// the root is resolved from `BICHON_ROOT_DIR` or asked here. The optional
+/// index/data directories are then asked for by `run` (via
+/// [`prompt_missing_dirs`]), just like the CLI subcommand.
+pub fn interactive_args(theme: &ColorfulTheme) -> ReindexArgs {
+    let root = resolve_root(
+        &ReindexArgs {
+            root: env_value("BICHON_ROOT_DIR"),
+            ..Default::default()
+        },
+        theme,
+    )
+    .ok()
+    .map(|path| path.display().to_string());
+
+    ReindexArgs {
+        root,
+        ..Default::default()
+    }
+}
+
+/// A non-empty environment variable, trimmed; `None` when unset or blank.
+fn env_value(name: &str) -> Option<String> {
+    std::env::var(name)
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
+/// Ask for whichever optional directory was not supplied on the command line
+/// or via its environment variable. The prompt shows the concrete default
+/// under the resolved root, so pressing Enter twice is the normal path for a
+/// default layout.
+fn prompt_missing_dirs(
+    mut args: ReindexArgs,
+    theme: &ColorfulTheme,
+    root: &Path,
+) -> ReindexArgs {
+    // Scripts and `docker exec` without `-it` have no terminal to answer on;
+    // keep their current defaults instead of blocking or emitting a prompt.
+    if !std::io::stdin().is_terminal() {
+        return args;
+    }
+    if args.index_parent.is_none() {
+        let prompt = format!(
+            "Index parent directory (blank = {})",
+            root.join("bichon-indices").display()
+        );
+        args.index_parent = prompt_optional_dir(theme, "BICHON_INDEX_DIR", &prompt);
+    }
+    if args.data_parent.is_none() {
+        let prompt = format!(
+            "Data parent directory (blank = {})",
+            root.join("bichon-storage").display()
+        );
+        args.data_parent = prompt_optional_dir(theme, "BICHON_DATA_DIR", &prompt);
+    }
+    args
+}
+
+/// Ask for an optional directory, honouring the same env var the subcommand
+/// uses. An empty answer means "use the default under the data root".
+fn prompt_optional_dir(theme: &ColorfulTheme, env: &str, prompt: &str) -> Option<String> {
+    if let Some(value) = env_value(env) {
+        return Some(value);
+    }
+    let input: String = Input::with_theme(theme)
+        .with_prompt(prompt)
+        .allow_empty(true)
+        .validate_with(|input: &String| -> Result<(), &str> {
+            let trimmed = input.trim();
+            if trimmed.is_empty() {
+                return Ok(());
+            }
+            let path = PathBuf::from(trimmed);
+            if !path.is_absolute() {
+                return Err("Path must be absolute.");
+            }
+            if !path.exists() {
+                return Err("Directory does not exist.");
+            }
+            Ok(())
+        })
+        .interact_text()
+        .unwrap_or_default();
+    let trimmed = input.trim();
+    (!trimmed.is_empty()).then(|| trimmed.to_string())
+}
+
 /// Non-interactive body (pre-checks → both phases → swap → report).
 /// `confirm=false` lets tests drive it directly.
 fn execute(
@@ -207,7 +322,7 @@ fn execute(
         if args.index_parent.is_none() {
             println!(
                 "{}",
-                style("If this deployment uses a custom index directory (`bichon_index_dir` / BICHON_INDEX_DIR), pass it as --index-parent.").dim()
+                style("If this deployment uses a custom index directory (`bichon_index_dir` / BICHON_INDEX_DIR), pass the same value as --index-dir (or --bichon-index-dir).").dim()
             );
         }
         return Ok(0);
@@ -246,7 +361,28 @@ fn execute(
         return Ok(0);
     }
 
-    // ── Pre-check 4: service-running detection = take the blob lock ──
+    // ── Pre-check 4: the blob store must be the one that belongs to this
+    // index. Creating an empty one on a mistyped --data-dir would "succeed"
+    // with every message body missing; fail instead, before touching disk. ──
+    if email_ok && !dirs.blobs_dir.exists() {
+        let docs = Index::open_in_dir(&dirs.envelope_dir)
+            .and_then(|index| index.reader())
+            .map(|reader| reader.searcher().num_docs())
+            .unwrap_or(0);
+        if docs > 0 {
+            eprintln!(
+                "{} The email index in {} has {} document(s), but its blob store {} does not exist.\n  \
+                 Check --data-dir (pass the same value as the server's --bichon-data-dir); rebuilding against an empty store would lose every message body.",
+                style("ERROR:").red().bold(),
+                dirs.envelope_dir.display(),
+                docs,
+                dirs.blobs_dir.display()
+            );
+            return Ok(1);
+        }
+    }
+
+    // ── Pre-check 5: service-running detection = take the blob lock ──
     std::fs::create_dir_all(&dirs.blobs_dir).map_err(|e| {
         raise_error!(
             format!("cannot create blob directory {:?}: {e:#?}", dirs.blobs_dir),
@@ -287,7 +423,7 @@ fn execute(
     let new_envelope = new_root.join(leaf(&dirs.envelope_dir)?);
     let new_attachment = new_root.join(leaf(&dirs.attachment_dir)?);
 
-    // ── Pre-check 5: disk space (the rebuild coexists with the live index) ──
+    // ── Pre-check 6: disk space (the rebuild coexists with the live index) ──
     let index_parent = index_root
         .parent()
         .map(Path::to_path_buf)
@@ -305,7 +441,7 @@ fn execute(
         return Ok(1);
     }
 
-    // ── Pre-check 6: a leftover `.new` from an interrupted run is a temp
+    // ── Pre-check 7: a leftover `.new` from an interrupted run is a temp
     // artifact and is safe to drop. Existing `.old-*` backups are NEVER touched:
     // only the operator removes those. ──
     if new_root.exists() {
@@ -317,7 +453,7 @@ fn execute(
         let _ = std::fs::remove_dir_all(&new_root);
     }
 
-    // ── Pre-check 7: summary + confirmation ──
+    // ── Pre-check 8: summary + confirmation ──
     let backup = backup_path(index_root);
     println!(
         "\n{}\n  {:<18} {}\n  {:<18} {}\n  {:<18} {}\n  {:<18} {}",
@@ -569,6 +705,11 @@ fn run_phases(
         let schema = old.index.schema();
         let of = OldEmailFields::resolve(&schema)?;
         let total = old.searcher.num_docs();
+        println!(
+            "{} Rebuilding email index: {} document(s) to examine...",
+            style("·").dim(),
+            total
+        );
         let pb = progress_bar(total, "Rebuilding email index");
         let stats = rebuild_email(
             &old.searcher,
@@ -597,6 +738,11 @@ fn run_phases(
             None => None,
         };
         let total = old.searcher.num_docs();
+        println!(
+            "{} Rebuilding attachment index: {} document(s) to examine...",
+            style("·").dim(),
+            total
+        );
         let pb = progress_bar(total, "Rebuilding attachment index");
         let stats = rebuild_attachments(
             &old.searcher,
@@ -650,7 +796,7 @@ fn validate_root(path: &Path) -> BichonResult<()> {
         return Err(raise_error!("Directory does not exist.".into(), ErrorCode::InvalidParameter));
     }
     // Deliberately no `bichon-indices` check here: the index directory may live
-    // elsewhere (`bichon_index_dir` / `--index-parent`), in which case nothing
+    // elsewhere (`bichon_index_dir` / `--index-dir`), in which case nothing
     // index-related exists under the root. The resolved index root is checked in
     // the pre-checks instead.
     Ok(())
@@ -884,6 +1030,18 @@ fn rebuild_email(
                 }
             }
 
+            // Advance once per *source* document, before any work and before
+            // the skip paths below, so the bar keeps moving while individual
+            // messages are being parsed and still reaches the total when some
+            // documents cannot be carried over.
+            processed += 1;
+            pb.set_position(processed);
+            if processed % COMMIT_BATCH == 0 {
+                writer
+                    .commit()
+                    .map_err(|e| raise_error!(format!("commit failed: {e:#?}"), ErrorCode::InternalError))?;
+            }
+
             let doc: TantivyDocument = match store.get(doc_id) {
                 Ok(d) => d,
                 Err(e) => {
@@ -1003,16 +1161,11 @@ fn rebuild_email(
                 stats.sample_id = Some(sample_id);
             }
             stats.docs += 1;
-            processed += 1;
-            if processed % 10_000 == 0 {
-                writer
-                    .commit()
-                    .map_err(|e| raise_error!(format!("commit failed: {e:#?}"), ErrorCode::InternalError))?;
-                pb.set_position(processed);
-            }
         }
     }
 
+    pb.set_position(processed);
+    pb.set_message("Finalizing email index (committing and merging segments)");
     writer
         .commit()
         .map_err(|e| raise_error!(format!("final commit failed: {e:#?}"), ErrorCode::InternalError))?;
@@ -1075,6 +1228,16 @@ fn rebuild_attachments(
                 if !a.is_alive(doc_id) {
                     continue;
                 }
+            }
+
+            // See `rebuild_email`: count source documents, not just the ones
+            // written, so the bar advances on every iteration and ends at 100%.
+            processed += 1;
+            pb.set_position(processed);
+            if processed % COMMIT_BATCH == 0 {
+                writer
+                    .commit()
+                    .map_err(|e| raise_error!(format!("commit failed: {e:#?}"), ErrorCode::InternalError))?;
             }
 
             let doc: TantivyDocument = match store.get(doc_id) {
@@ -1177,16 +1340,11 @@ fn rebuild_attachments(
                 stats.sample_id = Some(sample_id);
             }
             stats.docs += 1;
-            processed += 1;
-            if processed % 10_000 == 0 {
-                writer
-                    .commit()
-                    .map_err(|e| raise_error!(format!("commit failed: {e:#?}"), ErrorCode::InternalError))?;
-                pb.set_position(processed);
-            }
         }
     }
 
+    pb.set_position(processed);
+    pb.set_message("Finalizing attachment index (committing and merging segments)");
     writer
         .commit()
         .map_err(|e| raise_error!(format!("final commit failed: {e:#?}"), ErrorCode::InternalError))?;
@@ -1751,6 +1909,10 @@ fn validate_stable_uids(dir: &Path) -> BichonResult<()> {
     })?;
     let searcher = reader.searcher();
 
+    // This pass reads every rebuilt document, which on a large archive is long
+    // enough that a silent wait would look like a hang.
+    let pb = progress_bar(searcher.num_docs(), "Validating rebuilt email index");
+    let mut processed = 0u64;
     let mut pairs: Vec<(u64, u32)> = Vec::with_capacity(searcher.num_docs() as usize);
     for seg in searcher.segment_readers() {
         let seg_id = seg.segment_id().uuid_string();
@@ -1764,6 +1926,8 @@ fn validate_stable_uids(dir: &Path) -> BichonResult<()> {
                     continue;
                 }
             }
+            processed += 1;
+            pb.set_position(processed);
             let doc: TantivyDocument = store.get(doc_id).map_err(|e| {
                 raise_error!(
                     format!("validation: cannot read document {doc_id} of {seg_id}: {e:#?}"),
@@ -1790,6 +1954,7 @@ fn validate_stable_uids(dir: &Path) -> BichonResult<()> {
         }
     }
 
+    pb.set_message("Checking for duplicate stable IMAP UIDs");
     pairs.sort_unstable();
     for window in pairs.windows(2) {
         if window[0] == window[1] {
@@ -1802,6 +1967,7 @@ fn validate_stable_uids(dir: &Path) -> BichonResult<()> {
             ));
         }
     }
+    pb.finish_and_clear();
 
     println!(
         "{} email index stable UIDs validated: {} unique (account, uid) pairs",
@@ -1858,14 +2024,22 @@ fn human_bytes(bytes: u64) -> String {
     format!("{value:.1} {}", UNITS[unit])
 }
 
+const PROGRESS_TEMPLATE: &str =
+    "{msg} [{bar:32.cyan/blue}] {pos}/{len} ({percent}%) {per_sec} elapsed {elapsed_precise} ETA {eta}";
+
+/// A bar that never looks frozen: the position is advanced for every source
+/// document (see the rebuild loops), and the steady tick keeps the elapsed
+/// clock moving during long per-document work such as parsing a message or
+/// committing a batch.
 fn progress_bar(total: u64, msg: &'static str) -> ProgressBar {
     let pb = ProgressBar::new(total);
     pb.set_style(
-        ProgressStyle::with_template("{msg} [{bar:40.cyan/blue}] {pos}/{len} ({eta})")
+        ProgressStyle::with_template(PROGRESS_TEMPLATE)
             .unwrap_or_else(|_| ProgressStyle::default_bar())
             .progress_chars("=> "),
     );
     pb.set_message(msg);
+    pb.enable_steady_tick(Duration::from_millis(500));
     pb
 }
 
@@ -2329,7 +2503,7 @@ mod tests {
     }
 
     /// A deployment can put the index tree outside the data root
-    /// (`bichon_index_dir` / `--index-parent`). The root must still validate
+    /// (`bichon_index_dir` / `--index-dir`). The root must still validate
     /// even though it holds no `bichon-indices`, and the resolved directories
     /// must follow the custom parent.
     #[test]
@@ -2341,7 +2515,7 @@ mod tests {
             "fixture must not have an index under the root"
         );
 
-        // This used to be rejected outright, before `--index-parent` was even
+        // This used to be rejected outright, before `--index-dir` was even
         // taken into account.
         validate_root(&root).expect("a root without bichon-indices must still be valid");
 
@@ -2357,5 +2531,65 @@ mod tests {
         );
         // The blob store still comes from the root when no data parent is given.
         assert_eq!(dirs.blobs_dir, root.join("bichon-storage").join("blobs"));
+    }
+
+    /// `reindex` must let the operator point the index and the blob data at
+    /// different disks, using the same spellings as the server. Both the
+    /// primary names and the server-style `--bichon-*` aliases parse.
+    /// The rebuild bar must show rate, elapsed time and ETA — a typo in the
+    /// template would silently fall back to the bare default bar.
+    #[test]
+    fn progress_template_is_valid() {
+        assert!(ProgressStyle::with_template(PROGRESS_TEMPLATE).is_ok());
+    }
+
+    #[test]
+    fn index_and_data_dirs_can_be_set_separately() {
+        let args = ReindexArgs::try_parse_from([
+            "reindex",
+            "--root",
+            "/data",
+            "--index-dir",
+            "/ssd",
+            "--data-dir",
+            "/hdd",
+        ])
+        .expect("primary dir flags parse");
+        assert_eq!(args.root.as_deref(), Some("/data"));
+        assert_eq!(args.index_parent.as_deref(), Some("/ssd"));
+        assert_eq!(args.data_parent.as_deref(), Some("/hdd"));
+
+        let aliased = ReindexArgs::try_parse_from([
+            "reindex",
+            "--bichon-root-dir",
+            "/data",
+            "--bichon-index-dir",
+            "/ssd",
+            "--bichon-data-dir",
+            "/hdd",
+        ])
+        .expect("server-style aliases parse");
+        assert_eq!(aliased.index_parent.as_deref(), Some("/ssd"));
+        assert_eq!(aliased.data_parent.as_deref(), Some("/hdd"));
+
+        let dirs = resolve_dirs(
+            Path::new("/data"),
+            Some(Path::new("/ssd")),
+            Some(Path::new("/hdd")),
+        );
+        assert_eq!(
+            dirs.envelope_dir,
+            Path::new("/ssd").join("bichon-indices").join("mail_metadata")
+        );
+        assert_eq!(
+            dirs.attachment_dir,
+            Path::new("/ssd")
+                .join("bichon-indices")
+                .join("attachment_metadata")
+        );
+        assert_eq!(
+            dirs.blobs_dir,
+            Path::new("/hdd").join("bichon-storage").join("blobs")
+        );
     }
 }

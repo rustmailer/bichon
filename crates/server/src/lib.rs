@@ -144,8 +144,8 @@ pub async fn run() -> BichonResult<()> {
                 "Search index rebuild required",
                 &[
                     "A known issue could make search miss messages that are actually present. Rebuilding the index once fixes it.".to_string(),
-                    "Run `bichon-admin reindex` (Docker: `docker exec -it <bichon-container> bichon-admin reindex`). It prints progress and can take a while on large archives.".to_string(),
-                    "If `bichon_index_dir` / `bichon_data_dir` are customized, pass `--index-parent` / `--data-parent` (or set BICHON_INDEX_DIR / BICHON_DATA_DIR).".to_string(),
+                    "Run `bichon-admin reindex` (Docker: `docker exec -it <bichon-container> bichon-admin reindex`). It asks for the data root and, if `bichon_index_dir` / `bichon_data_dir` are customized, for those directories too. It prints progress and can take a while on large archives.".to_string(),
+                    "For non-interactive runs, pass `--index-dir` / `--data-dir` (same values as the server's `--bichon-index-dir` / `--bichon-data-dir`) or set BICHON_INDEX_DIR / BICHON_DATA_DIR.".to_string(),
                     "Restart the service once the rebuild has finished (e.g. `docker restart <bichon-container>`).".to_string(),
                     "Nothing is deleted: the previous indexes are kept aside until you remove them yourself.".to_string(),
                 ],

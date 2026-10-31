@@ -105,7 +105,7 @@ pub fn run_interactive(verify_only: bool) {
             std::process::exit(code);
         }
         4 => {
-            let code = reindex::run_cli(reindex::ReindexArgs::default());
+            let code = reindex::run_cli(reindex::interactive_args(&theme));
             std::process::exit(code);
         }
         _ => {
