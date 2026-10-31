@@ -41,7 +41,6 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { useToast } from '@/hooks/use-toast'
 import {
   errorMessage,
@@ -231,7 +230,9 @@ export function CleanupRunDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className='max-h-[60vh] pr-4'>
+        {/* Native scroll container: Radix's ScrollArea needs a definite height,
+            a max-height alone leaves it unable to scroll (see reports dialog). */}
+        <div className='max-h-[60vh] overflow-y-auto pr-4'>
           <div className='space-y-4 py-2 text-xs'>
             {!configured ? (
               <p className='rounded-md bg-muted p-3 text-muted-foreground'>
@@ -515,7 +516,7 @@ export function CleanupRunDialog({
               </>
             )}
           </div>
-        </ScrollArea>
+        </div>
 
         <DialogFooter>
           <Button

@@ -137,6 +137,7 @@
       "graceDesc": "Se cuenta desde que Bichon guardó el mensaje localmente. 0 mueve los mensajes en la próxima ejecución; por defecto 30.",
       "graceRange": "El periodo de gracia debe estar entre 0 y 3650 días.",
       "held": "Esta cuenta está en retención legal. Se rechazarán las limpiezas.",
+      "latest": "Más reciente",
       "maxPerRun": "Máximo de mensajes por lote",
       "maxPerRunDesc": "Mensajes movidos por lote. Una ejecución programada repite lotes hasta que no quede nada elegible; una acumulación muy grande continúa en la siguiente ejecución programada.",
       "maxPerRunRange": "El máximo de mensajes por lote debe estar entre 1 y 500.",

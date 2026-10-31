@@ -137,6 +137,7 @@
       "graceDesc": "Måles fra da Bichon lagret meldingen lokalt. 0 flytter meldinger ved neste kjøring; standard 30.",
       "graceRange": "Fristen må være mellom 0 og 3650 dager.",
       "held": "Denne kontoen har juridisk bevaring. Oppryddinger vil bli avvist.",
+      "latest": "Nyeste",
       "maxPerRun": "Maks. meldinger per batch",
       "maxPerRunDesc": "Meldinger flyttet per batch. En planlagt kjøring gjentar batcher til ingenting kvalifisert er igjen; en svært stor etterslep fortsetter ved neste planlagte kjøring.",
       "maxPerRunRange": "Maks. meldinger per batch må være mellom 1 og 500.",

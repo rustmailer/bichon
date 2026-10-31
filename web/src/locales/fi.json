@@ -137,6 +137,7 @@
       "graceDesc": "Lasketaan siitä, kun Bichon tallensi viestin paikallisesti. 0 siirtää viestit seuraavalla ajokerralla; oletus 30.",
       "graceRange": "Varoajan on oltava 0–3650 päivää.",
       "held": "Tämä tili on oikeudellisessa säilytyksessä. Siivoukset hylätään.",
+      "latest": "Uusin",
       "maxPerRun": "Viestejä enintään erässä",
       "maxPerRunDesc": "Viestejä siirretään erässä. Ajastettu ajo toistaa eriä, kunnes kelvollisia ei ole jäljellä; erittäin suuri ruuhka jatkuu seuraavassa ajastetussa ajossa.",
       "maxPerRunRange": "Viestejä erässä täytyy olla 1–500.",

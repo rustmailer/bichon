@@ -35,7 +35,6 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { Switch } from '@/components/ui/switch'
 import {
   Select,
@@ -351,7 +350,9 @@ export function CleanupConfigDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className='max-h-[60vh] pr-4'>
+        {/* Native scroll container: Radix's ScrollArea needs a definite height,
+            a max-height alone leaves it unable to scroll (see reports dialog). */}
+        <div className='max-h-[60vh] overflow-y-auto pr-4'>
           <div className='space-y-6 py-2 text-xs'>
             {held && (
               <div className='flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-600'>
@@ -690,7 +691,7 @@ export function CleanupConfigDialog({
               </div>
             )}
           </div>
-        </ScrollArea>
+        </div>
 
         <DialogFooter>
           <Button

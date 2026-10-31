@@ -27,6 +27,7 @@ use crate::{error::BichonResult, imap::manager::ImapConnectionManager};
 use async_imap::types::Name;
 use async_imap::Session;
 use futures::TryStreamExt;
+use mail_parser::MessageParser;
 use std::collections::{HashMap, HashSet};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
@@ -1413,25 +1414,22 @@ fn empty_enumeration_anomaly(
     }
 }
 
+/// Extracts the Message-ID from a raw header block fetched over IMAP.
+///
+/// The value is compared against the Tantivy index, where it was produced by
+/// `mail_parser` when the message was archived (`envelope::extractor`), so it
+/// must be parsed the same way: folding, header-name case, comments and angle
+/// brackets all have to match. A hand-rolled prefix scan used to diverge here,
+/// so gap-fill treated folded or lower-case `Message-ID` headers as missing and
+/// re-downloaded archived mail (#368).
 fn parse_message_id_header(header_bytes: &[u8]) -> Option<String> {
-    let header = std::str::from_utf8(header_bytes).ok()?;
-    for line in header.lines() {
-        if let Some(value) = line
-            .strip_prefix("Message-ID:")
-            .or_else(|| line.strip_prefix("Message-Id:"))
-            .or_else(|| line.strip_prefix("Message-id:"))
-        {
-            // mail_parser strips angle brackets, so we must do the same
-            // to ensure comparisons against the Tantivy index match.
-            let trimmed = value.trim();
-            let stripped = trimmed.strip_prefix('<').unwrap_or(trimmed);
-            let stripped = stripped.strip_suffix('>').unwrap_or(stripped);
-            if !stripped.is_empty() {
-                return Some(stripped.to_string());
-            }
-        }
+    if header_bytes.is_empty() {
+        return None;
     }
-    None
+    MessageParser::default()
+        .parse_headers(header_bytes)
+        .and_then(|message| message.message_id().map(str::to_string))
+        .filter(|id| !id.is_empty())
 }
 
 #[cfg(test)]
@@ -1600,6 +1598,82 @@ To: recipient@example.com\r\n\r\n";
             parse_message_id_header(header),
             Some("plain@example.com".into())
         );
+    }
+
+    // ── parse_message_id_header: folded / case / encoding (#368) ────
+
+    #[test]
+    fn parse_folded_message_id() {
+        // The value sits on the continuation line, as sent by many providers
+        // for long ids. The old prefix scan returned None here and gap-fill
+        // re-downloaded the message.
+        let header = b"Message-ID:\r\n <1234567890.12345.1781210050567@some-long-host-name.example>\r\n\r\n";
+        assert_eq!(
+            parse_message_id_header(header),
+            Some("1234567890.12345.1781210050567@some-long-host-name.example".into())
+        );
+    }
+
+    #[test]
+    fn parse_folded_message_id_tab_continuation() {
+        let header = b"Message-ID:\r\n\t<tabbed@example.com>\r\n\r\n";
+        assert_eq!(
+            parse_message_id_header(header),
+            Some("tabbed@example.com".into())
+        );
+    }
+
+    #[test]
+    fn parse_lowercase_header_name() {
+        let header = b"message-id: <lower@example.com>\r\n\r\n";
+        assert_eq!(
+            parse_message_id_header(header),
+            Some("lower@example.com".into())
+        );
+    }
+
+    #[test]
+    fn parse_uppercase_header_name() {
+        let header = b"MESSAGE-ID: <upper@example.com>\r\n\r\n";
+        assert_eq!(
+            parse_message_id_header(header),
+            Some("upper@example.com".into())
+        );
+    }
+
+    #[test]
+    fn parse_message_id_with_trailing_comment() {
+        // Only the id is kept; the comment must not leak into the comparison.
+        let header = b"Message-ID: <commented@example.com> (added by mx)\r\n\r\n";
+        assert_eq!(
+            parse_message_id_header(header),
+            Some("commented@example.com".into())
+        );
+    }
+
+    #[test]
+    fn parse_message_id_non_utf8_is_lossy() {
+        // A header block that is not valid UTF-8 must not yield None: both
+        // sides decode it lossily, so the comparison still works.
+        let header = b"Message-ID: <abc\xff@example.com>\r\n\r\n";
+        assert_eq!(
+            parse_message_id_header(header),
+            Some("abc\u{FFFD}@example.com".into())
+        );
+    }
+
+    #[test]
+    fn parse_header_fields_block_matches_full_message() {
+        // A HEADER.FIELDS (MESSAGE-ID) block must produce exactly the value
+        // the archiver stored from the full message; otherwise gap-fill marks
+        // the message missing. This pins the two sides together.
+        let full = b"From: a@b.example\r\nTo: c@d.example\r\nMessage-ID:\r\n <same@example.com>\r\n\r\nbody";
+        let block = b"Message-ID:\r\n <same@example.com>\r\n\r\n";
+        let archived = MessageParser::default()
+            .parse(full)
+            .and_then(|message| message.message_id().map(str::to_string));
+        assert_eq!(archived.as_deref(), Some("same@example.com"));
+        assert_eq!(parse_message_id_header(block), archived);
     }
 
     // ── empty_enumeration_anomaly ──────────────────────────────────

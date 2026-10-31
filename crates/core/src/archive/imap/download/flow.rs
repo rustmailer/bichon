@@ -1665,6 +1665,47 @@ mod tests {
         session.logout().await.ok();
     }
 
+    /// UIDVALIDITY reconciliation fetches full headers: folded and
+    /// lower/upper-case Message-ID headers must still yield an id, otherwise
+    /// the whole mailbox is treated as missing and re-downloaded (#368).
+    #[tokio::test]
+    async fn fetch_uid_metadata_folded_and_case_variant_message_ids() {
+        let folded = b"message-id:\r\n <folded-a@test.example>\r\n\r\n";
+        let upper = b"MESSAGE-ID: <upper-b@test.example>\r\n\r\n";
+        let mut response = Vec::new();
+        for (uid, header) in [(1u32, &folded[..]), (2u32, &upper[..])] {
+            response.extend_from_slice(
+                format!(
+                    "* {uid} FETCH (UID {uid} BODY[HEADER] {{{}}}\r\n",
+                    header.len()
+                )
+                .as_bytes(),
+            );
+            response.extend_from_slice(header);
+            response.extend_from_slice(b")\r\n");
+        }
+        response.extend_from_slice(b"{TAG} OK FETCH completed\r\n");
+
+        let handle = MockImapServer::new()
+            .respond("LOGIN", "{TAG} OK LOGIN done\r\n")
+            .respond("EXAMINE", examine_response("INBOX", 2, 42, 3))
+            .respond("UID FETCH", response)
+            .start()
+            .await;
+
+        let mut session = mock_session(&handle).await;
+
+        let result =
+            ImapExecutor::fetch_uid_metadata(&mut session, "1:2", CancellationToken::new())
+                .await
+                .unwrap();
+
+        assert_eq!(result.get(&1).unwrap().as_deref(), Some("folded-a@test.example"));
+        assert_eq!(result.get(&2).unwrap().as_deref(), Some("upper-b@test.example"));
+
+        session.logout().await.ok();
+    }
+
     /// Verify basic UID FETCH (FLAGS only, no body) works with the mock server.
     #[tokio::test]
     async fn fetch_uid_flags_with_mock_server() {

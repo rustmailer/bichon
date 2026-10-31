@@ -137,6 +137,7 @@
       "graceDesc": "Contato dal momento in cui Bichon ha salvato il messaggio localmente. 0 sposta i messaggi alla prossima esecuzione; predefinito 30.",
       "graceRange": "Il periodo di attesa deve essere compreso tra 0 e 3650 giorni.",
       "held": "Questo account è soggetto a conservazione legale. Le pulizie verranno rifiutate.",
+      "latest": "Più recente",
       "maxPerRun": "Numero massimo di messaggi per lotto",
       "maxPerRunDesc": "Messaggi spostati per lotto. Un'esecuzione pianificata ripete i lotti finché non resta nulla di idoneo; un arretrato molto grande prosegue nella pianificazione successiva.",
       "maxPerRunRange": "Il numero massimo di messaggi per lotto deve essere compreso tra 1 e 500.",

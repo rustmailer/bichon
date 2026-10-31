@@ -137,6 +137,7 @@
       "graceDesc": "Liczone od chwili, gdy Bichon zapisał wiadomość lokalnie. 0 oznacza przenoszenie przy następnym uruchomieniu; domyślnie 30.",
       "graceRange": "Okres karencji musi mieścić się w zakresie 0–3650 dni.",
       "held": "To konto objęte jest blokadą prawną. Czyszczenie zostanie odrzucone.",
+      "latest": "Najnowszy",
       "maxPerRun": "Maks. wiadomości w partii",
       "maxPerRunDesc": "Wiadomości przenoszone w partii. Zaplanowane uruchomienie powtarza partie, aż nie zostanie nic kwalifikującego się; bardzo duże zaległości są kontynuowane przy następnym zaplanowanym uruchomieniu.",
       "maxPerRunRange": "Maks. liczba wiadomości w partii musi mieścić się w zakresie 1–500.",

@@ -137,6 +137,7 @@
       "graceDesc": "Gezählt ab dem Moment, in dem Bichon die Nachricht lokal gespeichert hat. 0 verschiebt Nachrichten beim nächsten Lauf; Standard 30.",
       "graceRange": "Die Schonfrist muss zwischen 0 und 3650 Tagen liegen.",
       "held": "Dieses Konto unterliegt einer rechtlichen Sperre. Bereinigungen werden abgelehnt.",
+      "latest": "Neueste",
       "maxPerRun": "Max. Nachrichten pro Stapel",
       "maxPerRunDesc": "Nachrichten pro Stapel. Ein geplanter Lauf wiederholt Stapel, bis nichts mehr infrage kommt; ein sehr großer Rückstand wird beim nächsten geplanten Lauf fortgesetzt.",
       "maxPerRunRange": "Max. Nachrichten pro Stapel müssen zwischen 1 und 500 liegen.",

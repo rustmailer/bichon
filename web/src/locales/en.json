@@ -137,6 +137,7 @@
       "graceDesc": "Counted from the moment Bichon saved the message locally. 0 moves messages on the next run; default 30.",
       "graceRange": "Grace period must be between 0 and 3650 days.",
       "held": "This account is on legal hold. Cleanup runs will be refused.",
+      "latest": "Latest",
       "maxPerRun": "Max messages per batch",
       "maxPerRunDesc": "Messages moved per batch. A scheduled run repeats batches until nothing eligible is left; a very large backlog continues on the next scheduled run.",
       "maxPerRunRange": "Max messages per batch must be between 1 and 500.",

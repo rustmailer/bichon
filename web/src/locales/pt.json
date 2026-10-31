@@ -137,6 +137,7 @@
       "graceDesc": "Contado a partir do momento em que o Bichon salvou a mensagem localmente. 0 move as mensagens na próxima execução; padrão 30.",
       "graceRange": "O período de carência deve estar entre 0 e 3650 dias.",
       "held": "Esta conta está em retenção legal. As limpezas serão recusadas.",
+      "latest": "Mais recente",
       "maxPerRun": "Máximo de mensagens por lote",
       "maxPerRunDesc": "Mensagens movidas por lote. Uma execução agendada repete lotes até não restar nada elegível; um acumulado muito grande continua na execução agendada seguinte.",
       "maxPerRunRange": "O máximo de mensagens por lote deve estar entre 1 e 500.",

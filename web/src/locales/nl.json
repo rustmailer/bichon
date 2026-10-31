@@ -137,6 +137,7 @@
       "graceDesc": "Gerekend vanaf het moment waarop Bichon het bericht lokaal heeft opgeslagen. 0 verplaatst berichten bij de volgende run; standaard 30.",
       "graceRange": "De respijtperiode moet tussen 0 en 3650 dagen liggen.",
       "held": "Dit account heeft een juridische bewaring. Opschonen wordt geweigerd.",
+      "latest": "Nieuwste",
       "maxPerRun": "Max. berichten per batch",
       "maxPerRunDesc": "Berichten per batch. Een geplande uitvoering herhaalt batches totdat er niets meer in aanmerking komt; een zeer grote achterstand gaat verder bij de volgende geplande uitvoering.",
       "maxPerRunRange": "Max. berichten per batch moet tussen 1 en 500 liggen.",

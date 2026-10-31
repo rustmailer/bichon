@@ -137,6 +137,7 @@
       "graceDesc": "Compté à partir du moment où Bichon a enregistré le message localement. 0 déplace les messages dès la prochaine exécution ; 30 par défaut.",
       "graceRange": "Le délai de grâce doit être compris entre 0 et 3650 jours.",
       "held": "Ce compte fait l'objet d'une conservation légale. Les nettoyages seront refusés.",
+      "latest": "Le plus récent",
       "maxPerRun": "Nombre maximal de messages par lot",
       "maxPerRunDesc": "Messages déplacés par lot. Une exécution planifiée répète les lots jusqu'à ce qu'il ne reste plus rien d'éligible ; un très gros arriéré se poursuit à l'exécution planifiée suivante.",
       "maxPerRunRange": "Le nombre maximal de messages par lot doit être compris entre 1 et 500.",

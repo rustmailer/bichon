@@ -34,7 +34,6 @@ import {
 } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useToast } from '@/hooks/use-toast'
 import { errorMessage } from './use-cleanup-job'
@@ -113,9 +112,11 @@ export function CleanupReportsDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, account.id])
 
+  // Newest first: the running run (if any), then history ordered by start
+  // time descending, independent of the order the server stored it in.
   const moveRuns: RemoteCleanupRun[] = [
     ...(state?.active ? [state.active] : []),
-    ...(state?.history ? [...state.history].reverse() : []),
+    ...[...(state?.history ?? [])].sort((a, b) => b.started_at - a.started_at),
   ]
 
   return (
@@ -153,18 +154,60 @@ export function CleanupReportsDialog({
           </div>
 
           <TabsContent value='moves'>
-            <ScrollArea className='max-h-[60vh] pr-4'>
-              <div className='space-y-3 pt-2 text-xs'>
+            {/* A native scroll container, not <ScrollArea>: Radix's viewport
+                sizes itself with height:100%, which needs a definite height on
+                the root. With only max-height the viewport grows with the
+                content and the root clips it, so the list could not scroll. */}
+            <div className='max-h-[60vh] overflow-y-auto pr-4'>
+              <div className='pt-2 text-xs'>
                 {moveRuns.length === 0 && (
                   <p className='text-muted-foreground'>
                     {t('accounts.cleanup.noRuns', 'No cleanup runs recorded yet.')}
                   </p>
                 )}
-                {moveRuns.map((run) => (
-                  <RunCard key={run.run_id} run={run} />
-                ))}
+                {moveRuns.length > 0 && (
+                  <div className='relative'>
+                    {/* Timeline spine with the arrowhead at the top, pointing
+                        at the newest run: time runs from the top (latest)
+                        downwards to older runs. Mirrors the account status
+                        history. */}
+                    {moveRuns.length > 1 && (
+                      <>
+                        <div
+                          className='absolute left-[7px] top-2 bottom-1 w-0.5 bg-border'
+                          aria-hidden
+                        />
+                        <div
+                          className='absolute left-[3px] top-0 h-0 w-0 border-l-[5px] border-r-[5px] border-b-[7px] border-l-transparent border-r-transparent border-b-border'
+                          aria-hidden
+                        />
+                      </>
+                    )}
+                    <div className='space-y-3'>
+                      {moveRuns.map((run, index) => (
+                        <div key={run.run_id} className='relative pl-6'>
+                          {index === 0 ? (
+                            <span
+                              className='absolute left-[3px] top-4 flex h-2.5 w-2.5'
+                              aria-hidden
+                            >
+                              <span className='animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75' />
+                              <span className='relative inline-flex h-2.5 w-2.5 rounded-full bg-primary' />
+                            </span>
+                          ) : (
+                            <span
+                              className='absolute left-[4px] top-[17px] h-2 w-2 rounded-full bg-muted-foreground/30'
+                              aria-hidden
+                            />
+                          )}
+                          <RunCard run={run} isLatest={index === 0} />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
-            </ScrollArea>
+            </div>
           </TabsContent>
 
         </Tabs>
@@ -190,10 +233,10 @@ function Metric({ label, value }: { label: string; value: number }) {
   )
 }
 
-function RunCard({ run }: { run: RemoteCleanupRun }) {
+function RunCard({ run, isLatest }: { run: RemoteCleanupRun; isLatest: boolean }) {
   const { t } = useTranslation()
   return (
-    <div className='rounded-md border p-3'>
+    <div className={`rounded-md border p-3 ${isLatest ? 'border-primary/40 bg-primary/[0.03]' : ''}`}>
       <div className='flex flex-wrap items-center justify-between gap-2'>
         <div className='flex items-center gap-2'>
           <span className='font-semibold'>{when(run.started_at)}</span>
@@ -206,6 +249,11 @@ function RunCard({ run }: { run: RemoteCleanupRun }) {
           {run.status === 'Running' && (
             <Badge variant='outline' className='border-none bg-blue-500/10 text-blue-600'>
               {t('accounts.cleanup.activeRun', 'Active')}
+            </Badge>
+          )}
+          {isLatest && (
+            <Badge variant='outline' className='border-none bg-primary/10 text-primary'>
+              {t('accounts.cleanup.latest', 'Latest')}
             </Badge>
           )}
         </div>
