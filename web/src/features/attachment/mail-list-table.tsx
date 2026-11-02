@@ -141,17 +141,19 @@ export function AttachmentListTable({
             <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-primary opacity-0 group-hover:opacity-100 transition-opacity" />
 
             <div className="text-xs flex flex-wrap gap-x-1 min-w-0 flex-1">
-              <span className="flex items-center">
+              <span className="flex items-center w-full min-w-0">
                 <button
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
+                    // Open by the row's account + envelope id, never by the
+                    // rendered subject (a message may have none).
                     setCurrentAttachment(row.original);
                     setOpen("display");
                   }}
-                  className="hover:text-primary hover:underline transition-colors truncate"
+                  className="w-full text-left hover:text-primary hover:underline transition-colors truncate"
                 >
-                  <LongText>{row.original.subject}</LongText>
+                  <LongText>{row.original.subject || t('mail.noSubject')}</LongText>
                 </button>
               </span>
             </div>
@@ -320,7 +322,13 @@ export function AttachmentListTable({
       <SearchTable
         data={items}
         columns={columns}
-        onRowClick={() => { }}
+        onRowClick={(e, row) => {
+          const target = e.target as HTMLElement
+          // Interactive elements handle their own clicks.
+          if (target.closest('button, a, input, [role="menuitem"]')) return
+          setCurrentAttachment(row.original)
+          setOpen('display')
+        }}
         setSortBy={setSortBy}
         setSortOrder={setSortOrder}
       >
