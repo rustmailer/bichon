@@ -67,7 +67,6 @@ interface DataTableProps {
 export function SearchTable({ columns, data, onRowClick, setSortBy, setSortOrder, children }: DataTableProps) {
   const { sorting, setSorting } = useAttachmentContext()
   const { t } = useTranslation()
-  const [rowSelection, setRowSelection] = useState({})
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
 
   useEffect(() => {
@@ -85,11 +84,8 @@ export function SearchTable({ columns, data, onRowClick, setSortBy, setSortOrder
     columns,
     state: {
       sorting,
-      rowSelection,
       columnFilters,
     },
-    enableRowSelection: true,
-    onRowSelectionChange: setRowSelection,
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     getCoreRowModel: getCoreRowModel(),
@@ -131,7 +127,6 @@ export function SearchTable({ columns, data, onRowClick, setSortBy, setSortOrder
               table.getRowModel().rows.map((row) => (
                 <TableRow
                   key={row.id}
-                  data-state={row.getIsSelected() && 'selected'}
                   className="group/row cursor-pointer transition-colors hover:bg-accent/50 h-7"
                   onClick={(e) => onRowClick(e, row)}
                 >

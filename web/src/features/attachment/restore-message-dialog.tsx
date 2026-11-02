@@ -83,13 +83,7 @@ export function RestoreMessageDialog({
     onOpenChange
 }: RestoreMessageDialogProps) {
     const { t } = useTranslation()
-    const { selected, currentAttachment } = useAttachmentContext()
-
-    const accountsWithSelection = Array.from(selected.entries()).filter(([_, ids]) => ids.size > 0);
-    const selectedCount = accountsWithSelection.reduce((sum, [_, set]) => sum + set.size, 0);
-    const accountCount = accountsWithSelection.length;
-
-    const isBulk = selectedCount > 0;
+    const { currentAttachment } = useAttachmentContext()
 
     const {
         data: currentEnvelope,
@@ -98,12 +92,7 @@ export function RestoreMessageDialog({
 
     const restoreMutation = useMutation({
         mutationFn: async () => {
-            if (isBulk) {
-                const promises = accountsWithSelection.map(([accountId, ids]) =>
-                    restore_message(accountId, Array.from(ids))
-                );
-                return Promise.all(promises);
-            } else if (currentEnvelope) {
+            if (currentEnvelope) {
                 return restore_message(currentEnvelope.account_id, [currentEnvelope.id]);
             }
         },
@@ -155,7 +144,7 @@ export function RestoreMessageDialog({
         <ConfirmDialog
             open={open}
             onOpenChange={onOpenChange}
-            title={isBulk ? t('restore_message.bulkTitle', 'Restore multiple messages') : t('restore_message.title', 'Restore message')}
+            title={t('restore_message.title', 'Restore message')}
             desc={<div className="space-y-3">
                 <p className="text-sm text-muted-foreground">
                     {t(
@@ -164,28 +153,13 @@ export function RestoreMessageDialog({
                     )}
                 </p>
 
-                {isBulk ? (
-                    <div className="rounded-md bg-primary/5 border border-primary/20 p-3 text-sm">
-                        <div className="flex justify-between items-center text-primary font-medium">
-                            <span>{t('restore_message.summary', 'Summary')}</span>
-                            <span className="bg-primary/10 px-2 py-0.5 rounded text-xs">
-                                {selectedCount} {t('restore_message.messages', 'messages')}
-                            </span>
-                        </div>
-                        <div className="mt-2 text-xs space-y-1 text-muted-foreground">
-                            <p>• {t('restore_message.accountsInvolved', 'Accounts involved')}: {accountCount}</p>
-                            <p>• {t('restore_message.bulkWarning', 'Messages will be restored to their original folders.')}</p>
-                        </div>
-                    </div>
-                ) : (
-                    currentEnvelope && <MessageSummary envelope={currentEnvelope} t={t} />
-                )}
+                {currentEnvelope && <MessageSummary envelope={currentEnvelope} t={t} />}
             </div>}
             confirmText={t('restore_message.confirm', 'Restore')}
             handleConfirm={() => restoreMutation.mutate()}
             className="sm:max-w-sm"
             isLoading={restoreMutation.isPending}
-            disabled={restoreMutation.isPending || (!isBulk && !currentEnvelope)}
+            disabled={restoreMutation.isPending || !currentEnvelope}
         />
     )
 }

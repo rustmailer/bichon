@@ -44,8 +44,6 @@ interface AttachmentContextType {
   >
   toDelete: Map<number, Set<string>>
   setToDelete: React.Dispatch<React.SetStateAction<Map<number, Set<string>>>>
-  selected: Map<number, Set<string>>
-  setSelected: React.Dispatch<React.SetStateAction<Map<number, Set<string>>>>
   deleteMailboxId: string | undefined
   setDeleteMailboxId: React.Dispatch<React.SetStateAction<string | undefined>>
   selectedAccountId: number | undefined

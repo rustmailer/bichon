@@ -113,7 +113,7 @@ export function MailMessageView({
   showHeader = true
 }: MailMessageViewProps) {
   const { t } = useTranslation()
-  const { setToDelete, setOpen, setSelected } = useAttachmentContext();
+  const { setToDelete, setOpen } = useAttachmentContext();
   const [content, setContent] = useState<string | null>(null);
   const [contentType, setContentType] = useState<'Plain' | 'Html' | null>(null);
   const [attachments, setAttachments] = useState<AttachmentInfo[] | null>(null);
@@ -304,7 +304,6 @@ export function MailMessageView({
                   variant="ghost"
                   size="icon"
                   onClick={() => {
-                    setSelected(new Map())
                     setOpen('restore')
                   }}
                 >

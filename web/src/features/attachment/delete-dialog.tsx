@@ -33,7 +33,7 @@ interface Props {
 
 export function EnvelopeDeleteDialog({ open, onOpenChange }: Props) {
   const queryClient = useQueryClient()
-  const { toDelete, setToDelete, setSelected } = useAttachmentContext()
+  const { toDelete, setToDelete } = useAttachmentContext()
   const { t } = useTranslation()
 
   const deleteMutation = useMutation({
@@ -45,7 +45,6 @@ export function EnvelopeDeleteDialog({ open, onOpenChange }: Props) {
       queryClient.invalidateQueries({ queryKey: ['attachment-tags'] })
       onOpenChange(false)
       setToDelete(new Map())
-      setSelected(new Map())
       toast({
         title: t('search.delete.successTitle'),
         description: t('search.delete.successDesc'),

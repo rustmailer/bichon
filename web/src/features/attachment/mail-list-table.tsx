@@ -20,7 +20,6 @@
 import { dateFnsLocaleMap, formatBytes, formatSender } from "@/lib/utils"
 import { format, formatDistanceToNow } from "date-fns"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Checkbox } from "@/components/ui/checkbox"
 import { useAttachmentContext } from "./context"
 import { useTranslation } from 'react-i18next'
 import { enUS } from "date-fns/locale"
@@ -51,36 +50,9 @@ export function AttachmentListTable({
   const { t, i18n } = useTranslation()
 
   const locale = dateFnsLocaleMap[i18n.language.toLowerCase()] ?? enUS
-  const { selected, setSelected, setOpen, setCurrentAttachment, dateDisplay } = useAttachmentContext()
+  const { setOpen, setCurrentAttachment, dateDisplay } = useAttachmentContext()
 
   const columns: ColumnDef<AttachmentModel>[] = [
-    {
-      accessorKey: "id",
-      header: () => (
-        <Checkbox
-          checked={
-            totalSelected === items.length && items.length > 0
-              ? true
-              : totalSelected > 0
-                ? "indeterminate"
-                : false
-          }
-          onCheckedChange={handleToggleAll}
-          className="h-4 w-4"
-        />
-      ),
-      cell: ({ row }) => (
-        <Checkbox
-          checked={hasSelected(row.original.account_id, row.original.id)}
-          onCheckedChange={() => toggleSelected(row.original.account_id, row.original.id)}
-          onClick={(e) => e.stopPropagation()}
-          className="h-4 w-4 shrink-0"
-        />
-      ),
-      meta: { className: 'text-left text-sm' },
-      minSize: 25,
-      maxSize: 25,
-    },
     {
       accessorKey: "source",
       header: t('attachment.source'),
@@ -263,51 +235,11 @@ export function AttachmentListTable({
     },
   ]
 
-  const handleToggleAll = () => {
-    const total = Array.from(selected.values()).reduce((sum, set) => sum + set.size, 0)
-
-    if (total === items.length && items.length > 0) {
-      setSelected(new Map())
-    } else {
-      setSelected(prev => {
-        const next = new Map(prev)
-        for (const item of items) {
-          const set = new Set(next.get(item.account_id) || [])
-          set.add(item.id)
-          next.set(item.account_id, set)
-        }
-        return next
-      })
-    }
-  }
-
-  const toggleSelected = (accountId: number, mailId: string) => {
-    setSelected(prev => {
-      const next = new Map(prev)
-      const set = new Set(next.get(accountId) || [])
-
-      if (set.has(mailId)) {
-        set.delete(mailId)
-        if (set.size === 0) next.delete(accountId)
-        else next.set(accountId, set)
-      } else {
-        set.add(mailId)
-        next.set(accountId, set)
-      }
-      return next
-    })
-  }
-
-  const totalSelected = Array.from(selected.values()).reduce((sum, set) => sum + set.size, 0)
-
-  const hasSelected = (accountId: number, mailId: string) => selected.get(accountId)?.has(mailId) ?? false
-
   if (isLoading) {
     return (
       <div className="divide-y divide-border">
         {Array.from({ length: 30 }).map((_, i) => (
           <div key={i} className="flex items-center gap-2 px-2 py-1.5">
-            <Skeleton className="h-3 w-3" />
             <Skeleton className="h-3 w-3 rounded-full" />
             <Skeleton className="h-3 flex-1" />
             <Skeleton className="h-2.5 w-16" />

@@ -43,9 +43,6 @@ export default function AttachmentSearch() {
   const [toDelete, setToDelete] = React.useState<Map<number, Set<string>>>(
     new Map()
   )
-  const [selected, setSelected] = React.useState<Map<number, Set<string>>>(
-    new Map()
-  )
   const [selectedTags, setSelectedTags] = React.useState<string[]>([])
   // Start with no client-side sort: the server already orders the page
   // (RELEVANCE when the query has a text term, DATE desc otherwise), and
@@ -102,8 +99,6 @@ export default function AttachmentSearch() {
             setCurrentAttachment,
             toDelete,
             setToDelete,
-            selected,
-            setSelected,
             sorting,
             setSorting,
             filter,
