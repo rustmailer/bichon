@@ -327,27 +327,33 @@ fn test_crash_during_gc_leaves_data_intact() {
     {
         let engine = Engine::open(dir.path(), Config::default()).unwrap();
 
-        let value = make_value(500_000);
-        for i in 0..500u64 {
+        let value = make_value(200_000);
+        for i in 0..300u64 {
             engine
                 .put(make_key(i), &value, Codec::None)
                 .unwrap();
         }
-        // Delete ~40%
-        for i in (0..500u64).step_by(5) {
+        // Delete half, then seal so the segment is an actual GC candidate
+        // (the active segment is never compacted in place).
+        for i in (0..300u64).step_by(2) {
             engine.delete(&make_key(i)).unwrap();
         }
-        let _ = engine.gc();
+        engine.seal_active_segment().unwrap();
+        let stats = engine
+            .gc()
+            .unwrap()
+            .expect("GC should have compacted the sealed segment");
+        assert!(stats.entries_kept > 0);
     } // crash after GC
 
     // All non-deleted entries must still be readable
     {
         let engine = Engine::open(dir.path(), Config::default()).unwrap();
-        let value = make_value(500_000);
-        for i in 0..500u64 {
+        let value = make_value(200_000);
+        for i in 0..300u64 {
             let key = make_key(i);
             let result = engine.get(&key).unwrap();
-            if i % 5 == 0 {
+            if i % 2 == 0 {
                 assert_eq!(result, None, "key {} should be deleted", i);
             } else {
                 assert_eq!(

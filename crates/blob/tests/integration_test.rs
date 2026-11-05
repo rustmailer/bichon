@@ -126,8 +126,14 @@ fn test_gc() {
         engine.delete(&key).unwrap();
     }
 
-    // Run GC
-    let _result = engine.gc().unwrap();
+    // The active segment is never compacted in place: seal it first.
+    engine.seal_active_segment().unwrap();
+    let stats = engine
+        .gc()
+        .unwrap()
+        .expect("GC should have compacted the sealed segment");
+    assert!(stats.entries_kept > 0);
+    assert!(stats.bytes_on_disk > stats.bytes_after);
 
     // Verify remaining keys still readable
     for i in (1..n).step_by(2) {
@@ -143,6 +149,20 @@ fn test_gc() {
         key[0..4].copy_from_slice(&(i as u32).to_le_bytes());
         let result = engine.get(&key).unwrap();
         assert_eq!(result, None);
+    }
+
+    // A restart after compaction must not lose the segment tail (regression:
+    // the index cursor used to be the payload count, not the file size).
+    drop(engine);
+    let engine = Engine::open(dir.path(), Config::default()).unwrap();
+    for i in (1..n).step_by(2) {
+        let mut key = [0u8; 32];
+        key[0..4].copy_from_slice(&(i as u32).to_le_bytes());
+        assert_eq!(
+            engine.get(&key).unwrap(),
+            Some(value.clone()),
+            "key {i} must survive a restart after GC"
+        );
     }
 }
 
@@ -392,6 +412,7 @@ fn test_gc_deletes_empty_segment() {
     let stats = result.unwrap();
     assert_eq!(stats.segment_id, sealed_id);
     assert_eq!(stats.bytes_after, 0);
+    assert_eq!(stats.bytes_on_disk, 0);
 
     // Segment file must be deleted.
     let seg_path = dir

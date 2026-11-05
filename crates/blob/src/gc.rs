@@ -11,7 +11,15 @@ use crate::segment::{self, SegmentReader, SegmentWriter};
 pub struct GcStats {
     pub segment_id: u32,
     pub bytes_before: u64,
+    /// Payload bytes of the kept entries (headers excluded). This is the
+    /// same unit as `SegmentStats::total_bytes`.
     pub bytes_after: u64,
+    /// Physical size of the rewritten segment file: payload plus one
+    /// [`crate::types::ENTRY_HEADER_SIZE`] header per kept entry. This — not
+    /// `bytes_after` — is the correct `SegmentStats::indexed_up_to_offset`
+    /// for the compacted file; recovery resumes scanning from a physical
+    /// offset.
+    pub bytes_on_disk: u64,
     pub entries_kept: usize,
     pub entries_skipped: usize,
     /// SHA-256 of the compacted segment (recomputed after the rewrite, since
@@ -25,6 +33,8 @@ pub struct GcPrepare {
     pub segment_id: u32,
     pub bytes_before: u64,
     pub bytes_after: u64,
+    /// Physical size of the temp segment: `bytes_after` plus headers.
+    pub bytes_on_disk: u64,
     pub entries_kept: usize,
     pub entries_skipped: usize,
     /// Index records for kept entries with their new offsets in the compacted segment.
@@ -156,6 +166,15 @@ pub fn gc_prepare(
     })?;
 
     writer.fsync()?;
+    // Physical size of the rewritten file. `bytes_after` counts payload only,
+    // but recovery resumes from a *file offset*, so the index cursor must be
+    // this value. Mixing the two silently truncated the compacted segment's
+    // tail on the next start (issue #393 follow-up).
+    let bytes_on_disk = fs::metadata(&temp_path)?.len();
+    debug_assert_eq!(
+        bytes_on_disk,
+        bytes_after + crate::types::ENTRY_HEADER_SIZE as u64 * entries_kept as u64
+    );
     // Compaction rewrites the segment, so the seal-time hash is stale — hash
     // the new content now, while it is page-cache warm (design doc §7).
     let sha256 = crate::checksum::sha256_file(&temp_path)?;
@@ -164,6 +183,7 @@ pub fn gc_prepare(
         segment_id: target.segment_id,
         bytes_before: target.total_bytes,
         bytes_after,
+        bytes_on_disk,
         entries_kept,
         entries_skipped,
         kept_records,
@@ -182,6 +202,7 @@ pub fn gc_finish(prep: GcPrepare) -> Result<GcStats> {
         segment_id: prep.segment_id,
         bytes_before: prep.bytes_before,
         bytes_after: prep.bytes_after,
+        bytes_on_disk: prep.bytes_on_disk,
         entries_kept: prep.entries_kept,
         entries_skipped: prep.entries_skipped,
         sha256: prep.sha256,

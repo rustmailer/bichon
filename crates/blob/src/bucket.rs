@@ -139,6 +139,15 @@ impl IndexStore {
 
     /// Look up a key. Returns the latest IndexRecord, or None if absent/tombstone.
     pub fn get(&self, key: &[u8; 32]) -> Result<Option<IndexRecord>> {
+        Ok(self.get_raw(key)?.filter(|record| !record.is_tombstone()))
+    }
+
+    /// Like [`get`], but also returns tombstone records.
+    ///
+    /// Recovery uses this to compare recency: a tombstone in a newer segment
+    /// must suppress an older data record surfaced by a rescan, even though
+    /// [`get`] reports the key as absent.
+    pub fn get_raw(&self, key: &[u8; 32]) -> Result<Option<IndexRecord>> {
         let txn = self
             .db
             .begin_read()
@@ -151,10 +160,7 @@ impl IndexStore {
             .get(key)
             .map_err(|e| crate::error::Error::IndexDb(format!("get: {}", e)))?
         {
-            Some(guard) => {
-                let record = IndexRecord::decode(&guard.value().0)?;
-                Ok(if record.is_tombstone() { None } else { Some(record) })
-            }
+            Some(guard) => Ok(Some(IndexRecord::decode(&guard.value().0)?)),
             None => Ok(None),
         }
     }

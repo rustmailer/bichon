@@ -159,6 +159,38 @@ impl Engine {
         } else {
             crate::recovery::recover(path, &mut meta)?
         };
+        // A full rescan (stale cursor, interrupted GC) can surface a record
+        // that is *older* than the one the index already holds — for example a
+        // key deleted in a newer segment after the rescanned segment was
+        // compacted. Applying it would resurrect the deleted key. Keep the
+        // newer index record; segments and offsets only grow, so the ordering
+        // is a valid recency test.
+        //
+        // A rebuild starts from an empty index (the DB file is recreated), so
+        // every record is new there; skip the per-record lookup in that case.
+        let recovered_records = if index_rebuilt {
+            recovered_records
+        } else {
+            let mut current: Vec<crate::bucket::IndexRecord> =
+                Vec::with_capacity(recovered_records.len());
+            for rec in recovered_records {
+                // `get_raw` so a newer tombstone counts as a newer record too.
+                if let Some(existing) = index_store.get_raw(&rec.key)? {
+                    if (existing.segment_id, existing.offset) > (rec.segment_id, rec.offset) {
+                        continue;
+                    }
+                }
+                current.push(rec);
+            }
+            current
+        };
+        // One-time repair for stores written by builds where a GC-compacted
+        // segment's hash could describe the file as it was *before* an old
+        // restart truncated it. That cannot be detected from meta, so all
+        // stored hashes are dropped once; backups rehash lazily and persist
+        // the fresh value.
+        let reset_stale_hashes =
+            crate::recovery::invalidate_stale_segment_hashes(path, &mut meta)?;
         index_store.insert_batch(&recovered_records)?;
 
         let seg_path = path
@@ -171,6 +203,11 @@ impl Engine {
         };
 
         meta.save(path)?;
+        if reset_stale_hashes {
+            // Marker after the save: a crash in between simply repeats the
+            // (idempotent) reset on the next start, never the other way round.
+            crate::recovery::mark_hash_repair_done(path)?;
+        }
 
         let shared = Arc::new(EngineShared {
             config: config.clone(),
@@ -250,10 +287,12 @@ impl Engine {
                         match shared3.gc_if_needed() {
                             Ok(Some(stats)) => {
                                 tracing::info!(
-                                    "GC compacted segment {}: {} → {} bytes (kept {}, skipped {})",
+                                    "GC compacted segment {}: {} → {} payload bytes \
+                                     ({} bytes on disk, kept {}, skipped {})",
                                     stats.segment_id,
                                     stats.bytes_before,
                                     stats.bytes_after,
+                                    stats.bytes_on_disk,
                                     stats.entries_kept,
                                     stats.entries_skipped,
                                 );
@@ -816,7 +855,7 @@ impl EngineShared {
         {
             let mut inner = self.inner.write().unwrap();
 
-            if stats.bytes_after == 0 {
+            if stats.bytes_on_disk == 0 {
                 // Segment was completely emptied — remove it from meta first,
                 // then delete the file.  If we crash between the two steps the
                 // orphaned file is rediscovered on next open and retried.
@@ -834,10 +873,13 @@ impl EngineShared {
                 // rewritten by compaction, so the stored hash must be replaced
                 // with the new content's hash (computed on the temp file).
                 if let Some(seg_stats) = inner.meta.segments.get_mut(&stats.segment_id) {
+                    // `total_bytes` is payload-only (same unit as the append
+                    // path); the index cursor is a physical offset and must be
+                    // the size of the rewritten file.
                     seg_stats.total_bytes = stats.bytes_after;
                     seg_stats.deleted_bytes = 0;
                     seg_stats.deleted_ratio = 0.0;
-                    seg_stats.indexed_up_to_offset = stats.bytes_after;
+                    seg_stats.indexed_up_to_offset = stats.bytes_on_disk;
                     seg_stats.sha256 = Some(stats.sha256);
                 }
                 inner.meta.save(&inner.root)?;
@@ -937,6 +979,11 @@ impl EngineInner {
         if self.active_writer.bytes_written() == 0 {
             return Ok(());
         }
+        // Persist the segment before meta records it as sealed. Recovery treats
+        // a sealed segment as immutable and fully durable (a short cursor then
+        // means stale meta, not a torn write), so meta must never claim
+        // `sealed` while the tail is still only in the page cache.
+        self.active_writer.fsync()?;
         let old_id = self.active_writer.id();
         let old_stats = self
             .meta
@@ -1121,5 +1168,390 @@ mod tests {
             engine.set_gc_paused(false);
             engine.shutdown().unwrap();
         }
+    }
+
+    // ── GC index-cursor regressions (#393 follow-up) ─────────────────────
+
+    fn key_from_u32(v: u32) -> [u8; 32] {
+        let mut key = [0u8; 32];
+        key[0..4].copy_from_slice(&v.to_le_bytes());
+        key
+    }
+
+    fn segment_path(root: &std::path::Path, id: u32) -> std::path::PathBuf {
+        root.join("segments").join(segment::segment_filename(id))
+    }
+
+    /// Compact a store of `n` tiny entries (half deleted) and return the
+    /// surviving value, the compacted segment id, the payload total, and the
+    /// physical file length.
+    fn compacted_store(
+        dir: &TempDir,
+        config: Config,
+        n: u32,
+        value_len: usize,
+    ) -> (Vec<u8>, u32, u64, u64) {
+        let value = vec![b'Z'; value_len];
+        {
+            let engine = Engine::open(dir.path(), config).unwrap();
+            for i in 0..n {
+                engine.put(key_from_u32(i), &value, Codec::None).unwrap();
+            }
+            for i in (0..n).step_by(2) {
+                engine.delete(&key_from_u32(i)).unwrap();
+            }
+            engine.seal_active_segment().unwrap();
+            let stats = engine
+                .gc()
+                .unwrap()
+                .expect("the sealed, half-deleted segment must be compacted");
+            assert_eq!(stats.entries_kept as u32, n / 2);
+            assert_eq!(
+                stats.bytes_on_disk,
+                stats.bytes_after + ENTRY_HEADER_SIZE as u64 * stats.entries_kept as u64,
+                "on-disk size must include one header per kept entry"
+            );
+            let file_len = fs::metadata(segment_path(dir.path(), stats.segment_id))
+                .unwrap()
+                .len();
+            assert_eq!(stats.bytes_on_disk, file_len);
+            (value, stats.segment_id, stats.bytes_after, file_len)
+        }
+    }
+
+    /// The compacted segment's index cursor must be its physical size. Storing
+    /// the payload count instead made recovery resume mid-entry on the next
+    /// open, treat the remainder as a torn tail and truncate it.
+    ///
+    /// Tiny entries make the old failure catastrophic (~5/6 of the segment),
+    /// not a last-few-records loss.
+    #[test]
+    fn gc_cursor_is_physical_and_reopen_keeps_segment_tail() {
+        let dir = TempDir::new().unwrap();
+        let config = no_background_config();
+        let (value, seg_id, payload, file_len) = compacted_store(&dir, config.clone(), 200, 10);
+
+        {
+            let engine = Engine::open(dir.path(), config.clone()).unwrap();
+            let inner = engine.shared.inner.read().unwrap();
+            let stats = inner.meta.segments.get(&seg_id).unwrap();
+            assert_eq!(
+                stats.indexed_up_to_offset, file_len,
+                "the index cursor must be the physical file size"
+            );
+            assert_eq!(
+                stats.total_bytes, payload,
+                "total_bytes stays payload-only, like the append path"
+            );
+        }
+
+        let engine = Engine::open(dir.path(), config).unwrap();
+        assert_eq!(
+            fs::metadata(segment_path(dir.path(), seg_id)).unwrap().len(),
+            file_len,
+            "reopening must not truncate a compacted segment"
+        );
+        for i in (1..200u32).step_by(2) {
+            assert_eq!(
+                engine.get(&key_from_u32(i)).unwrap(),
+                Some(value.clone()),
+                "key {i} lost across reopen"
+            );
+        }
+        let inner = engine.shared.inner.read().unwrap();
+        assert_eq!(
+            inner.meta.segments[&seg_id].indexed_up_to_offset,
+            file_len
+        );
+    }
+
+    /// A store written by a pre-fix build carries the payload count in the
+    /// cursor. Opening it must rebuild that segment from byte 0 — never treat
+    /// the stale cursor as a torn tail.
+    #[test]
+    fn legacy_payload_cursor_is_repaired_without_data_loss() {
+        let dir = TempDir::new().unwrap();
+        let config = no_background_config();
+        let (value, seg_id, payload, file_len) = compacted_store(&dir, config.clone(), 80, 32);
+        assert!(payload < file_len);
+
+        // Rewrite meta exactly as the old build left it.
+        let mut meta = crate::meta::GlobalMeta::load(dir.path()).unwrap();
+        meta.segments
+            .get_mut(&seg_id)
+            .unwrap()
+            .indexed_up_to_offset = payload;
+        meta.save(dir.path()).unwrap();
+
+        let engine = Engine::open(dir.path(), config).unwrap();
+        assert_eq!(
+            fs::metadata(segment_path(dir.path(), seg_id)).unwrap().len(),
+            file_len,
+            "a stale cursor must not be mistaken for a torn tail"
+        );
+        for i in (1..80u32).step_by(2) {
+            assert_eq!(
+                engine.get(&key_from_u32(i)).unwrap(),
+                Some(value.clone()),
+                "key {i} lost while repairing a stale cursor"
+            );
+        }
+        let inner = engine.shared.inner.read().unwrap();
+        let stats = inner.meta.segments.get(&seg_id).unwrap();
+        assert_eq!(stats.indexed_up_to_offset, file_len);
+        assert_eq!(
+            stats.total_bytes, payload,
+            "a full rescan must rebuild totals, not add to them"
+        );
+    }
+
+    /// Repairing a stale cursor must not resurrect a key that was deleted in a
+    /// newer segment after the compacted segment was written. The index holds
+    /// the tombstone (newer segment/offset), so the older data record found by
+    /// the rescan must be discarded.
+    #[test]
+    fn stale_cursor_rescan_does_not_resurrect_deleted_keys() {
+        let dir = TempDir::new().unwrap();
+        let config = no_background_config();
+        let value = vec![b'R'; 16];
+        let n: u32 = 40;
+
+        let (seg_id, payload) = {
+            let engine = Engine::open(dir.path(), config.clone()).unwrap();
+            for i in 0..n {
+                engine.put(key_from_u32(i), &value, Codec::None).unwrap();
+            }
+            for i in (0..n).step_by(2) {
+                engine.delete(&key_from_u32(i)).unwrap();
+            }
+            engine.seal_active_segment().unwrap();
+            let stats = engine.gc().unwrap().expect("segment must be compacted");
+
+            // Delete a surviving key *after* the compaction: its tombstone
+            // lands in the new active segment.
+            engine.delete(&key_from_u32(1)).unwrap();
+            (stats.segment_id, stats.bytes_after)
+        };
+
+        let mut meta = crate::meta::GlobalMeta::load(dir.path()).unwrap();
+        meta.segments
+            .get_mut(&seg_id)
+            .unwrap()
+            .indexed_up_to_offset = payload;
+        meta.save(dir.path()).unwrap();
+
+        let engine = Engine::open(dir.path(), config).unwrap();
+        assert_eq!(
+            engine.get(&key_from_u32(1)).unwrap(),
+            None,
+            "the rescan resurrected a key deleted in a newer segment"
+        );
+        assert_eq!(
+            engine.get(&key_from_u32(3)).unwrap(),
+            Some(value.clone()),
+            "untouched keys must survive the repair"
+        );
+    }
+
+    /// A cursor past EOF (crash before the meta save recorded the tail) must
+    /// also rescan without double-counting `total_bytes`.
+    #[test]
+    fn cursor_past_eof_rescan_does_not_double_count_totals() {
+        let dir = TempDir::new().unwrap();
+        let config = no_background_config();
+        let value = vec![b'P'; 100];
+        let keys: Vec<[u8; 32]> = (0..10u32).map(key_from_u32).collect();
+
+        {
+            let engine = Engine::open(dir.path(), config.clone()).unwrap();
+            for key in &keys {
+                engine.put(*key, &value, Codec::None).unwrap();
+            }
+            drop(engine);
+        }
+
+        let mut meta = crate::meta::GlobalMeta::load(dir.path()).unwrap();
+        let active = meta.active_segment_id;
+        meta.segments.get_mut(&active).unwrap().indexed_up_to_offset = u64::MAX / 2;
+        meta.save(dir.path()).unwrap();
+
+        let engine = Engine::open(dir.path(), config).unwrap();
+        assert_eq!(
+            engine.stats().unwrap().total_bytes,
+            100 * keys.len() as u64,
+            "a rescan from 0 must reset totals first"
+        );
+        for key in &keys {
+            assert_eq!(engine.get(key).unwrap(), Some(value.clone()));
+        }
+    }
+
+    /// The one-time hash repair: hashes stored by pre-fix builds are dropped
+    /// on the first open, and hashes written afterwards are preserved.
+    #[test]
+    fn stale_segment_hashes_are_dropped_exactly_once() {
+        let dir = TempDir::new().unwrap();
+        let config = no_background_config();
+        let seg_id = {
+            let engine = Engine::open(dir.path(), config.clone()).unwrap();
+            engine.put(test_key(1), b"x", Codec::None).unwrap();
+            let id = engine.seal_active_segment().unwrap();
+            assert!(
+                engine.shared.inner.read().unwrap().meta.segments[&id]
+                    .sha256
+                    .is_some(),
+                "sealing records a hash"
+            );
+            id
+        };
+
+        // Simulate a store written by a pre-fix build: it never wrote the
+        // marker, because the repair did not exist yet.
+        fs::remove_file(dir.path().join(crate::recovery::HASH_REPAIR_MARKER)).unwrap();
+
+        {
+            let engine = Engine::open(dir.path(), config.clone()).unwrap();
+            assert!(
+                engine.shared.inner.read().unwrap().meta.segments[&seg_id]
+                    .sha256
+                    .is_none(),
+                "the first open after the fix must drop pre-fix hashes"
+            );
+        }
+        assert!(dir
+            .path()
+            .join(crate::recovery::HASH_REPAIR_MARKER)
+            .exists());
+
+        // A hash written by this build survives later opens.
+        let mut meta = crate::meta::GlobalMeta::load(dir.path()).unwrap();
+        meta.segments.get_mut(&seg_id).unwrap().sha256 = Some([7u8; 32]);
+        meta.save(dir.path()).unwrap();
+
+        let engine = Engine::open(dir.path(), config).unwrap();
+        assert_eq!(
+            engine.shared.inner.read().unwrap().meta.segments[&seg_id].sha256,
+            Some([7u8; 32]),
+            "the repair must run only once"
+        );
+    }
+
+    /// A segment whose only survivors have empty payloads compacts to zero
+    /// payload bytes but still occupies a header each. The emptied-segment
+    /// check must look at the on-disk size; deleting the file on
+    /// `bytes_after == 0` would leave dangling index records.
+    #[test]
+    fn gc_keeps_segment_holding_empty_values() {
+        let dir = TempDir::new().unwrap();
+        let config = no_background_config();
+
+        {
+            let engine = Engine::open(dir.path(), config.clone()).unwrap();
+            engine.put(key_from_u32(0), &[b'X'; 100], Codec::None).unwrap();
+            engine.put(key_from_u32(1), b"", Codec::None).unwrap();
+            engine.seal_active_segment().unwrap();
+            engine.delete(&key_from_u32(0)).unwrap();
+
+            let stats = engine.gc().unwrap().expect("deleted payload makes it a candidate");
+            assert_eq!(stats.entries_kept, 1);
+            assert_eq!(stats.bytes_after, 0, "the survivor has no payload bytes");
+            assert_eq!(
+                stats.bytes_on_disk, ENTRY_HEADER_SIZE as u64,
+                "but it still occupies a header"
+            );
+            assert!(
+                segment_path(dir.path(), stats.segment_id).exists(),
+                "a segment holding an empty-value entry must not be deleted"
+            );
+        }
+
+        let engine = Engine::open(dir.path(), config).unwrap();
+        assert_eq!(
+            engine.get(&key_from_u32(1)).unwrap(),
+            Some(Vec::new()),
+            "the empty-value entry must survive GC and a restart"
+        );
+    }
+
+    /// After the one-time hash repair, a backup must recompute and persist the
+    /// real hash instead of trusting the dropped value.
+    #[test]
+    fn backup_rehashes_segments_after_hash_repair() {
+        let dir = TempDir::new().unwrap();
+        let config = no_background_config();
+
+        let (seg_id, expected) = {
+            let engine = Engine::open(dir.path(), config.clone()).unwrap();
+            engine.put(test_key(3), b"hash me", Codec::None).unwrap();
+            let id = engine.seal_active_segment().unwrap();
+            let hash = engine.shared.inner.read().unwrap().meta.segments[&id]
+                .sha256
+                .expect("seal records a hash");
+            (id, hash)
+        };
+
+        fs::remove_file(dir.path().join(crate::recovery::HASH_REPAIR_MARKER)).unwrap();
+        let engine = Engine::open(dir.path(), config).unwrap();
+        assert!(engine.shared.inner.read().unwrap().meta.segments[&seg_id]
+            .sha256
+            .is_none());
+
+        let segments = engine.backup_segments().unwrap();
+        let artifact = segments
+            .iter()
+            .find(|s| s.segment_id == seg_id)
+            .expect("sealed segment should be part of a backup");
+        assert_eq!(
+            artifact.sha256, expected,
+            "the backup must recompute the segment hash"
+        );
+        assert_eq!(
+            engine.shared.inner.read().unwrap().meta.segments[&seg_id].sha256,
+            Some(expected),
+            "the recomputed hash must be persisted"
+        );
+    }
+
+    /// Truncating a corrupt sealed tail must invalidate the stored hash, or a
+    /// backup would upload the shortened file under the old content's hash and
+    /// poison that object for the restore point.
+    #[test]
+    fn corrupt_sealed_tail_is_truncated_and_hash_invalidated() {
+        use std::io::Write;
+
+        let dir = TempDir::new().unwrap();
+        let config = no_background_config();
+        let value = b"sealed payload".to_vec();
+
+        let (seg_id, file_len) = {
+            let engine = Engine::open(dir.path(), config.clone()).unwrap();
+            engine.put(test_key(2), &value, Codec::None).unwrap();
+            let id = engine.seal_active_segment().unwrap();
+            // Pretend this store was already opened by a fixed build, so the
+            // one-time repair does not mask the truncation behaviour.
+            crate::recovery::mark_hash_repair_done(dir.path()).unwrap();
+            let len = fs::metadata(segment_path(dir.path(), id)).unwrap().len();
+            (id, len)
+        };
+
+        let path = segment_path(dir.path(), seg_id);
+        let mut file = fs::OpenOptions::new().append(true).open(&path).unwrap();
+        file.write_all(&[0xAB; 37]).unwrap();
+        file.sync_all().unwrap();
+        drop(file);
+
+        let engine = Engine::open(dir.path(), config).unwrap();
+        assert_eq!(
+            fs::metadata(&path).unwrap().len(),
+            file_len,
+            "the corrupt tail must be cut back to the last complete entry"
+        );
+        assert_eq!(engine.get(&test_key(2)).unwrap(), Some(value));
+        assert!(
+            engine.shared.inner.read().unwrap().meta.segments[&seg_id]
+                .sha256
+                .is_none(),
+            "a hash of the pre-truncation bytes must not survive"
+        );
     }
 }

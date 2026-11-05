@@ -252,7 +252,7 @@ fn fuzz_gc_stress() {
 
     let mut config = Config::default();
     config.gc_deleted_ratio = 0.1; // aggressive GC trigger
-    let engine = Engine::open(dir.path(), config).unwrap();
+    let engine = Engine::open(dir.path(), config.clone()).unwrap();
 
     let mut oracle: HashMap<[u8; 32], Vec<u8>> = HashMap::new();
     let mut next_key = 0u64;
@@ -296,6 +296,19 @@ fn fuzz_gc_stress() {
                 round
             );
         }
+    }
+
+    // Restart after all those compactions: recovery must resume from the
+    // compacted files' physical end, not truncate their tails.
+    drop(engine);
+    let engine = Engine::open(dir.path(), config).unwrap();
+    for (key, expected) in &oracle {
+        let got = engine.get(key).unwrap();
+        assert_eq!(
+            got.as_ref(),
+            Some(expected),
+            "entry lost by a restart after GC"
+        );
     }
 }
 
