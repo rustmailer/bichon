@@ -29,6 +29,7 @@ pub mod account_roles;
 pub mod audit_detail;
 pub mod event_bus;
 pub mod journal;
+pub mod license_gate;
 pub mod text_extractor;
 pub mod timestamp;
 pub mod user_cleanup;

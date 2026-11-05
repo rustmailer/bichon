@@ -51,6 +51,17 @@ impl DownloadController {
 
     /// Trigger synchronization for a specific account
     pub async fn trigger_schedule(&self, account_id: u64, email: String) {
+        // The license gate can suspend syncing (e.g. a restore brought in
+        // more accounts than the license allows). Reads stay available.
+        if !crate::ext::license_gate::sync_allowed() {
+            tracing::warn!(
+                "Sync for account {}-{} skipped: {}",
+                account_id,
+                email,
+                "syncing is paused by the license account-limit invariant"
+            );
+            return;
+        }
         if let Err(e) = self.channel.send((account_id, email)).await {
             error!(
                 "Failed to trigger download for account={{{}}}, error: {:?}",

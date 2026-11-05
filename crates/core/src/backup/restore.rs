@@ -212,6 +212,14 @@ pub struct RestoreReport {
     pub audit_deltas_copied: usize,
     pub integrity_restored: bool,
     pub timestamp_restored: bool,
+    /// `instance-id` was restored from the deployment identity package, so
+    /// the existing license still binds to this data set.
+    pub instance_id_restored: bool,
+    /// `license.txt` was restored alongside it.
+    pub license_restored: bool,
+    /// `license-state.json` (trial start / installed ledger) was restored, so
+    /// a restore cannot reset a trial.
+    pub license_state_restored: bool,
     /// Number of index directories restored from the point (0 if the point
     /// carries no index copies).
     pub tantivy_restored: usize,
@@ -613,7 +621,15 @@ pub(crate) async fn restore_with_engine(
         )
     })?;
 
-    let result = restore_into(&manifest, &targets, &work, engine, &mut report).await;
+    let result = restore_into(
+        &manifest,
+        &targets,
+        &work,
+        engine,
+        opts.live_root.as_deref(),
+        &mut report,
+    )
+    .await;
     let _ = std::fs::remove_dir_all(&work);
     result?;
 
@@ -677,13 +693,162 @@ pub(crate) async fn restore_with_engine(
 
 /// Apply one manifest's objects to the resolved target directories. Separated
 /// so failures propagate through the work-dir cleanup.
+/// Deployment identity package: the `instance-id` licenses are bound to, the
+/// license file when one exists, and the license-state ledger (trial start /
+/// "a license was installed"). These are small files a disaster recovery must
+/// preserve together — restoring the data without the id makes every license
+/// fail with `MachineMismatch`, and dropping the ledger would restart a
+/// trial.
+#[derive(Debug, serde::Deserialize)]
+struct DeploymentIdentityPackage {
+    #[serde(default)]
+    instance_id: Option<String>,
+    #[serde(default)]
+    license: Option<String>,
+    #[serde(default)]
+    license_state: Option<serde_json::Value>,
+}
+
+/// Pick the license to restore.
+///
+/// The restore point carries the license as it was at backup time. Restoring
+/// an old point after a renewal would therefore regress `upd` and could fail
+/// the update-coverage preflight on the current binary. When the restore
+/// target belongs to the *same* deployment as the live install (same
+/// `instance-id`), the live license is at least as current, so it wins.
+/// Restoring onto a different deployment keeps the packaged license — it is
+/// the only one bound to the restored `instance-id`.
+/// A cheap shape check for "this is a license JWT, not an empty or garbage
+/// file". Format validation belongs to `bichon-license`, which the community
+/// core cannot depend on.
+fn looks_like_jwt(raw: &str) -> bool {
+    let compact: String = raw.chars().filter(|c| !c.is_whitespace()).collect();
+    compact.matches('.').count() == 2 && !compact.starts_with('.') && !compact.ends_with('.')
+}
+
+fn choose_license(
+    packaged: Option<&str>,
+    packaged_instance_id: Option<&str>,
+    live_root: Option<&Path>,
+) -> Option<String> {
+    let packaged = packaged.map(str::trim).filter(|s| !s.is_empty());
+    let Some(live_root) = live_root else {
+        return packaged.map(str::to_string);
+    };
+
+    let live_id = std::fs::read_to_string(live_root.join("instance-id")).ok();
+    let same_deployment = match (
+        packaged_instance_id.map(str::trim),
+        live_id.as_deref().map(str::trim),
+    ) {
+        (Some(a), Some(b)) => a.eq_ignore_ascii_case(b),
+        _ => false,
+    };
+    if same_deployment {
+        if let Ok(live) = std::fs::read_to_string(live_root.join("license.txt")) {
+            let live = live.trim();
+            if looks_like_jwt(live) && Some(live) != packaged {
+                info!(
+                    "restore: keeping the deployment's current license instead of the one \
+                     captured in the restore point"
+                );
+                return Some(live.to_string());
+            }
+        }
+    }
+    packaged.map(str::to_string)
+}
+
+async fn restore_deployment_identity(
+    obj: &ObjectRef,
+    targets: &RestoreTargets,
+    work: &Path,
+    engine: &BackupEngine,
+    live_root: Option<&Path>,
+    report: &mut RestoreReport,
+) -> BichonResult<()> {
+    let package = work.join("deployment.json");
+    download(engine, obj, &package, report).await?;
+    let raw = std::fs::read_to_string(&package).map_err(|e| {
+        raise_error!(
+            format!(
+                "restore: cannot read deployment identity {}: {e}",
+                package.display()
+            ),
+            ErrorCode::InternalError
+        )
+    })?;
+    let identity: DeploymentIdentityPackage = serde_json::from_str(&raw).map_err(|e| {
+        raise_error!(
+            format!("restore: invalid deployment identity package: {e}"),
+            ErrorCode::InternalError
+        )
+    })?;
+
+    if let Some(instance_id) = identity.instance_id.as_deref() {
+        let id = instance_id.trim();
+        if id.len() == 64 && id.bytes().all(|b| b.is_ascii_hexdigit()) {
+            std::fs::write(targets.root.join("instance-id"), id).map_err(|e| {
+                raise_error!(
+                    format!("restore: cannot write instance-id: {e}"),
+                    ErrorCode::InternalError
+                )
+            })?;
+            report.instance_id_restored = true;
+        } else {
+            // Never write a malformed id: a new one generated on first start
+            // is at least a coherent deployment, while a broken file would
+            // make every license check fail.
+            warn!("restore: deployment identity contains a malformed instance-id; skipped");
+        }
+    }
+    if let Some(license) = choose_license(
+        identity.license.as_deref(),
+        identity.instance_id.as_deref(),
+        live_root,
+    ) {
+        std::fs::write(targets.root.join("license.txt"), license).map_err(|e| {
+            raise_error!(
+                format!("restore: cannot write license.txt: {e}"),
+                ErrorCode::InternalError
+            )
+        })?;
+        report.license_restored = true;
+    }
+    if let Some(state) = identity.license_state.as_ref().filter(|v| v.is_object()) {
+        let raw = serde_json::to_vec_pretty(state).map_err(|e| {
+            raise_error!(
+                format!("restore: cannot encode license state: {e}"),
+                ErrorCode::InternalError
+            )
+        })?;
+        std::fs::write(targets.root.join("license-state.json"), raw).map_err(|e| {
+            raise_error!(
+                format!("restore: cannot write license-state.json: {e}"),
+                ErrorCode::InternalError
+            )
+        })?;
+        report.license_state_restored = true;
+    } else if matches!(&identity.license_state, Some(v) if !v.is_null()) {
+        warn!("restore: deployment identity contains a non-object license state; skipped");
+    }
+    Ok(())
+}
+
 async fn restore_into(
     manifest: &Manifest,
     targets: &RestoreTargets,
     work: &Path,
     engine: &BackupEngine,
+    live_root: Option<&Path>,
     report: &mut RestoreReport,
 ) -> BichonResult<()> {
+    // Deployment identity first: it is tiny and determines whether the
+    // restored data set keeps its license.
+    if let Some(obj) = &manifest.objects.deployment {
+        restore_deployment_identity(obj, targets, work, engine, live_root, report).await?;
+    }
+
     // memdb: one gzip snapshot streamed from memory at capture time. R7
     // guarantees the target is a fresh, empty dir, so there is no stale WAL
     // to clear.
@@ -850,6 +1015,7 @@ fn manifest_refs(m: &Manifest) -> Vec<(&str, &str, u64)> {
         &m.objects.memdb,
         &m.objects.integrity,
         &m.objects.timestamp,
+        &m.objects.deployment,
     ]
     .into_iter()
     .flatten()
@@ -941,6 +1107,7 @@ fn assert_sufficient_space(targets: &RestoreTargets, m: &Manifest) -> BichonResu
     let root_needed = m.objects.memdb.as_ref().map_or(0, |o| o.bytes)
         + m.objects.integrity.as_ref().map_or(0, |o| o.bytes)
         + m.objects.timestamp.as_ref().map_or(0, |o| o.bytes)
+        + m.objects.deployment.as_ref().map_or(0, |o| o.bytes)
         + m.objects.audit.as_ref().map_or(0, |a| {
             a.base.bytes + a.deltas.iter().map(|d| d.obj.bytes).sum::<u64>()
         });
@@ -1024,6 +1191,15 @@ pub fn format_restore_report(report: &RestoreReport) -> String {
             "  timestamp anchor: {}\n",
             yes(report.timestamp_restored)
         ));
+        if report.instance_id_restored || report.license_restored || report.license_state_restored
+        {
+            out.push_str(&format!(
+                "  deployment id   : instance-id {}, license {}, license state {}\n",
+                yes(report.instance_id_restored),
+                yes(report.license_restored),
+                yes(report.license_state_restored)
+            ));
+        }
         out.push_str(&format!(
             "  search indices  : {} (from the point)\n",
             report.tantivy_restored
@@ -1156,6 +1332,7 @@ mod tests {
             }),
             integrity: Some(obj.clone()),
             timestamp: Some(obj.clone()),
+            deployment: None,
             tantivy: vec![TantivyRef {
                 name: "envelope".to_string(),
                 obj: crate::backup::manifest::ObjectRef {
@@ -1276,6 +1453,105 @@ mod tests {
         );
         // Surrounding whitespace is tolerated.
         assert_eq!(normalize_point(Some("  m-abc  ")).as_deref(), Some("abc"));
+    }
+
+    /// A restore into the same deployment keeps the current (possibly
+    /// renewed) license instead of the older one captured in the point; a
+    /// different deployment keeps the packaged license, the only one bound to
+    /// the restored instance-id.
+    #[test]
+    fn choose_license_prefers_the_live_license_only_for_the_same_deployment() {
+        let root = test_root("choose-license");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let id = "a".repeat(64);
+        std::fs::write(root.join("instance-id"), &id).unwrap();
+        std::fs::write(root.join("license.txt"), "live.header.sig").unwrap();
+
+        // Same deployment: live wins.
+        assert_eq!(
+            choose_license(Some("packaged.header.sig"), Some(&id), Some(&root)).as_deref(),
+            Some("live.header.sig")
+        );
+        // Different deployment: packaged wins.
+        let other = "b".repeat(64);
+        assert_eq!(
+            choose_license(Some("packaged.header.sig"), Some(&other), Some(&root)).as_deref(),
+            Some("packaged.header.sig")
+        );
+        // A malformed live file is ignored.
+        std::fs::write(root.join("license.txt"), "not-a-jwt").unwrap();
+        assert_eq!(
+            choose_license(Some("packaged.header.sig"), Some(&id), Some(&root)).as_deref(),
+            Some("packaged.header.sig")
+        );
+        // No live root (fresh DR box) or no packaged license: packaged stays.
+        assert_eq!(
+            choose_license(Some("packaged.header.sig"), Some(&id), None).as_deref(),
+            Some("packaged.header.sig")
+        );
+        assert_eq!(choose_license(None, Some(&id), Some(&root)), None);
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// Deployment identity restores `instance-id` and `license.txt` verbatim,
+    /// so the existing license still binds to the restored data root.
+    #[tokio::test]
+    async fn deployment_identity_restores_instance_id_and_license() {
+        init_test_env();
+        let root = test_root("deployment");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let store = BackupEngine::local_store_for_test(&root.join("store")).unwrap();
+        let engine = BackupEngine::new(store, "test");
+
+        let instance_id = "a".repeat(64);
+        let package = serde_json::json!({
+            "instance_id": instance_id,
+            "license": "-----BEGIN BICHON LICENSE-----\njwt.payload.sig\n-----END BICHON LICENSE-----",
+            "license_state": {
+                "license_installed": true,
+                "trial_started_at": 1_700_000_000_i64,
+                "last_seen_at": 1_700_086_400_i64,
+            },
+        });
+        let raw = serde_json::to_vec(&package).unwrap();
+        let key = engine.upload_bytes_for_test(&raw).await.unwrap();
+        let obj = ObjectRef {
+            key,
+            sha256: hex::encode(ring::digest::digest(&ring::digest::SHA256, &raw).as_ref()),
+            bytes: raw.len() as u64,
+        };
+
+        let target = root.join("restored");
+        std::fs::create_dir_all(&target).unwrap();
+        let targets = RestoreTargets {
+            root: target.clone(),
+            index: target.join(INDICES_DIR),
+            data: target.join(STORAGE_DIR),
+        };
+        let mut report = RestoreReport::default();
+        restore_deployment_identity(&obj, &targets, &root, &engine, None, &mut report)
+            .await
+            .unwrap();
+
+        assert!(report.instance_id_restored);
+        assert!(report.license_restored);
+        assert!(report.license_state_restored);
+        assert_eq!(
+            std::fs::read_to_string(target.join("instance-id")).unwrap(),
+            instance_id
+        );
+        assert!(std::fs::read_to_string(target.join("license.txt"))
+            .unwrap()
+            .contains("BICHON LICENSE"));
+        let state = std::fs::read_to_string(target.join("license-state.json")).unwrap();
+        let state: serde_json::Value = serde_json::from_str(&state).unwrap();
+        assert_eq!(state["license_installed"], true);
+        assert_eq!(state["trial_started_at"], 1_700_000_000_i64);
+
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[tokio::test]

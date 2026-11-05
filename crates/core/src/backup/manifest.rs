@@ -118,6 +118,10 @@ pub struct ManifestObjects {
     pub integrity: Option<ObjectRef>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub timestamp: Option<ObjectRef>,
+    /// Deployment identity package (`instance-id` + optional `license.txt`).
+    /// Absent in backups written before this artifact existed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub deployment: Option<ObjectRef>,
     /// Tantivy index copies (envelope + attachment). Derived data —
     /// recreated after a restore instead of being copied back.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -199,6 +203,7 @@ impl Manifest {
             }
             ArtifactKey::Integrity => self.objects.integrity = Some(obj),
             ArtifactKey::TimestampAnchor => self.objects.timestamp = Some(obj),
+            ArtifactKey::DeploymentIdentity => self.objects.deployment = Some(obj),
         }
         Ok(())
     }
@@ -225,6 +230,7 @@ impl Manifest {
             &self.objects.memdb,
             &self.objects.integrity,
             &self.objects.timestamp,
+            &self.objects.deployment,
         ]
         .into_iter()
         .flatten()
@@ -253,6 +259,7 @@ impl Manifest {
             &self.objects.memdb,
             &self.objects.integrity,
             &self.objects.timestamp,
+            &self.objects.deployment,
         ]
         .into_iter()
         .flatten()
@@ -369,10 +376,15 @@ mod tests {
         m.add_artifact(&artifact(ArtifactKey::AuditDelta(1, 2), 0x06, 1)).unwrap();
         m.add_artifact(&artifact(ArtifactKey::Integrity, 0x07, 1)).unwrap();
         m.add_artifact(&artifact(ArtifactKey::TimestampAnchor, 0x08, 1)).unwrap();
+        m.add_artifact(&artifact(ArtifactKey::DeploymentIdentity, 0x09, 1)).unwrap();
 
         let keys = m.object_keys();
-        assert_eq!(keys.len(), 7, "memdb+2 segs+audit base+delta+integrity+timestamp");
-        assert_eq!(m.object_refs().len(), 7);
+        assert_eq!(
+            keys.len(),
+            8,
+            "memdb+2 segs+audit base+delta+integrity+timestamp+deployment"
+        );
+        assert_eq!(m.object_refs().len(), 8);
         // Content addressing ⇒ distinct bytes ⇒ distinct keys.
         let uniq: std::collections::HashSet<&str> = keys.iter().copied().collect();
         assert_eq!(uniq.len(), keys.len(), "all references must be distinct objects");

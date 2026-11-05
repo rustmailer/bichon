@@ -226,6 +226,9 @@ impl AccountDownTask {
     }
 
     pub async fn start_manual_task(&self, account_id: u64, run_gap_fill: bool) -> BichonResult<()> {
+        if !crate::ext::license_gate::sync_allowed() {
+            return Err(crate::ext::license_gate::sync_refused_error());
+        }
         {
             if self.is_manual_running(account_id).await {
                 return Err(raise_error!(

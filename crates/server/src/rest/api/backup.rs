@@ -160,6 +160,8 @@ struct ManifestView {
     audit: Option<AuditView>,
     integrity: Option<ObjectView>,
     timestamp: Option<ObjectView>,
+    /// `instance-id` + license + license-state package (Pro deployments).
+    deployment: Option<ObjectView>,
     tantivy: Vec<ObjectView>,
 }
 
@@ -624,6 +626,7 @@ fn manifest_view(m: Manifest) -> ManifestView {
         audit: objects.audit.as_ref().map(audit_view),
         integrity: objects.integrity.as_ref().map(object_view),
         timestamp: objects.timestamp.as_ref().map(object_view),
+        deployment: objects.deployment.as_ref().map(object_view),
         tantivy: objects
             .tantivy
             .iter()

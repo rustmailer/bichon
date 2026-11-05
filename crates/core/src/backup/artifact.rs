@@ -49,6 +49,11 @@ pub enum ArtifactKey {
     Integrity,
     /// Full timestamp anchor database copy.
     TimestampAnchor,
+    /// Deployment identity: a small JSON package holding `instance-id` (the
+    /// id licenses are bound to) and, when present, `license.txt`. Restoring
+    /// it keeps the licence valid on the restored data set instead of forcing
+    /// a reissue after every disaster recovery.
+    DeploymentIdentity,
 }
 
 impl ArtifactKey {
@@ -65,6 +70,7 @@ impl ArtifactKey {
             ArtifactKey::AuditBase | ArtifactKey::AuditDelta(_, _) => "audit",
             ArtifactKey::Integrity => "integrity",
             ArtifactKey::TimestampAnchor => "timestamp",
+            ArtifactKey::DeploymentIdentity => "deployment",
         }
     }
 }
