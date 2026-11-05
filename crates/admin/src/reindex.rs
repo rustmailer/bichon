@@ -153,6 +153,16 @@ pub struct ReindexArgs {
     #[clap(long, help = "Reindex even if the index is already at the current format")]
     pub force: bool,
 
+    /// Confirm the rebuild explicitly instead of answering the
+    /// "Proceed with reindex?" prompt. Required when stdin is not a terminal
+    /// (init containers, Kubernetes Jobs, CI), where that prompt cannot be
+    /// answered.
+    #[clap(
+        long,
+        help = "Skip the confirmation prompt; required when stdin is not a terminal"
+    )]
+    pub yes: bool,
+
     /// NDJSON file recording every document that could not be carried over
     /// (default: `<root>/reindex-skipped.ndjson`). It contains plain-text
     /// message metadata, so treat it like the archive itself.
@@ -213,9 +223,50 @@ pub fn run_cli(args: ReindexArgs) -> i32 {
     }
 }
 
+/// How the final "Proceed with reindex?" gate is decided.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ConfirmationMode {
+    /// Ask on the terminal.
+    Prompt,
+    /// Proceed without asking (explicit `--yes`).
+    Proceed,
+    /// No terminal and no `--yes`: refuse loudly.
+    Refuse,
+}
+
+fn confirmation_mode(yes: bool, stdin_is_terminal: bool) -> ConfirmationMode {
+    if yes {
+        ConfirmationMode::Proceed
+    } else if stdin_is_terminal {
+        ConfirmationMode::Prompt
+    } else {
+        ConfirmationMode::Refuse
+    }
+}
+
 fn run(args: ReindexArgs) -> BichonResult<i32> {
+    run_with_terminal(args, std::io::stdin().is_terminal())
+}
+
+/// [`run`] with the terminal state injected, so the non-interactive contract is
+/// testable without a real TTY.
+fn run_with_terminal(args: ReindexArgs, stdin_is_terminal: bool) -> BichonResult<i32> {
+    let confirmation = confirmation_mode(args.yes, stdin_is_terminal);
+    if confirmation == ConfirmationMode::Refuse {
+        // The prompt cannot be answered here, and the old behaviour — print
+        // "Cancelled." and exit 0 — made a Kubernetes Job look successful
+        // while rebuilding nothing. Refuse loudly instead.
+        eprintln!(
+            "{} reindex needs confirmation, but stdin is not a terminal.\n\
+             Pass {} to run it non-interactively.",
+            style("ERROR:").red().bold(),
+            style("--yes").bold(),
+        );
+        return Ok(2);
+    }
+
     let theme = ColorfulTheme::default();
-    let root = resolve_root(&args, &theme)?;
+    let root = resolve_root_with(&args, &theme, stdin_is_terminal)?;
     // A bare `bichon-admin reindex` must be enough: ask for the two optional
     // directories and the writer budget right here, exactly like the v1.x
     // migration does. Anything supplied by flag or env var is taken as-is and
@@ -227,7 +278,12 @@ fn run(args: ReindexArgs) -> BichonResult<i32> {
         args.index_parent.as_deref().map(Path::new),
         args.data_parent.as_deref().map(Path::new),
     );
-    execute(&root, &dirs, &args, true)
+    execute(
+        &root,
+        &dirs,
+        &args,
+        confirmation == ConfirmationMode::Prompt,
+    )
 }
 
 /// Run the reindex **without** its own confirmation prompt — for callers that
@@ -976,17 +1032,46 @@ fn run_phases(
 // ─── root resolution ──────────────────────────────────────────────────────────
 
 fn resolve_root(args: &ReindexArgs, theme: &ColorfulTheme) -> BichonResult<PathBuf> {
+    resolve_root_with(args, theme, std::io::stdin().is_terminal())
+}
+
+fn resolve_root_with(
+    args: &ReindexArgs,
+    theme: &ColorfulTheme,
+    stdin_is_terminal: bool,
+) -> BichonResult<PathBuf> {
     if let Some(root) = args.root.as_deref().filter(|s| !s.trim().is_empty()) {
         let path = PathBuf::from(root.trim());
         validate_root(&path)?;
         return Ok(path);
     }
 
+    if !stdin_is_terminal {
+        // Prompting has no answer here, and the loop below used to spin
+        // forever on EOF (empty input -> validation error -> prompt again).
+        return Err(raise_error!(
+            "bichon root not provided: pass --root <dir> (or set BICHON_ROOT_DIR) \
+             when stdin is not a terminal."
+                .into(),
+            ErrorCode::InvalidParameter
+        ));
+    }
+
     loop {
-        let input: String = Input::with_theme(theme)
+        let input: String = match Input::with_theme(theme)
             .with_prompt("Enter the absolute path for 'bichon_root_dir'")
             .interact_text()
-            .unwrap_or_default();
+        {
+            Ok(input) => input,
+            // Ctrl-D / closed stdin: stop instead of spinning on an empty
+            // answer.
+            Err(_) => {
+                return Err(raise_error!(
+                    "No bichon root entered (stdin closed); aborting.".into(),
+                    ErrorCode::InvalidParameter
+                ));
+            }
+        };
         let path = PathBuf::from(input.trim());
         match validate_root(&path) {
             Ok(()) => return Ok(path),
@@ -2888,6 +2973,88 @@ mod tests {
         assert_eq!(
             dirs.blobs_dir,
             Path::new("/hdd").join("bichon-storage").join("blobs")
+        );
+    }
+
+    // ── non-interactive confirmation (--yes) ─────────────────────────────
+
+    #[test]
+    fn confirmation_mode_requires_yes_without_a_terminal() {
+        assert_eq!(confirmation_mode(true, false), ConfirmationMode::Proceed);
+        assert_eq!(confirmation_mode(true, true), ConfirmationMode::Proceed);
+        assert_eq!(confirmation_mode(false, true), ConfirmationMode::Prompt);
+        assert_eq!(confirmation_mode(false, false), ConfirmationMode::Refuse);
+    }
+
+    #[test]
+    fn yes_flag_parses() {
+        assert!(!ReindexArgs::try_parse_from(["reindex"]).unwrap().yes);
+        assert!(ReindexArgs::try_parse_from(["reindex", "--yes"]).unwrap().yes);
+    }
+
+    /// No terminal, no `--yes`: refuse with a distinct exit code *before* any
+    /// pre-check or write. The old behaviour silently printed "Cancelled." and
+    /// exited 0.
+    #[test]
+    fn non_interactive_without_yes_refuses_before_touching_anything() {
+        let (root, dirs) = build_fixture("no-tty-no-yes");
+        let args = ReindexArgs {
+            root: Some(root.to_string_lossy().into_owned()),
+            ..Default::default()
+        };
+
+        let code = run_with_terminal(args, false).expect("refusal is not an I/O error");
+        assert_eq!(code, 2);
+        assert_eq!(
+            check_index_format(&dirs.envelope_dir),
+            IndexFormatStatus::NeedsUpgrade,
+            "nothing may be rebuilt before confirmation"
+        );
+        assert!(
+            backups_under(&dirs.index_root).is_empty(),
+            "no backup may be created before confirmation"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// `--yes` must reach the real rebuild on a terminal-less run, not the
+    /// old cancel path (which also returned 0).
+    #[test]
+    fn yes_runs_the_rebuild_without_a_terminal() {
+        let (root, dirs) = build_fixture("no-tty-yes");
+        let args = ReindexArgs {
+            root: Some(root.to_string_lossy().into_owned()),
+            yes: true,
+            ..Default::default()
+        };
+
+        let code = run_with_terminal(args, false).expect("reindex ok");
+        assert_eq!(code, 0);
+        assert_eq!(
+            check_index_format(&dirs.envelope_dir),
+            IndexFormatStatus::Current,
+            "--yes must have performed the rebuild"
+        );
+        assert_eq!(
+            backups_under(&dirs.index_root).len(),
+            1,
+            "--yes must have swapped the rebuilt index into place"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// Without a root on a terminal-less run the tool must error instead of
+    /// looping forever on an unanswerable prompt.
+    #[test]
+    fn non_interactive_missing_root_errors_instead_of_looping() {
+        let args = ReindexArgs {
+            yes: true,
+            ..Default::default()
+        };
+        let err = run_with_terminal(args, false).expect_err("no root must be an error");
+        assert!(
+            format!("{err:?}").contains("pass --root"),
+            "unexpected error: {err:?}"
         );
     }
 }
