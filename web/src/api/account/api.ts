@@ -42,6 +42,8 @@ export const minimal_account_list = async () => {
 export enum DownloadStatus {
     Running = "Running",
     Success = "Success",
+    /** Finished, but at least one folder failed or was deferred (throttling). */
+    Partial = "Partial",
     Failed = "Failed",
     Cancelled = "Cancelled",
 }

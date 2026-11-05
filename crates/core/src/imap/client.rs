@@ -19,6 +19,7 @@
 use crate::account::entity::Encryption;
 use crate::error::code::ErrorCode;
 use crate::error::BichonResult;
+use crate::imap::executor::classify_login_error;
 use crate::imap::session::SessionStream;
 use crate::imap::stats::StatsWrapper;
 use crate::utils::net::establish_tcp_connection_with_timeout;
@@ -94,7 +95,9 @@ impl Client {
     ) -> BichonResult<ImapSession<Box<dyn SessionStream>>> {
         let Client { inner, .. } = self;
         let session = inner.login(username, password).await.map_err(|(e, _)| {
-            raise_error!(format!("{:#?}", e), ErrorCode::ImapAuthenticationFailed)
+            // A throttled or timed-out login is not a credential failure:
+            // callers pick their retry/backoff policy from the code (#396).
+            raise_error!(format!("{:#?}", e), classify_login_error(&e))
         })?;
         Ok(session)
     }
@@ -107,9 +110,7 @@ impl Client {
         let session = inner
             .authenticate("XOAUTH2", authenticator)
             .await
-            .map_err(|(e, _)| {
-                raise_error!(format!("{:#?}", e), ErrorCode::ImapAuthenticationFailed)
-            })?;
+            .map_err(|(e, _)| raise_error!(format!("{:#?}", e), classify_login_error(&e)))?;
         Ok(session)
     }
 
@@ -274,5 +275,73 @@ impl Client {
         socket_addrs.into_iter().next().ok_or_else(|| {
             raise_error!("Unable to resolve address".into(), ErrorCode::NetworkError)
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::imap::mock_server::MockImapServer;
+
+    /// The connection path reads the global settings, which need a data root
+    /// and an encryption password in a test process (same convention as the
+    /// other core tests).
+    fn init_test_env() {
+        use std::sync::Once;
+        static TEST_ENV: Once = Once::new();
+        TEST_ENV.call_once(|| {
+            let root = crate::test_support::unique_test_root("bichon-core-test");
+            std::env::set_var("BICHON_ROOT_DIR", &root);
+            std::env::set_var("BICHON_ENCRYPT_PASSWORD", "test-password");
+            let _ = &*crate::settings::cli::SETTINGS;
+            let _ = &*crate::settings::dir::DATA_DIR_MANAGER;
+        });
+    }
+
+    /// Runs a real `LOGIN` against a scripted server and returns the error
+    /// code the caller would see.
+    async fn login_against(login_response: &str) -> ErrorCode {
+        init_test_env();
+        let handle = MockImapServer::new()
+            .respond("LOGIN", login_response)
+            .start()
+            .await;
+        let client = Client::connection(
+            &handle.host(),
+            &Encryption::None,
+            handle.port(),
+            None,
+            false,
+        )
+        .await
+        .expect("plain connection to the mock server must succeed");
+        match client.login("user", "pass").await {
+            Ok(_) => panic!("the mock server rejected LOGIN, login must not succeed"),
+            Err(e) => e.code(),
+        }
+    }
+
+    #[tokio::test]
+    async fn throttled_login_is_not_reported_as_an_auth_failure() {
+        // The exact NO line Exchange returned in #396.
+        let code = login_against(
+            "{TAG} NO [ALERT] Account exceeded command or bandwidth limits. (Failure)\r\n",
+        )
+        .await;
+        assert_eq!(code, ErrorCode::ImapServerThrottled);
+    }
+
+    #[tokio::test]
+    async fn bad_credentials_are_an_auth_failure() {
+        let code =
+            login_against("{TAG} NO [AUTHENTICATIONFAILED] Invalid credentials\r\n").await;
+        assert_eq!(code, ErrorCode::ImapAuthenticationFailed);
+    }
+
+    #[tokio::test]
+    async fn too_many_connections_is_throttling_not_bad_password() {
+        let code = login_against("{TAG} NO [UNAVAILABLE] Too many simultaneous connections\r\n")
+            .await;
+        assert_eq!(code, ErrorCode::ImapServerThrottled);
     }
 }

@@ -27,10 +27,13 @@ use crate::{
         migration::{AccountModel, ArchiveRules},
         state::{DownloadState, GapFillFolderStats, GapFillState},
     },
-    archive::imap::mailbox::MailBox,
+    archive::imap::{
+        download::flow::{is_retryable_error, retry_backoff_secs},
+        mailbox::MailBox,
+    },
     envelope::extractor::should_archive_from_headers,
     error::BichonResult,
-    imap::executor::{compress_uid_list, ImapExecutor, DEFAULT_BATCH_SIZE},
+    imap::executor::{classify_imap_error, compress_uid_list, ImapExecutor, DEFAULT_BATCH_SIZE},
     store::tantivy::envelope::EnvelopeSnapshot,
 };
 
@@ -164,7 +167,7 @@ pub async fn gap_fill_mailbox(
     session
         .examine(&remote_mailbox.encoded_name())
         .await
-        .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;
+        .map_err(|e| raise_error!(format!("{:#?}", e), classify_imap_error(&e)))?;
 
     // Phase 1: enumerate every remote UID. A huge mailbox can make the server
     // take a while to answer `UID SEARCH ALL`; keep the UI informed instead of
@@ -207,7 +210,7 @@ pub async fn gap_fill_mailbox(
     };
     let results = match search_outcome {
         Some(res) => {
-            res.map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?
+            res.map_err(|e| raise_error!(format!("{:#?}", e), classify_imap_error(&e)))?
         }
         None => {
             session.logout().await.ok();
@@ -267,14 +270,20 @@ pub async fn gap_fill_mailbox(
                 Ok(headers) => break Ok(headers),
                 Err(e)
                     if header_retries < MAX_NETWORK_RETRIES
-                        && e.code() == ErrorCode::NetworkError =>
+                        && is_retryable_error(e.code()) =>
                 {
+                    let code = e.code();
                     header_retries += 1;
                     warn!(
                         account_id,
                         mailbox = remote_mailbox.name,
                         retries = header_retries,
-                        "Gap-fill: network error on header batch, reconnecting ({}/{})",
+                        "Gap-fill: {} on header batch, reconnecting ({}/{})",
+                        if code == ErrorCode::ImapServerThrottled {
+                            "server throttling"
+                        } else {
+                            "network error"
+                        },
                         header_retries,
                         MAX_NETWORK_RETRIES
                     );
@@ -291,7 +300,7 @@ pub async fn gap_fill_mailbox(
                                 let _ = DownloadState::append_session_error(account_id, err_msg);
                                 break Err(e);
                             }
-                            let backoff = [5u64, 15, 30][(header_retries - 1) as usize];
+                            let backoff = retry_backoff_secs(code, header_retries);
                             warn!(
                                 account_id,
                                 mailbox = remote_mailbox.name,
@@ -364,7 +373,7 @@ pub async fn gap_fill_mailbox(
     session2
         .examine(&remote_mailbox.encoded_name())
         .await
-        .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;
+        .map_err(|e| raise_error!(format!("{:#?}", e), classify_imap_error(&e)))?;
 
     // Phase 4.5: apply archive rules to the candidates from their headers,
     // before any body is downloaded. A message the filter rejects is never
@@ -461,7 +470,7 @@ pub async fn gap_fill_mailbox(
                             .examine(&remote_mailbox.encoded_name())
                             .await
                             .map_err(|e| {
-                                raise_error!(format!("{:#?}", e), ErrorCode::InternalError)
+                                raise_error!(format!("{:#?}", e), classify_imap_error(&e))
                             })?;
                     }
                 }
@@ -560,14 +569,20 @@ pub async fn gap_fill_mailbox(
             .await
             {
                 Ok(outcome) => break Ok(outcome),
-                Err(e) if retries < MAX_NETWORK_RETRIES && e.code() == ErrorCode::NetworkError => {
+                Err(e) if retries < MAX_NETWORK_RETRIES && is_retryable_error(e.code()) => {
+                    let code = e.code();
                     retries += 1;
                     warn!(
                         account_id,
                         mailbox = remote_mailbox.name,
                         index,
                         retries,
-                        "Gap-fill: network error on batch, reconnecting ({}/{})",
+                        "Gap-fill: {} on batch, reconnecting ({}/{})",
+                        if code == ErrorCode::ImapServerThrottled {
+                            "server throttling"
+                        } else {
+                            "network error"
+                        },
                         retries,
                         MAX_NETWORK_RETRIES
                     );
@@ -583,9 +598,10 @@ pub async fn gap_fill_mailbox(
                                 DownloadState::append_session_error(account_id, err_msg)?;
                                 break Err(e);
                             }
-                            // Longer backoff than the original 1s/2s/4s: a
-                            // throttling server needs time to recover.
-                            let backoff = [5u64, 15, 30][(retries - 1) as usize];
+                            // A throttled server needs much longer than a
+                            // transient network blip before it will accept
+                            // the next command.
+                            let backoff = retry_backoff_secs(code, retries);
                             warn!(
                                 account_id,
                                 mailbox = remote_mailbox.name,

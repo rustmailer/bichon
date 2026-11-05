@@ -29,6 +29,17 @@ use crate::{bichon_version, decrypt, raise_error};
 use async_imap::Session;
 use tracing::{error, warn};
 
+/// Human-readable reason for a failed login, so the log line says *why*
+/// rather than always blaming the password (#396).
+fn login_failure_label(code: ErrorCode) -> &'static str {
+    match code {
+        ErrorCode::ImapServerThrottled => "server throttling, will back off",
+        ErrorCode::NetworkError => "network error or timeout",
+        ErrorCode::ImapCommandFailed => "server rejected the command",
+        _ => "unexpected error",
+    }
+}
+
 pub struct ImapConnectionManager;
 
 impl ImapConnectionManager {
@@ -63,10 +74,22 @@ impl ImapConnectionManager {
 
                 let password = decrypt!(&password)?;
                 client.login(&login_name, &password).await.map_err(|e| {
-                    error!(
-                        "IMAP password auth failed for username '{}': {}",
-                        login_name, e
-                    );
+                    // "password auth failed" sent users hunting for a
+                    // credential problem when the server was actually
+                    // throttling or the socket timed out (#396).
+                    if e.code() == ErrorCode::ImapAuthenticationFailed {
+                        error!(
+                            "IMAP login rejected for username '{}': {}",
+                            login_name, e
+                        );
+                    } else {
+                        error!(
+                            "IMAP login for username '{}' failed ({}): {}",
+                            login_name,
+                            login_failure_label(e.code()),
+                            e
+                        );
+                    }
                     e
                 })
             }
@@ -83,10 +106,19 @@ impl ImapConnectionManager {
                     .authenticate(OAuth2::new(login_name.clone(), access_token))
                     .await
                     .map_err(|e| {
-                        error!(
-                            "IMAP OAuth2 auth failed for username '{}': {}",
-                            login_name, e
-                        );
+                        if e.code() == ErrorCode::ImapAuthenticationFailed {
+                            error!(
+                                "IMAP OAuth2 login rejected for username '{}': {}",
+                                login_name, e
+                            );
+                        } else {
+                            error!(
+                                "IMAP OAuth2 login for username '{}' failed ({}): {}",
+                                login_name,
+                                login_failure_label(e.code()),
+                                e
+                            );
+                        }
                         e
                     })
             }

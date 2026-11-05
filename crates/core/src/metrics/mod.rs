@@ -1051,6 +1051,7 @@ pub fn trigger_label(trigger: &TriggerType) -> &'static str {
 pub fn download_status_label(status: &DownloadStatus) -> &'static str {
     match status {
         DownloadStatus::Success => "success",
+        DownloadStatus::Partial => "partial",
         DownloadStatus::Failed => "failed",
         DownloadStatus::Running | DownloadStatus::Cancelled => "cancelled",
     }

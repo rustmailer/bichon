@@ -56,8 +56,7 @@ pub async fn decide_next_download_task(
         TriggerType::SyncFull => true,
         TriggerType::Scheduled => {
             let now = utc_now!();
-            let cooldown_ok = now - state.last_finished_at.unwrap_or(0) > 60 * 1000;
-            if !cooldown_ok {
+            if !scheduled_ready(now, state.last_finished_at, state.retry_after) {
                 false
             } else if let Some(ref schedule) = account.download_schedule {
                 should_trigger_scheduled(schedule, state.last_trigger_at)
@@ -82,6 +81,18 @@ pub async fn decide_next_download_task(
         Ok(DownloadTask::Idle)
     }
 }
+/// Whether a scheduled round may start: not within a minute of the previous
+/// one, and past any backoff a throttled server forced on us (#396).
+///
+/// The backoff lives here rather than only in the interval comparison so a
+/// short interval *or* a cron schedule cannot re-hammer a server that is
+/// already refusing this account.
+fn scheduled_ready(now: i64, last_finished_at: Option<i64>, retry_after: Option<i64>) -> bool {
+    let cooldown_ok = now - last_finished_at.unwrap_or(0) > 60 * 1000;
+    let backoff_over = retry_after.is_none_or(|t| now >= t);
+    cooldown_ok && backoff_over
+}
+
 fn should_trigger_next_download(last_trigger_at: i64, sync_interval_min: i64) -> bool {
     let now = utc_now!();
     now - last_trigger_at > (sync_interval_min * 60 * 1000)
@@ -157,5 +168,30 @@ mod test {
         let now = Local::now();
         let last_trigger = now.timestamp_millis() - 61 * 60 * 1000;
         assert!(should_trigger_scheduled("0 0 * * * *", last_trigger));
+    }
+
+    // ── Throttle backoff gate (#396) ───────────────────────────────
+
+    #[test]
+    fn scheduled_round_starts_when_nothing_blocks_it() {
+        assert!(super::scheduled_ready(1_000_000, Some(1_000), None));
+        // Exactly at/after the backoff deadline is allowed.
+        assert!(super::scheduled_ready(1_000_000, Some(1_000), Some(1_000_000)));
+        assert!(super::scheduled_ready(1_000_000, Some(1_000), Some(999_999)));
+    }
+
+    #[test]
+    fn scheduled_round_waits_out_the_throttle_backoff() {
+        // retry_after is in the future: a short interval or cron schedule
+        // must not start the round anyway.
+        assert!(!super::scheduled_ready(1_000_000, Some(1_000), Some(1_000_001)));
+        assert!(!super::scheduled_ready(1_000_000, Some(1_000), Some(3_600_000)));
+    }
+
+    #[test]
+    fn scheduled_round_keeps_the_one_minute_cooldown() {
+        assert!(!super::scheduled_ready(1_000_000, Some(1_000_000), None));
+        assert!(!super::scheduled_ready(1_000_000, Some(999_500), None));
+        assert!(super::scheduled_ready(1_000_000, Some(939_000), None));
     }
 }

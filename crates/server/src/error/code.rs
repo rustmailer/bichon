@@ -39,7 +39,11 @@ impl IntoStatusCode for ErrorCode {
             ErrorCode::EmailParseError => StatusCode::UNPROCESSABLE_ENTITY,
             ErrorCode::RequestTimeout => StatusCode::REQUEST_TIMEOUT,
             ErrorCode::PayloadTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
-            ErrorCode::TooManyRequest => StatusCode::TOO_MANY_REQUESTS,
+            // The IMAP server is rate-limiting us; same meaning as 429 when
+            // this bubbles up through the REST layer.
+            ErrorCode::TooManyRequest | ErrorCode::ImapServerThrottled => {
+                StatusCode::TOO_MANY_REQUESTS
+            }
             ErrorCode::AlreadyExists => StatusCode::CONFLICT,
             ErrorCode::InternalError
             | ErrorCode::AutoconfigFetchFailed
@@ -135,6 +139,7 @@ mod tests {
             ErrorCode::RequestTimeout,
             ErrorCode::PayloadTooLarge,
             ErrorCode::TooManyRequest,
+            ErrorCode::ImapServerThrottled,
             ErrorCode::AlreadyExists,
             ErrorCode::InternalError,
             ErrorCode::AutoconfigFetchFailed,

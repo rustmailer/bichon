@@ -59,6 +59,7 @@ function StatusBadge({ status }: { status: string }) {
     Running: 'bg-blue-500/10 text-blue-600',
     Downloading: 'bg-blue-500/10 text-blue-600',
     Success: 'bg-green-500/10 text-green-600',
+    Partial: 'bg-amber-500/10 text-amber-600',
     Failed: 'bg-red-500/10 text-red-600',
     Cancelled: 'bg-muted text-muted-foreground',
     Pending: 'bg-amber-500/10 text-amber-600',

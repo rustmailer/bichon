@@ -35,6 +35,12 @@ pub enum ErrorCode {
     /// per-message failure: callers streaming a batch treat it as
     /// "skip this one, keep going" instead of a batch-level abort.
     EmailParseError = 50030,
+    /// The server refused a command or a login because of its own rate or
+    /// resource limits (Exchange's "Account exceeded command or bandwidth
+    /// limits", Gmail's `[LIMIT]`, Dovecot's "too many connections",
+    /// `OVERQUOTA`). Retryable, but only after a backoff: it is not a
+    /// credential problem and retrying immediately makes it worse (#396).
+    ImapServerThrottled = 50040,
     AutoconfigFetchFailed = 50060,
     // Internal system errors (70000–70999)
     InternalError = 70000,

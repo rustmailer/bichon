@@ -33,6 +33,12 @@ use std::collections::BTreeMap;
 pub enum DownloadStatus {
     Running,
     Success,
+    /// The round finished but at least one folder failed (or the server
+    /// started throttling and the remaining folders were deferred). A large
+    /// account used to show every round as `Failed` because one transient
+    /// folder failure poisoned the whole session (#396); the UI can now tell
+    /// "393/394 folders archived" from "nothing worked".
+    Partial,
     Failed,
     #[default]
     Cancelled,
@@ -162,6 +168,16 @@ pub struct DownloadState {
     pub history: Vec<DownloadSession>,
     pub last_trigger_at: i64,
     pub last_finished_at: Option<i64>,
+    /// Earliest UTC-millis time a *scheduled* round may start. Set when the
+    /// IMAP server throttled us so retries back off instead of re-hammering
+    /// the server at the normal interval (#396). Manual syncs ignore it.
+    /// Missing on records written by older versions (`None` = no wait).
+    #[serde(default)]
+    pub retry_after: Option<i64>,
+    /// Consecutive throttled rounds. Grows the backoff; reset by any round
+    /// that is not throttled. Older records deserialize as 0.
+    #[serde(default)]
+    pub throttle_streak: u32,
 }
 
 impl MemDbModel for DownloadState {
@@ -171,6 +187,20 @@ impl MemDbModel for DownloadState {
     fn key(&self) -> String {
         self.account_id.to_string()
     }
+}
+
+/// Backoff (seconds) before the next scheduled round after the server
+/// throttled us: 15 min, 30 min, 1 h, then 2 h. Long enough for an
+/// Exchange/Gmail throttling window to reset, bounded so an archive still
+/// catches up the same day.
+pub fn throttle_backoff_secs(streak: u32) -> i64 {
+    let minutes: i64 = match streak {
+        0 | 1 => 15,
+        2 => 30,
+        3 => 60,
+        _ => 120,
+    };
+    minutes * 60
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Deserialize, Serialize)]
@@ -218,6 +248,7 @@ impl DownloadState {
             }),
             history: Default::default(),
             last_finished_at: Default::default(),
+            ..Default::default()
         };
         upsert_impl(DB_MANAGER.db(), state)
     }
@@ -469,6 +500,42 @@ impl DownloadState {
             if let Some(ref mut session) = updated.active_session {
                 session.message = Some(message);
             }
+            Ok(updated)
+        })
+    }
+
+    /// Records that the IMAP server throttled this account and schedules the
+    /// next *scheduled* round after a growing backoff. Returns the delay in
+    /// seconds, for the session message.
+    ///
+    /// Without this, an account whose interval is shorter than the server's
+    /// throttling window retries forever at full speed: in the #396 logs a
+    /// 394-folder account fired 72 logins in 60 seconds while Exchange was
+    /// already refusing them.
+    pub fn note_throttle(account_id: u64) -> BichonResult<i64> {
+        let now = utc_now!();
+        Self::update_state(account_id, move |current| {
+            let mut updated = current.clone();
+            updated.throttle_streak = updated.throttle_streak.saturating_add(1);
+            let delay_secs = throttle_backoff_secs(updated.throttle_streak);
+            updated.retry_after = Some(now + delay_secs * 1000);
+            Ok(updated)
+        })?;
+        let streak = Self::get(account_id)?
+            .map(|s| s.throttle_streak)
+            .unwrap_or(1);
+        Ok(throttle_backoff_secs(streak))
+    }
+
+    /// Clears the throttle backoff after a round that was not throttled.
+    pub fn clear_throttle(account_id: u64) -> BichonResult<()> {
+        Self::update_state(account_id, |current| {
+            if current.throttle_streak == 0 && current.retry_after.is_none() {
+                return Ok(current);
+            }
+            let mut updated = current.clone();
+            updated.throttle_streak = 0;
+            updated.retry_after = None;
             Ok(updated)
         })
     }
@@ -1095,5 +1162,109 @@ mod tests {
         // not an empty list: the UI has to tell "nothing skipped" apart from
         // "we did not record which ones".
         assert!(state.history[0].folders["INBOX"].unprocessed.is_none());
+    }
+
+    // ── Throttle backoff (#396) ────────────────────────────────────
+
+    #[test]
+    fn throttle_backoff_grows_and_is_capped() {
+        assert_eq!(super::throttle_backoff_secs(1), 15 * 60);
+        assert_eq!(super::throttle_backoff_secs(2), 30 * 60);
+        assert_eq!(super::throttle_backoff_secs(3), 60 * 60);
+        assert_eq!(super::throttle_backoff_secs(4), 120 * 60);
+        assert_eq!(super::throttle_backoff_secs(99), 120 * 60);
+        // Defensive: a zero streak (should not happen) still waits.
+        assert_eq!(super::throttle_backoff_secs(0), 15 * 60);
+    }
+
+    /// Download state written before `retry_after`/`throttle_streak` existed
+    /// must keep deserializing after an upgrade.
+    #[test]
+    fn legacy_download_state_without_backoff_fields_deserializes() {
+        let state: super::DownloadState = serde_json::from_str(
+            r#"{"account_id":7,"active_session":null,"history":[],"last_trigger_at":1,"last_finished_at":2}"#,
+        )
+        .expect("legacy DownloadState must deserialize");
+        assert_eq!(state.retry_after, None);
+        assert_eq!(state.throttle_streak, 0);
+    }
+
+    /// The throttle ledger is DB-backed; a private root keeps it out of any
+    /// other test's data (same convention as the other core DB tests).
+    fn init_test_env() {
+        use std::sync::Once;
+        static TEST_ENV: Once = Once::new();
+        TEST_ENV.call_once(|| {
+            let root = crate::test_support::unique_test_root("bichon-core-test");
+            std::env::set_var("BICHON_ROOT_DIR", &root);
+            std::env::set_var("BICHON_ENCRYPT_PASSWORD", "test-password");
+            let _ = &*crate::settings::cli::SETTINGS;
+            let _ = &*crate::settings::dir::DATA_DIR_MANAGER;
+            let _ = &*crate::database::manager::DB_MANAGER;
+        });
+    }
+
+    #[tokio::test]
+    async fn throttle_backoff_is_recorded_grows_and_clears() {
+        init_test_env();
+        // Far away from the ids other tests use in the shared test database.
+        let account_id = 9_900_000_001u64;
+        super::DownloadState::init(account_id).await.unwrap();
+
+        let before = crate::utc_now!();
+        let delay = super::DownloadState::note_throttle(account_id).unwrap();
+        assert_eq!(delay, 15 * 60);
+
+        let state = super::DownloadState::get(account_id)
+            .unwrap()
+            .expect("state must exist");
+        assert_eq!(state.throttle_streak, 1);
+        let retry_after = state.retry_after.expect("backoff must be scheduled");
+        assert!(
+            retry_after >= before + delay * 1000,
+            "retry_after {retry_after} must be at least {delay}s after {before}"
+        );
+
+        // A second throttled round backs off further.
+        let delay = super::DownloadState::note_throttle(account_id).unwrap();
+        assert_eq!(delay, 30 * 60);
+        let state = super::DownloadState::get(account_id).unwrap().unwrap();
+        assert_eq!(state.throttle_streak, 2);
+
+        // A non-throttled round resets it completely.
+        super::DownloadState::clear_throttle(account_id).unwrap();
+        let state = super::DownloadState::get(account_id).unwrap().unwrap();
+        assert_eq!(state.throttle_streak, 0);
+        assert_eq!(state.retry_after, None);
+
+        // Clearing again is a no-op, not an error.
+        super::DownloadState::clear_throttle(account_id).unwrap();
+        super::DownloadState::delete(account_id).unwrap();
+    }
+
+    #[test]
+    fn download_state_round_trips_backoff_fields() {
+        let state = super::DownloadState {
+            account_id: 7,
+            retry_after: Some(1_700_000_000_000),
+            throttle_streak: 3,
+            ..Default::default()
+        };
+        let json = serde_json::to_string(&state).unwrap();
+        let back: super::DownloadState = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.retry_after, Some(1_700_000_000_000));
+        assert_eq!(back.throttle_streak, 3);
+    }
+
+    /// The persisted status is a wire contract: `Partial` must serialize
+    /// exactly as the UI enum spells it.
+    #[test]
+    fn partial_status_serializes_as_partial() {
+        let json = serde_json::to_string(&super::DownloadStatus::Partial).unwrap();
+        assert_eq!(json, "\"Partial\"");
+        assert_eq!(
+            crate::metrics::download_status_label(&super::DownloadStatus::Partial),
+            "partial"
+        );
     }
 }

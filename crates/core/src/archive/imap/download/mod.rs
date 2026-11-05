@@ -119,6 +119,9 @@ pub async fn process_imap_download(
         };
         match result {
             Ok(_) => {
+                // A full rebuild finished: no reason to keep a throttle
+                // backoff from an earlier incremental round.
+                DownloadState::clear_throttle(account_id)?;
                 DownloadState::update_session_status(account_id, DownloadStatus::Success, None)?;
             }
             Err(e) => {
@@ -143,7 +146,11 @@ pub async fn process_imap_download(
     // download anything missing locally. Not run on scheduled syncs. Gap-fill
     // runs are tracked in their own state (independent of the download session)
     // because they are repeatable until `failed == 0`.
-    if run_gap_fill {
+    //
+    // Skipped when the round was throttled: gap-fill opens a connection per
+    // folder, which is exactly what the server is refusing right now.
+    let throttled = matches!(&reconcile_result, Ok(summary) if summary.throttled);
+    if run_gap_fill && !throttled {
         GapFillState::start_run(account_id)?;
         // Run inside a helper so a failure anywhere still finalizes the run:
         // an abandoned active run would otherwise show as Running forever.
@@ -200,7 +207,26 @@ pub async fn process_imap_download(
     // during gap-fill are not dropped (update_session_status closes the active
     // session, moving it into history).
     match reconcile_result {
-        Ok(_) => DownloadState::update_session_status(account_id, DownloadStatus::Success, None)?,
+        Ok(summary) => {
+            let (status, message) = flow::session_status_for(&summary);
+            if summary.throttled {
+                // Back off instead of retrying at the normal interval; a
+                // short interval against a throttling server is what produced
+                // the 72-logins-per-minute storm in #396.
+                let delay_secs = DownloadState::note_throttle(account_id)?;
+                let minutes = (delay_secs + 59) / 60;
+                let msg = format!(
+                    "{} Next scheduled attempt in about {} minute(s).",
+                    message.unwrap_or_default(),
+                    minutes
+                );
+                DownloadState::update_session_status(account_id, status, Some(msg))?;
+            } else {
+                // Any non-throttled round clears a previous backoff.
+                DownloadState::clear_throttle(account_id)?;
+                DownloadState::update_session_status(account_id, status, message)?;
+            }
+        }
         Err(e) => {
             let err_msg = format!("Email Download interrupted: {:#?}", e);
             DownloadState::append_session_error(account_id, err_msg.clone())?;
