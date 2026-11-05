@@ -39,7 +39,10 @@ use bichon_core::{
     context::Initialize,
     settings::cli::SETTINGS,
 };
+use crate::rest::health;
+
 use poem::{
+    get,
     listener::TcpListener,
     Endpoint, Request, Response, Route, Server,
 };
@@ -102,7 +105,7 @@ pub async fn serve_maintenance(edition: &str, heading: &str, steps: &[String]) {
     let page = MaintenancePage {
         html: Arc::new(render_page(edition, heading, steps)),
     };
-    let app = Route::new().at("/", page.clone()).at("/*", page);
+    let app = maintenance_route(page);
 
     let mut shutdown_rx = SIGNAL_MANAGER.subscribe();
     let server = Server::new(TcpListener::bind((bind_ip, port)))
@@ -129,6 +132,16 @@ pub async fn serve_maintenance(edition: &str, heading: &str, steps: &[String]) {
         }
     }
     reminder.abort();
+}
+
+/// Maintenance-mode route tree: `/healthz` stays green so a liveness probe
+/// does not restart the container, while every application path answers the
+/// 503 page (including `/api/status`, which is readiness, not liveness).
+fn maintenance_route(page: MaintenancePage) -> Route {
+    Route::new()
+        .at("/healthz", get(health::healthz))
+        .at("/", page.clone())
+        .at("/*", page)
 }
 
 /// Answers every request with the same 503 page.
@@ -238,5 +251,31 @@ mod tests {
             escape_html(r#"<a href="x">&"</a> "#),
             r#"&lt;a href=&quot;x&quot;&gt;&amp;&quot;&lt;/a&gt; "#
         );
+    }
+
+    /// Liveness must stay green in maintenance mode; only readiness and the
+    /// application paths may be 503. Otherwise a Kubernetes liveness probe
+    /// restarts the container and the operator loses `exec` access.
+    #[test]
+    fn healthz_stays_ok_in_maintenance_while_everything_else_is_503() {
+        let app = maintenance_route(MaintenancePage {
+            html: Arc::new(render_page("CE", "Migration required", &[])),
+        });
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let status = |path: &'static str| {
+            let req = Request::builder()
+                .uri(poem::http::Uri::from_static(path))
+                .finish();
+            rt.block_on(app.call(req)).unwrap().status()
+        };
+
+        assert_eq!(status("/healthz"), http::StatusCode::OK);
+        for path in ["/", "/api/status", "/api/v1/accounts", "/index.html"] {
+            assert_eq!(
+                status(path),
+                http::StatusCode::SERVICE_UNAVAILABLE,
+                "{path} must remain the maintenance page"
+            );
+        }
     }
 }

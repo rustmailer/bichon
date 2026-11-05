@@ -52,6 +52,7 @@ use {
 
 pub mod api;
 pub mod assets;
+pub mod health;
 pub mod maintenance;
 pub mod metrics;
 pub mod public;
@@ -136,6 +137,10 @@ pub fn build_routes() -> impl Endpoint {
     let app_logic = add_web_assets(app_logic);
 
     Route::new()
+        // Liveness only, mounted outside `bichon_base_url` so a sub-path
+        // deployment keeps a stable probe path. Readiness stays at
+        // `/api/status`, which is intentionally 503 in maintenance mode.
+        .at("/healthz", get(health::healthz))
         .nest(&SETTINGS.bichon_base_url, app_logic)
         .with(cors)
         .with_if(SETTINGS.bichon_http_compression_enabled, Compression::new())
@@ -221,4 +226,41 @@ pub async fn start_http_server() -> BichonResult<()> {
     server
         .await
         .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))
+}
+
+#[cfg(test)]
+mod liveness_route_tests {
+    use super::*;
+    use poem::{handler, http::StatusCode, Request};
+
+    #[handler]
+    async fn unavailable() -> StatusCode {
+        StatusCode::SERVICE_UNAVAILABLE
+    }
+
+    /// `/healthz` must win over the root-nested application (which registers
+    /// its own `/*` catch-all for the SPA) and must not inherit readiness.
+    /// This mirrors the shape of `build_routes`.
+    #[test]
+    fn healthz_is_reachable_next_to_a_root_nested_app_with_catch_all() {
+        let app = Route::new()
+            .at("/healthz", get(health::healthz))
+            .nest(
+                "/",
+                Route::new()
+                    .at("/api/status", get(unavailable))
+                    .at("/*", get(unavailable)),
+            );
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let status = |path: &'static str| {
+            let req = Request::builder()
+                .uri(poem::http::Uri::from_static(path))
+                .finish();
+            rt.block_on(app.call(req)).unwrap().status()
+        };
+
+        assert_eq!(status("/healthz"), StatusCode::OK);
+        assert_eq!(status("/api/status"), StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(status("/some/spa/route"), StatusCode::SERVICE_UNAVAILABLE);
+    }
 }
