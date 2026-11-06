@@ -3,6 +3,7 @@
 //
 // This file is part of the Bichon Email Archiving Project
 
+use poem::http::StatusCode;
 use poem::test::TestClient;
 use serde::{Deserialize, Serialize};
 
@@ -199,19 +200,19 @@ async fn get_nonexistent_account_returns_error() {
 }
 
 #[tokio::test]
-async fn delete_nonexistent_account_is_idempotent() {
+async fn delete_nonexistent_account_returns_404() {
     setup().await;
     let token = admin_token().await;
     let route = build_api_route();
     let cli = api_client(route);
 
-    // `delete` returns as soon as the account is *marked* for deletion and
-    // spawns the purge in the background; with no account present it is
-    // still a no-op success (the spawn fails silently and logs).
+    // The deletion guards (legal hold / journal / view source) need the full
+    // account, so `delete` loads it first — a missing account is a 404 like
+    // GET, not the old no-op success.
     let resp = cli
         .delete("/api/v1/account/99999999")
         .header("Authorization", &format!("Bearer {}", token))
         .send()
         .await;
-    resp.assert_status_is_ok();
+    resp.assert_status(StatusCode::NOT_FOUND);
 }
