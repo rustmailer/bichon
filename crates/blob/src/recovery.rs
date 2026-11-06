@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
 
@@ -9,18 +10,33 @@ use crate::segment::{self, SegmentReader};
 /// Recover after a crash: scan any unindexed portions of segments,
 /// update segment stats, and return newly discovered index records.
 ///
+/// Also returns the ids of segments that were fully rescanned from byte 0
+/// (stale cursor, interrupted GC). Records from such a scan reflect the
+/// segment's current on-disk content, which is authoritative over any
+/// same-segment record the index already holds; the caller needs the set to
+/// apply that rule without resurrecting keys deleted in newer segments.
+///
 /// The caller is responsible for inserting the returned records into
 /// the index store.
-pub fn recover(store_root: &Path, meta: &mut GlobalMeta) -> Result<Vec<IndexRecord>> {
+pub fn recover(
+    store_root: &Path,
+    meta: &mut GlobalMeta,
+) -> Result<(Vec<IndexRecord>, HashSet<u32>)> {
     scan_segments(store_root, meta, false)
 }
 
 /// Rebuild the entire index from scratch by scanning all segments from
 /// offset 0.  Used when the index database is corrupted or lost.
 ///
-/// Resets all segment stats and returns every entry found on disk.
+/// Resets all segment stats and returns every entry found on disk,
+/// plus the ids of the scanned segments (every one of them — a rebuild is
+/// a full rescan by definition; the caller works from an empty index and
+/// ignores the set).
 /// The caller should replace the index database before calling this.
-pub fn rebuild_index(store_root: &Path, meta: &mut GlobalMeta) -> Result<Vec<IndexRecord>> {
+pub fn rebuild_index(
+    store_root: &Path,
+    meta: &mut GlobalMeta,
+) -> Result<(Vec<IndexRecord>, HashSet<u32>)> {
     // Reset all segment stats — they'll be recomputed during the scan.
     // Also reset indexed_up_to_offset so we scan from 0.
     for stats in meta.segments.values_mut() {
@@ -34,11 +50,12 @@ pub fn rebuild_index(store_root: &Path, meta: &mut GlobalMeta) -> Result<Vec<Ind
 
 /// Common implementation: scan segments and collect index records.
 /// When `full_scan` is true, every segment is scanned from offset 0.
+/// Returns the records plus the ids of segments that were fully rescanned.
 fn scan_segments(
     store_root: &Path,
     meta: &mut GlobalMeta,
     full_scan: bool,
-) -> Result<Vec<IndexRecord>> {
+) -> Result<(Vec<IndexRecord>, HashSet<u32>)> {
     let seg_dir = store_root.join("segments");
     if !seg_dir.exists() {
         fs::create_dir_all(&seg_dir)?;
@@ -63,6 +80,7 @@ fn scan_segments(
     disk_segments.sort_unstable();
 
     let mut all_records: Vec<IndexRecord> = Vec::new();
+    let mut full_rescan_segments: HashSet<u32> = HashSet::new();
 
     // For each segment, scan unindexed portions
     for &seg_id in &disk_segments {
@@ -102,6 +120,7 @@ fn scan_segments(
             // otherwise be counted twice.
             stats.total_bytes = 0;
             stats.deleted_bytes = 0;
+            full_rescan_segments.insert(seg_id);
         }
         if cursor > file_size {
             // The file shrank under the cursor, which only happens when an
@@ -167,7 +186,7 @@ fn scan_segments(
 
     meta.save(store_root)?;
 
-    Ok(all_records)
+    Ok((all_records, full_rescan_segments))
 }
 
 /// Marker recording that stored segment hashes were dropped once after the
