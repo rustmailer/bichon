@@ -644,12 +644,32 @@ mod tests {
         .into_bytes()
     }
 
+    /// `ingest` derefs the core `SETTINGS` global (via the stable-UID
+    /// counter). Under `cargo test` that LazyLock parses argv, which has no
+    /// `--bichon-root-dir`, and its env-only fallback then exits the whole
+    /// test process. Seed the environment first — same convention as the
+    /// core DB tests (see `account::state::tests::init_test_env`).
+    fn init_settings_env() {
+        use std::sync::Once;
+        static TEST_ENV: Once = Once::new();
+        TEST_ENV.call_once(|| {
+            let root = std::env::temp_dir()
+                .join("bichon-admin-test-settings")
+                .join(uuid::Uuid::new_v4().to_string());
+            std::fs::create_dir_all(&root).unwrap();
+            std::env::set_var("BICHON_ROOT_DIR", &root);
+            std::env::set_var("BICHON_ENCRYPT_PASSWORD", "test-password");
+            let _ = &*bichon_core::settings::cli::SETTINGS;
+        });
+    }
+
     /// The v0.3.7 migration writes documents by hand, so it is the one ingest
     /// path that does not go through the extractor. It must still give every
     /// document a distinct stable UID and leave the account counter above them —
     /// otherwise the first post-migration ingest would reissue a number.
-    #[test]
-    fn ingest_assigns_distinct_stable_uids_and_persists_the_counter() {
+    #[tokio::test]
+    async fn ingest_assigns_distinct_stable_uids_and_persists_the_counter() {
+        init_settings_env();
         let root = temp_root("uids");
         let account_id = 1u64;
         let mut writer = NewIndexWriterV2::open(new_dirs(&root)).expect("open writer");
