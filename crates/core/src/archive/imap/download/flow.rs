@@ -1066,6 +1066,15 @@ pub async fn reconcile_mailboxes(
                         last_err = Some(err);
                     }
                 }
+            } else {
+                DownloadState::update_folder_progress(
+                    account.id,
+                    mailbox.name.clone(),
+                    0,
+                    0,
+                    FolderStatus::Success,
+                    None,
+                )?;
             }
         }
 
@@ -1194,6 +1203,14 @@ async fn perform_incremental_sync(
         // Keep existing highest_uid if no new mail was fetched.
         Ok(new_max_uid.or(local_mailbox.highest_uid))
     } else {
+        DownloadState::update_folder_progress(
+            account.id,
+            remote_mailbox.name.clone(),
+            0,
+            0,
+            FolderStatus::Success,
+            None,
+        )?;
         Ok(local_mailbox.highest_uid)
     }
 }
@@ -1230,6 +1247,110 @@ mod tests {
     fn test_generate_synthetic_uidvalidity_non_zero() {
         let uid = generate_synthetic_uidvalidity("INBOX");
         assert_ne!(uid, 0, "UIDVALIDITY should not be 0 (reserved)");
+    }
+
+    #[tokio::test]
+    async fn test_empty_folder_reconciliation_completes_only_observed_work() {
+        // Reuse upstream's per-process test root; account IDs isolate these cases.
+        let root = crate::test_support::unique_test_root("bichon-core-test");
+        std::env::set_var("BICHON_ROOT_DIR", &root);
+        std::env::set_var("BICHON_ENCRYPT_PASSWORD", "test-password");
+        let _ = &*crate::settings::cli::SETTINGS;
+
+        for (case, existing, cancelled, exists) in [
+            (0, false, false, 0),
+            (1, true, false, 0),
+            (2, false, true, 1),
+            (3, true, true, 1),
+            (4, true, false, 1),
+            (5, false, true, 0),
+            (6, true, true, 0),
+        ] {
+            let account = AccountModel {
+                id: 9_002_011 + case,
+                ..Default::default()
+            };
+            let remote = MailBox {
+                id: account.id,
+                account_id: account.id,
+                name: "Observed".into(),
+                exists,
+                uid_validity: Some(7),
+                ..Default::default()
+            };
+            let local = if existing {
+                vec![MailBox {
+                    highest_uid: Some(42),
+                    ..remote.clone()
+                }]
+            } else {
+                vec![]
+            };
+            DownloadState::init(account.id).await.unwrap();
+            DownloadState::init_folder_details(
+                account.id,
+                vec![remote.name.clone(), "Unvisited".into()],
+            )
+            .unwrap();
+            for (name, status) in [
+                ("Failed", FolderStatus::Failed),
+                ("Cancelled", FolderStatus::Cancelled),
+            ] {
+                DownloadState::update_folder_progress(account.id, name.into(), 0, 0, status, None)
+                    .unwrap();
+            }
+            let token = CancellationToken::new();
+            if cancelled {
+                token.cancel();
+            }
+            // The nonempty failure case has no stored account, so connection
+            // setup fails locally before any network access.
+            let result = reconcile_mailboxes(&account, &[remote.clone()], &local, token).await;
+            assert_eq!(result.is_err(), exists > 0 && !cancelled);
+            let state = DownloadState::get(account.id).unwrap().unwrap();
+            let session = if cancelled {
+                assert!(state.active_session.is_none());
+                let session = state.history.last().unwrap();
+                assert_eq!(session.status, DownloadStatus::Cancelled);
+                session
+            } else {
+                state.active_session.as_ref().unwrap()
+            };
+            let progress = &session.folder_details[&remote.name];
+            assert_eq!(
+                progress.status,
+                if exists == 0 && !cancelled {
+                    FolderStatus::Success
+                } else {
+                    FolderStatus::Pending
+                },
+                "case {case}, existing={existing}, cancelled={cancelled}"
+            );
+            assert_eq!(
+                (progress.planned, progress.current, &progress.message),
+                (0, 0, &None)
+            );
+            assert_eq!(
+                session.folder_details["Unvisited"].status,
+                FolderStatus::Pending
+            );
+            assert_eq!(
+                session.folder_details["Failed"].status,
+                FolderStatus::Failed
+            );
+            assert_eq!(
+                session.folder_details["Cancelled"].status,
+                FolderStatus::Cancelled
+            );
+            if exists == 0 && !cancelled {
+                assert_eq!(
+                    MailBox::get(remote.id).unwrap().highest_uid,
+                    if existing { Some(42) } else { None }
+                );
+            } else if !cancelled {
+                assert!(!session.errors.is_empty());
+            }
+        }
     }
 
     // ============================================================
