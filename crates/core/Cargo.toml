@@ -45,7 +45,7 @@ sysinfo.workspace = true
 num_cpus.workspace = true
 rand.workspace = true
 encoding_rs.workspace = true
-async-imap = { git = "https://github.com/rustmailer/async-imap.git", branch = "main", default-features = false, features = [
+async-imap = { version = "0.12.0", default-features = false, features = [
     "runtime-tokio",
     "compress",
 ] }
