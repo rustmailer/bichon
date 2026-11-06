@@ -696,3 +696,225 @@ where
     on_progress(&format!("DONE:{}:{}", total_migrated, total_skipped));
     Ok(())
 }
+
+#[cfg(test)]
+mod migration_e2e_tests {
+    use super::*;
+    use bichon_core::database::MemDbModel;
+    use native_db::*;
+    use tantivy::schema::{
+        FacetOptions, Schema, TantivyDocument, FAST, INDEXED, STORED, STRING, TEXT,
+    };
+
+    /// Build the legacy envelope index with the *real* v0.3.7 field order.
+    /// This deliberately does not reuse `crate::legacy::schema`, so a drift in
+    /// that schema (the field-id mismatch that used to lose `internal_date`)
+    /// makes this test fail instead of hiding behind a self-consistent fixture.
+    fn legacy_envelope_index(dir: &std::path::Path) {
+        let mut b = Schema::builder();
+        let f_id = b.add_u64_field("id", INDEXED | STORED | FAST);
+        let f_account_id = b.add_u64_field("account_id", INDEXED | STORED | FAST);
+        let f_mailbox_id = b.add_u64_field("mailbox_id", INDEXED | STORED | FAST);
+        let f_uid = b.add_u64_field("uid", INDEXED | STORED | FAST);
+        let f_subject = b.add_text_field("subject", TEXT | STORED);
+        let f_text = b.add_text_field("text", TEXT | STORED);
+        let f_from = b.add_text_field("from", STRING | STORED | FAST);
+        let f_to = b.add_text_field("to", STRING | STORED);
+        let f_cc = b.add_text_field("cc", STRING | STORED);
+        let f_bcc = b.add_text_field("bcc", STRING | STORED);
+        let f_date = b.add_i64_field("date", STORED | FAST);
+        let f_internal_date = b.add_i64_field("internal_date", STORED | FAST);
+        let f_size = b.add_u64_field("size", STORED | FAST);
+        let f_thread_id = b.add_u64_field("thread_id", INDEXED | STORED | FAST);
+        let f_message_id = b.add_text_field("message_id", STRING | STORED);
+        let f_attachments = b.add_text_field("attachments", TEXT | STORED);
+        let f_has_attachment = b.add_bool_field("has_attachment", INDEXED | STORED | FAST);
+        let _f_tags = b.add_facet_field("tags", FacetOptions::default().set_stored());
+        let schema = b.build();
+
+        let index = Index::create_in_dir(dir, schema).unwrap();
+        let mut writer = index.writer(50_000_000).unwrap();
+        let mut doc = TantivyDocument::new();
+        doc.add_u64(f_id, 1);
+        doc.add_u64(f_account_id, 1);
+        doc.add_u64(f_mailbox_id, 10);
+        doc.add_u64(f_uid, 42);
+        doc.add_text(f_subject, "legacy subject");
+        doc.add_text(f_text, "legacy body");
+        doc.add_text(f_from, "alice@example.com");
+        doc.add_text(f_to, "bob@example.com");
+        doc.add_text(f_cc, "");
+        doc.add_text(f_bcc, "");
+        doc.add_i64(f_date, 1_000_000_000_000);
+        doc.add_i64(f_internal_date, 1_234_567_890_000);
+        doc.add_u64(f_size, 123);
+        doc.add_u64(f_thread_id, 7);
+        doc.add_text(f_message_id, "<legacy@x>");
+        doc.add_text(f_attachments, "");
+        doc.add_bool(f_has_attachment, false);
+        writer.add_document(doc).unwrap();
+        writer.commit().unwrap();
+    }
+
+    fn legacy_eml_index(dir: &std::path::Path, eml: &[u8]) {
+        let mut b = Schema::builder();
+        let f_id = b.add_u64_field("id", INDEXED | FAST);
+        let f_account_id = b.add_u64_field("account_id", INDEXED | STORED | FAST);
+        let f_mailbox_id = b.add_u64_field("mailbox_id", INDEXED | STORED | FAST);
+        let f_eml = b.add_bytes_field("eml", STORED);
+        let schema = b.build();
+
+        let index = Index::create_in_dir(dir, schema).unwrap();
+        let mut writer = index.writer(50_000_000).unwrap();
+        let mut doc = TantivyDocument::new();
+        doc.add_u64(f_id, 1);
+        doc.add_u64(f_account_id, 1);
+        doc.add_u64(f_mailbox_id, 10);
+        doc.add_bytes(f_eml, eml);
+        writer.add_document(doc).unwrap();
+        writer.commit().unwrap();
+    }
+
+    /// Full v0.3.7 -> v2.x migration over a synthetic v0.3.7 store.
+    ///
+    /// Deliberately a plain `#[test]`: `bichon-admin`'s interactive menu runs
+    /// the migration without a Tokio runtime. This is the regression test for
+    /// the `DB_MANAGER`/`tokio::spawn` panic introduced in 2.3.0, and it also
+    /// pins the v0.3.7 field order so `internal_date` survives the migration.
+    #[test]
+    fn v037_migration_runs_without_tokio_and_preserves_internal_date() {
+        let root = std::env::temp_dir()
+            .join("bichon-v037-migration-e2e")
+            .join(uuid::Uuid::new_v4().to_string());
+        std::fs::create_dir_all(root.join("envelope")).unwrap();
+        std::fs::create_dir_all(root.join("eml")).unwrap();
+
+        let eml = b"From: Alice <alice@example.com>\r\n\
+To: bob@example.com\r\n\
+Subject: legacy subject\r\n\
+Date: Thu, 01 Jan 2026 00:00:00 +0000\r\n\
+Message-ID: <legacy@x>\r\n\
+\r\n\
+legacy body\r\n";
+
+        legacy_envelope_index(&root.join("envelope"));
+        legacy_eml_index(&root.join("eml"), eml);
+
+        {
+            let db = Builder::new()
+                .create(&crate::meta::META_MODELS, root.join("meta.db"))
+                .unwrap();
+            let rw = db.rw_transaction().unwrap();
+            let account = crate::meta::AccountV3 {
+                id: 1,
+                email: "alice@example.com".into(),
+                account_type: bichon_core::account::migration::AccountType::IMAP,
+                ..Default::default()
+            };
+            rw.insert(account).unwrap();
+            rw.commit().unwrap();
+        }
+        {
+            let db = Builder::new()
+                .create(&crate::meta::MAILBOX_MODELS, root.join("mailbox.db"))
+                .unwrap();
+            let rw = db.rw_transaction().unwrap();
+            let mailbox = crate::meta::MailBox {
+                id: 10,
+                account_id: 1,
+                name: "INBOX".into(),
+                ..Default::default()
+            };
+            rw.insert(mailbox).unwrap();
+            rw.commit().unwrap();
+        }
+
+        crate::meta::migrate_metadata(&root).unwrap();
+
+        let legacy = LegacyDirs::new(root.join("envelope"), root.join("eml"));
+        assert_eq!(count_eml_segments(&legacy).unwrap(), 1);
+
+        let mut writer = NewIndexWriterV2::open(NewDirs::new(
+            root.join("bichon-indices"),
+            root.join("bichon-storage"),
+        ))
+        .unwrap();
+        do_migrate_segment_v2(1000, legacy, &mut writer, 0, |message| {
+            assert!(
+                !message.starts_with("ERROR") && !message.starts_with("WARN"),
+                "migration reported: {message}"
+            );
+        })
+        .unwrap();
+        writer.finish_writers().unwrap();
+        writer.finish_uids(&root).unwrap();
+        writer.shutdown_engine().unwrap();
+
+        let index =
+            Index::open_in_dir(root.join("bichon-indices").join("mail_metadata")).unwrap();
+        let reader = index.reader().unwrap();
+        reader.reload().unwrap();
+        let searcher = reader.searcher();
+        let hits = searcher
+            .search(
+                &tantivy::query::AllQuery,
+                &tantivy::collector::TopDocs::with_limit(10).order_by_score(),
+            )
+            .unwrap();
+        assert_eq!(hits.len(), 1, "one migrated envelope expected");
+
+        let doc: TantivyDocument = searcher.doc(hits[0].1).unwrap();
+        let fields = bichon_core::store::tantivy::schema::SchemaTools::email_fields();
+        let get_str = |field| {
+            doc.get_first(field)
+                .and_then(|v| v.as_str())
+                .map(str::to_string)
+        };
+        let get_u64 = |field| doc.get_first(field).and_then(|v| v.as_u64());
+        let get_i64 = |field| doc.get_first(field).and_then(|v| v.as_i64());
+
+        assert_eq!(get_str(fields.f_subject).as_deref(), Some("legacy subject"));
+        assert_eq!(get_str(fields.f_from).as_deref(), Some("alice@example.com"));
+        assert_eq!(
+            get_str(fields.f_from_name).as_deref(),
+            Some("Alice"),
+            "the display name must survive the migration"
+        );
+        assert_eq!(
+            get_str(fields.f_wire_from),
+            None,
+            "v0.3.7 accounts have no sender-override rule, so wire_from stays empty"
+        );
+        assert_eq!(get_str(fields.f_to).as_deref(), Some("bob@example.com"));
+        assert_eq!(get_u64(fields.f_account_id), Some(1));
+        assert_eq!(get_u64(fields.f_mailbox_id), Some(10));
+        assert_eq!(
+            get_i64(fields.f_internal_date),
+            Some(1_234_567_890_000),
+            "v0.3.7 internal_date must survive the migration"
+        );
+        assert_eq!(
+            get_i64(fields.f_date),
+            Some(1_767_225_600_000),
+            "the Date header in the EML must be re-parsed during the migration"
+        );
+        assert_eq!(
+            get_u64(fields.f_imap_uid),
+            Some(1),
+            "migrated envelopes need a stable archive-side UID"
+        );
+
+        let db = bichon_core::admin::meta::open_database(root.join("memdb")).unwrap();
+        let account: bichon_core::account::migration::Account = db
+            .collection(bichon_core::account::migration::Account::collection())
+            .get("1")
+            .unwrap()
+            .expect("migrated account row");
+        assert_eq!(
+            account.imap_uid_next, 2,
+            "the stable-UID counter must sit above the assigned UID"
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+}
