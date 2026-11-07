@@ -1201,6 +1201,10 @@ pub async fn reconcile_mailboxes(
                     FolderStatus::Success,
                     None,
                 )?;
+                // Count it, like the incremental path counts an existing
+                // empty folder (#398): a round where one folder failed and one
+                // empty folder completed is Partial, not a total failure.
+                summary.synced_folders += 1;
             }
         }
     }
@@ -1597,8 +1601,22 @@ mod tests {
             }
             // The nonempty failure case has no stored account, so connection
             // setup fails locally before any network access.
-            let result = reconcile_mailboxes(&account, &[remote.clone()], &local, token).await;
-            assert_eq!(result.is_err(), exists > 0 && !cancelled);
+            let summary = reconcile_mailboxes(&account, &[remote.clone()], &local, token)
+                .await
+                .unwrap();
+            // Since #396 a folder failure is recorded in the summary (which the
+            // caller maps to a Partial/Failed session), not returned as an Err,
+            // so every case returns Ok.
+            assert_eq!(
+                summary.failed_folders,
+                u32::from(exists > 0 && !cancelled),
+                "case {case}"
+            );
+            assert_eq!(
+                summary.synced_folders,
+                u32::from(exists == 0 && !cancelled),
+                "case {case}"
+            );
             let state = DownloadState::get(account.id).unwrap().unwrap();
             let session = if cancelled {
                 assert!(state.active_session.is_none());
