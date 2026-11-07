@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import { enUS, zhCN, zhTW, arSA, de, es, fi, fr, it, ja, ko, nl, ptBR, ru, da, sv, nb, Locale } from 'date-fns/locale';
+import { enUS, zhCN, zhTW, arSA, cs, de, es, fi, fr, it, ja, ko, nl, ptBR, ru, da, sv, nb, Locale } from 'date-fns/locale';
 import { type ClassValue, clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
 
@@ -145,6 +145,8 @@ export const dateFnsLocaleMap: Record<string, Locale> = {
   'zh_hk': zhTW,
   ar: arSA,
   'ar-sa': arSA,
+  cs: cs,
+  'cs-cz': cs,
   de: de,
   'de-de': de,
   es: es,
