@@ -54,8 +54,8 @@ fn allowed_themes() -> HashSet<&'static str> {
 
 fn allowed_languages() -> HashSet<&'static str> {
     [
-        "ar", "da", "de", "en", "es", "fi", "fr", "it", "jp", "ko", "nl", "no", "pl", "pt", "ru",
-        "sv", "zh", "zh-tw",
+        "ar", "cs", "da", "de", "en", "es", "fi", "fr", "it", "jp", "ko", "nl", "no", "pl", "pt",
+        "ru", "sv", "zh", "zh-tw",
     ]
     .into_iter()
     .collect()

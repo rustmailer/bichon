@@ -38,6 +38,7 @@ import ru from './locales/ru.json'
 import da from './locales/da.json'
 import sv from './locales/sv.json'
 import no from './locales/no.json'
+import cs from './locales/cs.json'
 import zh_tw from './locales/zh-tw.json'
 
 
@@ -57,6 +58,7 @@ i18n
       en: { translation: en },
       zh: { translation: zh },
       ar: { translation: ar },
+      cs: { translation: cs },
       da: { translation: da },
       de: { translation: de },
       es: { translation: es },
