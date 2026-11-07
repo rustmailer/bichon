@@ -457,6 +457,10 @@ pub enum Event {
         user: String,
         export_id: String,
         saved_search_id: String,
+        /// The saved search's name, or the caller's label for an ad-hoc
+        /// export (e.g. "All images"). Empty `saved_search_id` plus a name is
+        /// how an ad-hoc export reads in the audit trail.
+        saved_search_name: String,
         format: String,
         account_count: u64,
         email_count: u64,
@@ -466,6 +470,7 @@ pub enum Event {
         user: String,
         export_id: String,
         saved_search_id: String,
+        saved_search_name: String,
         exported: u64,
         failed: u64,
         artifact_size: u64,
@@ -488,6 +493,7 @@ pub enum Event {
         user: String,
         export_id: String,
         saved_search_id: String,
+        saved_search_name: String,
         error: String,
     },
     /// A batch export job was cancelled by its owner.

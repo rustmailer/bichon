@@ -20,23 +20,58 @@
 //! clients (web UI and CLI). The export engine itself lives in the server
 //! crate; this module only carries the wire format.
 
+use crate::message::search::{AttachmentSearchFilter, EmailSearchFilter};
 use serde::{Deserialize, Serialize};
 
-/// Export file format for batch exports. Only `Mbox` is supported today;
-/// the enum keeps the door open for additional formats.
+/// Export file format for batch exports. `Mbox` packs whole messages; the
+/// saved search must be of kind `Email`. `Attachments` packs the attachments
+/// the saved search matches (deduplicated by content) into a zip; the saved
+/// search must be of kind `Attachment`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
 #[cfg_attr(feature = "web-api", derive(poem_openapi::Enum))]
 pub enum ExportFormat {
     #[default]
     Mbox,
+    Attachments,
 }
 
 impl ExportFormat {
     pub fn as_str(&self) -> &'static str {
         match self {
             ExportFormat::Mbox => "mbox",
+            ExportFormat::Attachments => "attachments",
         }
     }
+}
+
+/// An ad-hoc export selection, built from the UI's current view (for example
+/// "every image attachment" or "every PDF") instead of a saved search.
+///
+/// Which half is used is decided by `ExportFormat`: `Mbox` reads `email`,
+/// `Attachments` reads `attachment`. The other half must be left unset — a
+/// request that carries both is ambiguous and is rejected rather than guessed
+/// at.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[cfg_attr(feature = "web-api", derive(poem_openapi::Object))]
+pub struct ExportFilter {
+    #[serde(default)]
+    pub email: Option<EmailSearchFilter>,
+    #[serde(default)]
+    pub attachment: Option<AttachmentSearchFilter>,
+}
+
+/// Where an export's contents come from. Exactly one of `saved_search_id` and
+/// `filter` is set; `label` names an ad-hoc export in the job list and on the
+/// approval card (a saved search carries its own name).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[cfg_attr(feature = "web-api", derive(poem_openapi::Object))]
+pub struct ExportSource {
+    #[serde(default)]
+    pub saved_search_id: Option<String>,
+    #[serde(default)]
+    pub filter: Option<ExportFilter>,
+    #[serde(default)]
+    pub label: Option<String>,
 }
 
 /// One account that will be (or was) included in an export scope.
@@ -49,10 +84,34 @@ pub struct ExportAccount {
 }
 
 /// Request body for previewing an export before starting it.
+///
+/// Either `saved_search_id` or `filter` selects the contents; see
+/// [`ExportSource`].
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[cfg_attr(feature = "web-api", derive(poem_openapi::Object))]
 pub struct ExportPreviewRequest {
-    pub saved_search_id: String,
+    #[serde(default)]
+    pub saved_search_id: Option<String>,
+    /// Ad-hoc selection, mutually exclusive with `saved_search_id`.
+    #[serde(default)]
+    pub filter: Option<ExportFilter>,
+    /// Display name for an ad-hoc export; ignored for saved searches.
+    #[serde(default)]
+    pub label: Option<String>,
+    /// Format to preview for. Defaults to `Mbox`; the saved-search kind must
+    /// match (Email → Mbox, Attachment → Attachments).
+    #[serde(default)]
+    pub format: Option<ExportFormat>,
+}
+
+impl ExportPreviewRequest {
+    pub fn source(&self) -> ExportSource {
+        ExportSource {
+            saved_search_id: self.saved_search_id.clone(),
+            filter: self.filter.clone(),
+            label: self.label.clone(),
+        }
+    }
 }
 
 /// What an export would contain, computed before the job starts so the
@@ -68,13 +127,31 @@ pub struct ExportPreviewView {
     pub total_size: u64,
 }
 
-/// Request body for starting a batch export from a saved search.
+/// Request body for starting a batch export. Either `saved_search_id` or
+/// `filter` selects the contents; see [`ExportSource`].
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[cfg_attr(feature = "web-api", derive(poem_openapi::Object))]
 pub struct ExportCreateRequest {
-    pub saved_search_id: String,
+    #[serde(default)]
+    pub saved_search_id: Option<String>,
+    /// Ad-hoc selection, mutually exclusive with `saved_search_id`.
+    #[serde(default)]
+    pub filter: Option<ExportFilter>,
+    /// Display name for an ad-hoc export; ignored for saved searches.
+    #[serde(default)]
+    pub label: Option<String>,
     #[serde(default)]
     pub format: Option<ExportFormat>,
+}
+
+impl ExportCreateRequest {
+    pub fn source(&self) -> ExportSource {
+        ExportSource {
+            saved_search_id: self.saved_search_id.clone(),
+            filter: self.filter.clone(),
+            label: self.label.clone(),
+        }
+    }
 }
 
 /// Snapshot of an export job, returned by the status and control endpoints.
@@ -181,4 +258,59 @@ pub struct ExportVerifyProgressView {
     pub result: Option<ExportVerifyView>,
     pub started_at: Option<i64>,
     pub finished_at: Option<i64>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The REST body carries the enum's variant names, while audit rows and
+    /// approval targets carry `as_str()` (`"mbox"` / `"attachments"`). Pinning
+    /// both spellings: the web client sends the former, the ledger stores the
+    /// latter, and mixing them up fails only at runtime.
+    #[test]
+    fn format_wire_values_are_variant_names() {
+        assert_eq!(
+            serde_json::to_string(&ExportFormat::Mbox).unwrap(),
+            "\"Mbox\""
+        );
+        assert_eq!(
+            serde_json::to_string(&ExportFormat::Attachments).unwrap(),
+            "\"Attachments\""
+        );
+        assert_eq!(ExportFormat::Mbox.as_str(), "mbox");
+        assert_eq!(ExportFormat::Attachments.as_str(), "attachments");
+    }
+
+    /// Both request shapes parse: a saved search (the original wire format,
+    /// still sent by the CLI) and an ad-hoc filter (what the attachments page
+    /// sends).
+    #[test]
+    fn create_request_parses_saved_search_and_adhoc_filter() {
+        let saved: ExportCreateRequest = serde_json::from_str(
+            r#"{"saved_search_id":"ss-1","format":"Mbox"}"#,
+        )
+        .unwrap();
+        assert_eq!(saved.source().saved_search_id.as_deref(), Some("ss-1"));
+        assert!(saved.source().filter.is_none());
+
+        let adhoc: ExportCreateRequest = serde_json::from_str(
+            r#"{"filter":{"attachment":{"attachment_category":"image"}},
+                "label":"All images","format":"Attachments"}"#,
+        )
+        .unwrap();
+        let source = adhoc.source();
+        assert!(source.saved_search_id.is_none());
+        assert_eq!(source.label.as_deref(), Some("All images"));
+        assert_eq!(
+            source
+                .filter
+                .unwrap()
+                .attachment
+                .unwrap()
+                .attachment_category
+                .as_deref(),
+            Some("image")
+        );
+    }
 }

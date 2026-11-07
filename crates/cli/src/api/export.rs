@@ -18,16 +18,24 @@
 
 use crate::BichonCliConfig;
 use bichon_core::export::{
-    ExportJobView, ExportPreviewView, ExportVerifyProgressView, ExportVerifyView,
+    ExportFormat, ExportJobView, ExportPreviewView, ExportVerifyProgressView, ExportVerifyView,
 };
-use bichon_core::saved_search::SavedSearchModel;
+use bichon_core::saved_search::{SavedSearchKind, SavedSearchModel};
 use reqwest::Client;
 use std::path::Path;
 use tokio::io::AsyncWriteExt;
 
-/// Lists the current user's email saved searches (newest first).
-pub async fn list_saved_searches(client: &Client, config: &BichonCliConfig) -> Vec<SavedSearchModel> {
-    let url = format!("{}/api/v1/saved-searches?kind=Email", config.base_url);
+/// Lists the current user's saved searches of one kind (newest first).
+pub async fn list_saved_searches(
+    client: &Client,
+    config: &BichonCliConfig,
+    kind: &SavedSearchKind,
+) -> Vec<SavedSearchModel> {
+    let kind = match kind {
+        SavedSearchKind::Email => "Email",
+        SavedSearchKind::Attachment => "Attachment",
+    };
+    let url = format!("{}/api/v1/saved-searches?kind={kind}", config.base_url);
     match client
         .get(&url)
         .header("Authorization", format!("Bearer {}", config.api_token))
@@ -56,12 +64,16 @@ pub async fn preview_export(
     client: &Client,
     config: &BichonCliConfig,
     saved_search_id: &str,
+    format: ExportFormat,
 ) -> Option<ExportPreviewView> {
     let url = format!("{}/api/v1/exports/preview", config.base_url);
     match client
         .post(&url)
         .header("Authorization", format!("Bearer {}", config.api_token))
-        .json(&serde_json::json!({ "saved_search_id": saved_search_id }))
+        .json(&serde_json::json!({
+            "saved_search_id": saved_search_id,
+            "format": format,
+        }))
         .send()
         .await
     {
@@ -87,12 +99,16 @@ pub async fn create_export_job(
     client: &Client,
     config: &BichonCliConfig,
     saved_search_id: &str,
+    format: ExportFormat,
 ) -> Option<ExportJobView> {
     let url = format!("{}/api/v1/exports", config.base_url);
     match client
         .post(&url)
         .header("Authorization", format!("Bearer {}", config.api_token))
-        .json(&serde_json::json!({ "saved_search_id": saved_search_id }))
+        .json(&serde_json::json!({
+            "saved_search_id": saved_search_id,
+            "format": format,
+        }))
         .send()
         .await
     {

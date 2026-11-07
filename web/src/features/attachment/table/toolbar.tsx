@@ -4,6 +4,7 @@ import { Sparkles } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { SearchRefreshButton } from '@/components/search-refresh-button'
+import { ExportResultsButton } from '../../exports/export-results-button'
 import { SavedSearchesDropdown } from '../../saved-searches/saved-searches-dropdown'
 import { AccountPopover } from '../account-popover'
 import { MetadataFilter } from '../attachment-metadata-filter'
@@ -60,6 +61,7 @@ export function DataTableToolbar<TData>({
             filter={filter}
             onApply={(f) => setFilter(f)}
           />
+          <ExportResultsButton kind='attachment' filter={filter} />
         </div>
         <div className='flex items-center gap-1 shrink-0'>
           {effectiveSort === 'RELEVANCE' && (

@@ -254,11 +254,11 @@ pub struct AttachmentSearchFilter {
 #[derive(Debug, Clone, Default, Eq, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "web-api", derive(poem_openapi::Object))]
 pub struct AttachmentSearchRequest {
-    filter: AttachmentSearchFilter,
-    page: u64,
-    page_size: u64,
-    sort_by: Option<SortBy>,
-    desc: Option<bool>,
+    pub filter: AttachmentSearchFilter,
+    pub page: u64,
+    pub page_size: u64,
+    pub sort_by: Option<SortBy>,
+    pub desc: Option<bool>,
 }
 impl AttachmentSearchRequest {
     pub fn filter(&self) -> &AttachmentSearchFilter {

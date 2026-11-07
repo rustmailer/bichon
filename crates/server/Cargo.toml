@@ -38,6 +38,9 @@ sysinfo.workspace = true
 base64.workspace = true
 uuid.workspace = true
 sha2 = "0.10"
+# Lockfile already carries zip 8.6.0 (via mail-auth); deflate-only keeps the
+# feature set identical so the lock does not move.
+zip = { version = "8.6", default-features = false, features = ["deflate"] }
 
 [dev-dependencies]
 poem = { version = "3.1.12", features = ["test"] }

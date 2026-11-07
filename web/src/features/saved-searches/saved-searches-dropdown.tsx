@@ -44,28 +44,19 @@ import { cn } from '@/lib/utils'
 import { AxiosError } from 'axios'
 import { useSavedSearches } from '@/hooks/use-saved-searches'
 import { SavedSearchKind, SavedSearchModel } from '@/api/saved-search/api'
-import {
-  createExport,
-  downloadExport,
-  getExportJob,
-  is_queued_export,
-  previewExport,
-  ExportJobView,
-  ExportPreviewView,
-} from '@/api/export/api'
-import { OP_EXPORT_BATCH } from '@/api/approvals/api'
-import { useGatedOp } from '@/features/approvals/use-gated-op'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { IconAlertCircle } from '@tabler/icons-react'
+import type { ExportRequest } from '@/api/export/api'
+import { ExportDialog } from '@/features/exports/export-dialog'
 
 interface SavedSearchesDropdownProps {
   kind: SavedSearchKind
-  filter: Record<string, any>
-  onApply: (filter: Record<string, any>) => void
+  filter: Record<string, unknown>
+  onApply: (filter: Record<string, unknown>) => void
 }
 
-const normalizeFilter = (filter: Record<string, any>): Record<string, any> => {
-  const out: Record<string, any> = {}
+const normalizeFilter = (
+  filter: Record<string, unknown>
+): Record<string, unknown> => {
+  const out: Record<string, unknown> = {}
   Object.keys(filter)
     .sort()
     .forEach((key) => {
@@ -74,7 +65,10 @@ const normalizeFilter = (filter: Record<string, any>): Record<string, any> => {
   return out
 }
 
-const filtersEqual = (a: Record<string, any>, b: Record<string, any>) =>
+const filtersEqual = (
+  a: Record<string, unknown>,
+  b: Record<string, unknown>
+) =>
   JSON.stringify(normalizeFilter(a)) === JSON.stringify(normalizeFilter(b))
 
 const getErrorMessage = (error: unknown) => {
@@ -87,13 +81,6 @@ const getErrorMessage = (error: unknown) => {
   return error instanceof Error ? error.message : String(error)
 }
 
-const formatBytes = (bytes: number) => {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`
-  return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`
-}
-
 export function SavedSearchesDropdown({ kind, filter, onApply }: SavedSearchesDropdownProps) {
   const { t } = useTranslation()
   const { searches, createSearch, renameSearch, deleteSearch } = useSavedSearches(kind)
@@ -104,138 +91,19 @@ export function SavedSearchesDropdown({ kind, filter, onApply }: SavedSearchesDr
   const [renameTarget, setRenameTarget] = React.useState<SavedSearchModel | null>(null)
   const [renameName, setRenameName] = React.useState('')
   const [deleteTarget, setDeleteTarget] = React.useState<SavedSearchModel | null>(null)
-  const [exportTarget, setExportTarget] = React.useState<SavedSearchModel | null>(null)
-  const [exportPreview, setExportPreview] = React.useState<ExportPreviewView | null>(null)
-  const [exportJob, setExportJob] = React.useState<ExportJobView | null>(null)
-  const [exportBusy, setExportBusy] = React.useState(false)
-  const { gated, announceIfQueued } = useGatedOp(OP_EXPORT_BATCH)
+  const [exportRequest, setExportRequest] = React.useState<ExportRequest | null>(null)
   const filtered = query.trim()
     ? searches.filter((s) => s.name.toLowerCase().includes(query.trim().toLowerCase()))
     : searches
-  const pollRef = React.useRef<ReturnType<typeof setInterval> | null>(null)
 
-  const clearExportPoll = () => {
-    if (pollRef.current) {
-      clearInterval(pollRef.current)
-      pollRef.current = null
-    }
-  }
-
-  const closeExport = () => {
-    clearExportPoll()
-    setExportTarget(null)
-    setExportPreview(null)
-    setExportJob(null)
-    setExportBusy(false)
-  }
-
-  const triggerDownload = (jobId: string) => {
-    downloadExport(jobId)
-      .then((blob) => {
-        const url = URL.createObjectURL(blob)
-        const link = document.createElement('a')
-        link.href = url
-        link.download = `${jobId}.mbox`
-        document.body.appendChild(link)
-        link.click()
-        document.body.removeChild(link)
-        URL.revokeObjectURL(url)
-        toast({ title: t('exports.downloadSaved') })
-        closeExport()
-      })
-      .catch((error) => {
-        toast({
-          title: t('exports.downloadFailed'),
-          description: getErrorMessage(error),
-          variant: 'destructive',
-        })
-        closeExport()
-      })
-  }
-
-  const startExport = () => {
-    if (!exportTarget || !exportPreview) return
-    setExportBusy(true)
-    createExport(exportTarget.id)
-      .then((result) => {
-        // Dual control is on for batch exports: the server queued the request
-        // and answered 202. There is no job to poll and nothing has been
-        // exported — polling `undefined` here would show a failure for a
-        // request that is in fact waiting on a second person.
-        if (is_queued_export(result)) {
-          announceIfQueued(result)
-          setExportBusy(false)
-          closeExport()
-          return
-        }
-        const job = result
-        setExportJob(job)
-        pollRef.current = setInterval(() => {
-          getExportJob(job.job_id)
-            .then((updated) => {
-              setExportJob(updated)
-              if (updated.status === 'finished') {
-                clearExportPoll()
-                setExportBusy(false)
-                triggerDownload(updated.job_id)
-              } else if (updated.status === 'failed' || updated.status === 'cancelled') {
-                clearExportPoll()
-                setExportBusy(false)
-                toast({
-                  title:
-                    updated.status === 'failed'
-                      ? t('exports.failed')
-                      : t('exports.cancelled'),
-                  description: updated.error ?? undefined,
-                  variant: 'destructive',
-                })
-                closeExport()
-              }
-            })
-            .catch((error) => {
-              clearExportPoll()
-              setExportBusy(false)
-              toast({
-                title: t('exports.statusFailed'),
-                description: getErrorMessage(error),
-                variant: 'destructive',
-              })
-              closeExport()
-            })
-        }, 2000)
-      })
-      .catch((error) => {
-        setExportBusy(false)
-        toast({
-          title: t('exports.startFailed'),
-          description: getErrorMessage(error),
-          variant: 'destructive',
-        })
-        closeExport()
-      })
-  }
-
+  /** Export this saved search in the format its kind drives: whole messages
+   *  as mbox, attachment searches as a zip. */
   const handleExportClick = (item: SavedSearchModel) => {
-    setExportTarget(item)
-    setExportPreview(null)
-    setExportJob(null)
-    setExportBusy(false)
-    previewExport(item.id)
-      .then((preview) => setExportPreview(preview))
-      .catch((error) => {
-        setExportTarget(null)
-        toast({
-          title: t('exports.previewFailed'),
-          description: getErrorMessage(error),
-          variant: 'destructive',
-        })
-      })
+    setExportRequest({
+      saved_search_id: item.id,
+      format: kind === 'Email' ? 'Mbox' : 'Attachments',
+    })
   }
-
-  React.useEffect(() => {
-    return clearExportPoll
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
 
   const hasActiveFilter = Object.keys(filter).length > 0
 
@@ -408,17 +276,15 @@ export function SavedSearchesDropdown({ kind, filter, onApply }: SavedSearchesDr
                         <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                         <span className="truncate font-medium">{item.name}</span>
                       </button>
-                      {kind === 'Email' && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
-                          title={t('exports.export')}
-                          onClick={() => handleExportClick(item)}
-                        >
-                          <Download className="h-3.5 w-3.5" />
-                        </Button>
-                      )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
+                        title={t('exports.export')}
+                        onClick={() => handleExportClick(item)}
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                      </Button>
                       <Button
                         variant="ghost"
                         size="icon"
@@ -504,124 +370,10 @@ export function SavedSearchesDropdown({ kind, filter, onApply }: SavedSearchesDr
         isLoading={deleteSearch.isPending}
       />
 
-      <Dialog
-        open={exportTarget !== null}
-        onOpenChange={(isOpen) => !isOpen && closeExport()}
-      >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>{t('exports.title')}</DialogTitle>
-          </DialogHeader>
-          {!exportPreview ? (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              {t('exports.exporting')}
-            </div>
-          ) : !exportJob ? (
-            <div className="space-y-3">
-              <div className="grid grid-cols-3 gap-2 text-center">
-                <div className="rounded-md border p-2">
-                  <div className="text-lg font-semibold">
-                    {exportPreview.accounts.length}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {t('exports.previewAccounts')}
-                  </div>
-                </div>
-                <div className="rounded-md border p-2">
-                  <div className="text-lg font-semibold">
-                    {exportPreview.total_emails.toLocaleString()}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {t('exports.previewEmails')}
-                  </div>
-                </div>
-                <div className="rounded-md border p-2">
-                  <div className="text-lg font-semibold">
-                    {formatBytes(exportPreview.total_size)}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {t('exports.previewSize')}
-                  </div>
-                </div>
-              </div>
-              {gated ? (
-                <Alert>
-                  <IconAlertCircle className="h-4 w-4" />
-                  <AlertTitle>
-                    {t(
-                      'approvals.gatedExportTitle',
-                      'Dual control is on for this operation'
-                    )}
-                  </AlertTitle>
-                  <AlertDescription>
-                    {t(
-                      'approvals.gatedExportDesc',
-                      'This will NOT export anything now. It submits a request that a second person must approve, and only then does the export run.'
-                    )}
-                  </AlertDescription>
-                </Alert>
-              ) : (
-                <p className="text-sm text-muted-foreground break-words">
-                  {t('exports.confirm', {
-                    count: exportPreview.total_emails,
-                    name: exportTarget?.name ?? '',
-                  })}
-                </p>
-              )}
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  onClick={closeExport}
-                  disabled={exportBusy}
-                >
-                  {t('common.cancel')}
-                </Button>
-                <Button onClick={startExport} disabled={exportBusy}>
-                  {exportBusy && (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  )}
-                  {gated
-                    ? t('approvals.submitForApproval', 'Submit for approval')
-                    : t('exports.export')}
-                </Button>
-              </DialogFooter>
-            </div>
-          ) : exportJob.status === 'finished' ? (
-            <div className="space-y-3">
-              <div className="text-sm text-muted-foreground">
-                {t('exports.complete')}
-              </div>
-              <DialogFooter>
-                <Button onClick={() => triggerDownload(exportJob.job_id)}>
-                  <Download className="mr-2 h-4 w-4" />
-                  {t('exports.download')}
-                </Button>
-              </DialogFooter>
-            </div>
-          ) : exportJob.status === 'failed' ||
-            exportJob.status === 'cancelled' ? (
-            <div className="text-sm text-destructive">
-              {exportJob.error ?? t('exports.failed')}
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                {t('exports.exporting')}
-              </div>
-              <div className="text-xs text-muted-foreground">
-                {t('exports.progress', {
-                  processed: exportJob.processed,
-                  total: exportJob.total_emails,
-                  exported: exportJob.exported,
-                  failed: exportJob.failed,
-                })}
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      <ExportDialog
+        request={exportRequest}
+        onClose={() => setExportRequest(null)}
+      />
 
     </>
   )

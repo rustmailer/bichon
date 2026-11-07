@@ -108,33 +108,33 @@ export function AttachmentListTable({
       accessorKey: "subject",
       header: t('attachment.subject'),
       cell: ({ row }) => {
+        const subject = row.original.subject || t('mail.noSubject');
         return (
           <div className="group relative flex items-center w-full min-w-0 h-full px-2 py-0.5 overflow-hidden">
             <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-primary opacity-0 group-hover:opacity-100 transition-opacity" />
-
-            <div className="text-xs flex flex-wrap gap-x-1 min-w-0 flex-1">
-              <span className="flex items-center w-full min-w-0">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    // Open by the row's account + envelope id, never by the
-                    // rendered subject (a message may have none).
-                    setCurrentAttachment(row.original);
-                    setOpen("display");
-                  }}
-                  className="w-full text-left hover:text-primary hover:underline transition-colors truncate"
-                >
-                  <LongText>{row.original.subject || t('mail.noSubject')}</LongText>
-                </button>
-              </span>
-            </div>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                // Open by the row's account + envelope id, never by the
+                // rendered subject (a message may have none).
+                setCurrentAttachment(row.original);
+                setOpen("display");
+              }}
+              className="w-full min-w-0 text-left text-xs hover:text-primary hover:underline transition-colors"
+            >
+              {/* LongText truncates with an ellipsis and shows the full
+                  subject in a tooltip when the column is too narrow. */}
+              <LongText contentClassName="max-w-sm whitespace-normal break-words">
+                {subject}
+              </LongText>
+            </button>
           </div>
         );
       },
       meta: { className: 'text-left text-xs' },
-      minSize: 500,
-      maxSize: 500,
+      minSize: 380,
+      maxSize: 380,
     },
     {
       accessorKey: "name",

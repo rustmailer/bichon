@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { SearchRefreshButton } from '@/components/search-refresh-button'
 import { useCurrentUser } from '@/hooks/use-current-user'
+import { ExportResultsButton } from '../../exports/export-results-button'
 import { SavedSearchesDropdown } from '../../saved-searches/saved-searches-dropdown'
 import { AccountPopover } from '../account-popover'
 import { MailFilterPopover } from '../contact-popover'
@@ -63,6 +64,7 @@ export function DataTableToolbar<TData>({
             filter={filter}
             onApply={(f) => setFilter(f)}
           />
+          <ExportResultsButton kind='email' filter={filter} />
         </div>
         <div className='flex items-center gap-1 shrink-0'>
           {effectiveSort === 'RELEVANCE' && (

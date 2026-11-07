@@ -388,7 +388,7 @@ export default function ExportTasksPage() {
                     {t('export_tasks.progressLabel')}
                   </TableHead>
                   <TableHead className='text-xs'>
-                    {t('export_tasks.emails')}
+                    {t('export_tasks.items')}
                   </TableHead>
                   <TableHead className='text-xs'>
                     {t('export_tasks.size')}

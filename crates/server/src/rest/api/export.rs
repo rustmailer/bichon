@@ -59,7 +59,12 @@ impl ExportApi {
         payload: Json<ExportPreviewRequest>,
     ) -> ApiResult<Json<ExportPreviewView>> {
         let scope = export_scope(&context)?;
-        let view = preview(context.user.id, &payload.0.saved_search_id, scope)?;
+        let view = preview(
+            context.user.id,
+            &payload.0.source(),
+            payload.0.format.unwrap_or_default(),
+            scope,
+        )?;
         Ok(Json(view))
     }
 
@@ -78,7 +83,7 @@ impl ExportApi {
         let job = create_export(
             context.user.id,
             context.user.username.clone(),
-            &payload.0.saved_search_id,
+            &payload.0.source(),
             payload.0.format.unwrap_or_default(),
             scope,
         )?;
@@ -140,7 +145,8 @@ impl ExportApi {
         Ok(delete_export(context.user.id, &job_id.0)?)
     }
 
-    /// Downloads the finished mbox artifact.
+    /// Downloads the finished export artifact (mbox for whole-message
+    /// exports, zip for attachment exports).
     #[oai(
         path = "/exports/:job_id/download",
         method = "get",

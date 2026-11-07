@@ -43,12 +43,13 @@ use bichon_core::account::migration::AccountModel;
 use bichon_core::envelope::meta::BichonMetadata;
 use bichon_core::error::{code::ErrorCode, BichonResult};
 use bichon_core::export::{
-    ExportAccount, ExportFormat, ExportJobView, ExportPreviewView,
+    ExportAccount, ExportFormat, ExportJobView, ExportPreviewView, ExportSource,
     ExportVerifyMismatch, ExportVerifyProgressView, ExportVerifyView,
 };
 use bichon_core::ext::event_bus::{emit, Event};
 use bichon_core::message::search::{
-    search_messages_impl, EmailSearchFilter, EmailSearchRequest, SortBy,
+    search_attachment_impl, search_messages_impl, AttachmentSearchFilter,
+    AttachmentSearchRequest, EmailSearchFilter, EmailSearchRequest, SortBy,
 };
 use bichon_core::raise_error;
 use bichon_core::saved_search::{SavedSearchKind, SavedSearchModel};
@@ -249,14 +250,37 @@ fn new_job_id() -> String {
     )
 }
 
-fn ensure_email_kind(kind: &SavedSearchKind) -> BichonResult<()> {
-    match kind {
-        SavedSearchKind::Email => Ok(()),
-        SavedSearchKind::Attachment => Err(raise_error!(
-            "Only email saved searches can be exported; attachment searches are not exportable."
-                .into(),
+/// Inverse of [`ExportFormat::as_str`], for manifests written to disk. Keeping
+/// the two directions next to each other means a new format cannot be added to
+/// one side and forgotten in the other.
+fn export_format_from_wire(value: &str) -> Option<ExportFormat> {
+    [ExportFormat::Mbox, ExportFormat::Attachments]
+        .into_iter()
+        .find(|format| format.as_str() == value)
+}
+
+/// The saved-search kind an export format drives on: `Mbox` exports whole
+/// messages from an `Email` search; `Attachments` exports the attachments an
+/// `Attachment` search matches.
+fn ensure_search_kind(format: ExportFormat, kind: &SavedSearchKind) -> BichonResult<()> {
+    let ok = match format {
+        ExportFormat::Mbox => kind == &SavedSearchKind::Email,
+        ExportFormat::Attachments => kind == &SavedSearchKind::Attachment,
+    };
+    if ok {
+        Ok(())
+    } else {
+        Err(raise_error!(
+            format!(
+                "Export format '{}' requires a saved search of kind '{}'.",
+                format.as_str(),
+                match format {
+                    ExportFormat::Mbox => "Email",
+                    ExportFormat::Attachments => "Attachment",
+                }
+            ),
             ErrorCode::InvalidParameter
-        )),
+        ))
     }
 }
 
@@ -267,6 +291,23 @@ fn parse_filter(value: serde_json::Value) -> BichonResult<EmailSearchFilter> {
             ErrorCode::InvalidParameter
         )
     })
+}
+
+fn parse_attachment_filter(value: serde_json::Value) -> BichonResult<AttachmentSearchFilter> {
+    serde_json::from_value(value).map_err(|e| {
+        raise_error!(
+            format!("Saved search filter is invalid: {e}"),
+            ErrorCode::InvalidParameter
+        )
+    })
+}
+
+/// The search plan an export runs: which index drives the export and with
+/// what filter. Owns the parsed saved-search conditions for both formats.
+#[derive(Clone)]
+enum ExportPlan {
+    Mbox(EmailSearchFilter),
+    Attachments(AttachmentSearchFilter),
 }
 
 fn find_owned(user_id: u64, job_id: &str) -> BichonResult<Arc<Mutex<ExportJob>>> {
@@ -336,6 +377,55 @@ fn estimate(
     Ok((accounts, total_emails, total_size))
 }
 
+/// Attachment-export variant of [`estimate`]: pages the attachment search and
+/// counts *unique* attachments (by content hash) plus their total size, so a
+/// photo attached to ten emails counts once — the same dedup the export runs.
+fn estimate_attachments(
+    scope: &Option<HashSet<u64>>,
+    filter: &AttachmentSearchFilter,
+) -> BichonResult<(Vec<ExportAccount>, u64, u64)> {
+    let mut account_ids: HashSet<u64> = HashSet::new();
+    let mut unique: HashMap<String, u64> = HashMap::new();
+    let mut page: u64 = 1;
+
+    loop {
+        let request = AttachmentSearchRequest {
+            filter: filter.clone(),
+            page,
+            page_size: EXPORT_PAGE_SIZE,
+            sort_by: Some(SortBy::DATE),
+            desc: Some(false),
+        };
+        let data = search_attachment_impl(scope.clone(), request)?;
+        for att in &data.items {
+            account_ids.insert(att.account_id);
+            unique.entry(att.content_hash.clone()).or_insert(att.size);
+        }
+        let pages = data.total_pages.unwrap_or(1).max(1);
+        if page >= pages {
+            break;
+        }
+        page += 1;
+    }
+
+    let total_size: u64 = unique.values().sum();
+    let total_attachments = unique.len() as u64;
+
+    let mut ids: Vec<u64> = account_ids.into_iter().collect();
+    ids.sort_unstable();
+    let mut accounts = Vec::with_capacity(ids.len());
+    for id in ids {
+        if let Some(acc) = AccountModel::find(id)? {
+            accounts.push(ExportAccount {
+                id,
+                email: acc.email,
+                name: acc.account_name,
+            });
+        }
+    }
+    Ok((accounts, total_attachments, total_size))
+}
+
 /// Verifies there is enough free disk space for the estimated export size.
 fn check_disk_space(required: u64) -> BichonResult<()> {
     let dir = export_root_dir();
@@ -365,21 +455,131 @@ fn check_disk_space(required: u64) -> BichonResult<()> {
     Ok(())
 }
 
-/// Computes what an export from a saved search would contain, restricted to
-/// the caller's authorized account scope.
+/// A selection resolved against the archive: the display metadata a job or an
+/// approval card shows, plus the search plan the export actually runs.
+struct ResolvedSelection {
+    /// Empty for ad-hoc selections — there is no saved search to point at.
+    saved_search_id: String,
+    saved_search_name: String,
+    plan: ExportPlan,
+}
+
+/// Resolves "what to export": a saved search replayed, or an ad-hoc filter
+/// built by the UI (e.g. "all images", "all PDFs"). Exactly one source is
+/// accepted; two would be ambiguous and none is a caller bug, so both are
+/// refused rather than guessed at.
+fn resolve_selection(
+    user_id: u64,
+    source: &ExportSource,
+    format: ExportFormat,
+) -> BichonResult<ResolvedSelection> {
+    // An empty id is the ledger's spelling of "no saved search"; treat it as
+    // absent rather than as an id that could never resolve.
+    let saved_search_id = source
+        .saved_search_id
+        .as_deref()
+        .filter(|id| !id.is_empty());
+    match (saved_search_id, source.filter.as_ref()) {
+        (Some(_), Some(_)) => Err(raise_error!(
+            "Provide either a saved search or a filter, not both.".into(),
+            ErrorCode::InvalidParameter
+        )),
+        (None, None) => Err(raise_error!(
+            "Provide a saved search or a filter.".into(),
+            ErrorCode::InvalidParameter
+        )),
+        (Some(id), None) => {
+            let saved = SavedSearchModel::get_owned(user_id, id)?;
+            ensure_search_kind(format, &saved.kind)?;
+            let plan = match format {
+                ExportFormat::Mbox => ExportPlan::Mbox(parse_filter(saved.filter.clone())?),
+                ExportFormat::Attachments => {
+                    ExportPlan::Attachments(parse_attachment_filter(saved.filter.clone())?)
+                }
+            };
+            Ok(ResolvedSelection {
+                saved_search_id: saved.id,
+                saved_search_name: saved.name,
+                plan,
+            })
+        }
+        (None, Some(filter)) => {
+            // The filter half must match the format — an email filter with
+            // `Attachments` (or the reverse) would silently export something
+            // other than what the caller asked for.
+            let plan = match format {
+                ExportFormat::Mbox => {
+                    let email = filter.email.clone().ok_or_else(|| {
+                        raise_error!(
+                            "Export format 'mbox' requires an email filter.".into(),
+                            ErrorCode::InvalidParameter
+                        )
+                    })?;
+                    if filter.attachment.is_some() {
+                        return Err(raise_error!(
+                            "Export format 'mbox' does not accept an attachment filter.".into(),
+                            ErrorCode::InvalidParameter
+                        ));
+                    }
+                    ExportPlan::Mbox(email)
+                }
+                ExportFormat::Attachments => {
+                    let attachment = filter.attachment.clone().ok_or_else(|| {
+                        raise_error!(
+                            "Export format 'attachments' requires an attachment filter.".into(),
+                            ErrorCode::InvalidParameter
+                        )
+                    })?;
+                    if filter.email.is_some() {
+                        return Err(raise_error!(
+                            "Export format 'attachments' does not accept an email filter.".into(),
+                            ErrorCode::InvalidParameter
+                        ));
+                    }
+                    ExportPlan::Attachments(attachment)
+                }
+            };
+            let name = source
+                .label
+                .as_deref()
+                .map(str::trim)
+                .filter(|label| !label.is_empty())
+                .unwrap_or("Ad-hoc export")
+                .to_string();
+            Ok(ResolvedSelection {
+                saved_search_id: String::new(),
+                saved_search_name: name,
+                plan,
+            })
+        }
+    }
+}
+
+fn estimate_for(
+    scope: &Option<HashSet<u64>>,
+    plan: &ExportPlan,
+) -> BichonResult<(Vec<ExportAccount>, u64, u64)> {
+    match plan {
+        ExportPlan::Mbox(filter) => estimate(scope, filter),
+        ExportPlan::Attachments(filter) => estimate_attachments(scope, filter),
+    }
+}
+
+/// Computes what an export would contain, restricted to the caller's
+/// authorized account scope. For `Attachments` the totals are unique
+/// attachments and their summed size.
 pub fn preview(
     user_id: u64,
-    saved_search_id: &str,
+    source: &ExportSource,
+    format: ExportFormat,
     scope: Option<HashSet<u64>>,
 ) -> BichonResult<ExportPreviewView> {
-    let saved = SavedSearchModel::get_owned(user_id, saved_search_id)?;
-    ensure_email_kind(&saved.kind)?;
-    let filter = parse_filter(saved.filter.clone())?;
-    let (accounts, total_emails, total_size) = estimate(&scope, &filter)?;
+    let resolved = resolve_selection(user_id, source, format)?;
+    let (accounts, total_emails, total_size) = estimate_for(&scope, &resolved.plan)?;
     Ok(ExportPreviewView {
-        saved_search_id: saved.id,
-        saved_search_name: saved.name,
-        format: ExportFormat::Mbox,
+        saved_search_id: resolved.saved_search_id,
+        saved_search_name: resolved.saved_search_name,
+        format,
         accounts,
         total_emails,
         total_size,
@@ -391,7 +591,7 @@ pub fn preview(
 pub fn create_export(
     user_id: u64,
     username: String,
-    saved_search_id: &str,
+    source: &ExportSource,
     format: ExportFormat,
     scope: Option<HashSet<u64>>,
 ) -> BichonResult<ExportJobView> {
@@ -407,11 +607,9 @@ pub fn create_export(
         )
     })?;
 
-    let saved = SavedSearchModel::get_owned(user_id, saved_search_id)?;
-    ensure_email_kind(&saved.kind)?;
-    let filter = parse_filter(saved.filter.clone())?;
-
-    let (accounts, total_emails, total_size) = estimate(&scope, &filter)?;
+    let resolved = resolve_selection(user_id, source, format)?;
+    let plan = resolved.plan;
+    let (accounts, total_emails, total_size) = estimate_for(&scope, &plan)?;
     check_disk_space(total_size)?;
 
     let job_id = new_job_id();
@@ -427,8 +625,8 @@ pub fn create_export(
         job_id: job_id.clone(),
         user_id,
         username: username.clone(),
-        saved_search_id: saved.id.clone(),
-        saved_search_name: saved.name.clone(),
+        saved_search_id: resolved.saved_search_id.clone(),
+        saved_search_name: resolved.saved_search_name.clone(),
         format,
         status: STATUS_RUNNING.to_string(),
         accounts,
@@ -461,11 +659,12 @@ pub fn create_export(
     }
 
     let view = job.lock().unwrap().to_view();
-    tokio::spawn(run_export(job, scope, filter, permit));
+    tokio::spawn(run_export(job, scope, plan, permit));
     emit(Event::ExportStarted {
         user: username,
         export_id: job_id,
-        saved_search_id: saved_search_id.to_string(),
+        saved_search_id: resolved.saved_search_id,
+        saved_search_name: view.saved_search_name.clone(),
         format: view.format.as_str().to_string(),
         account_count: view.accounts.len() as u64,
         email_count: view.total_emails,
@@ -632,7 +831,7 @@ pub fn spawn_export_cleanup() {
 async fn run_export(
     job: Arc<Mutex<ExportJob>>,
     scope: Option<HashSet<u64>>,
-    filter: EmailSearchFilter,
+    plan: ExportPlan,
     _permit: tokio::sync::SemaphorePermit<'static>,
 ) {
     let dir = {
@@ -640,15 +839,16 @@ async fn run_export(
         job_dir(&guard.job_id)
     };
 
-    let result = run_export_inner(&job, &dir, scope, filter).await;
+    let result = run_export_inner(&job, &dir, scope, plan).await;
     if let Err(e) = result {
         let message = e.to_string();
-        let (username, export_id, saved_search_id) = {
+        let (username, export_id, saved_search_id, saved_search_name) = {
             let guard = job.lock().unwrap();
             (
                 guard.username.clone(),
                 guard.job_id.clone(),
                 guard.saved_search_id.clone(),
+                guard.saved_search_name.clone(),
             )
         };
         {
@@ -663,6 +863,7 @@ async fn run_export(
             user: username,
             export_id: export_id.clone(),
             saved_search_id,
+            saved_search_name,
             error: message.clone(),
         });
         error!("Export {export_id} failed: {message}");
@@ -670,6 +871,18 @@ async fn run_export(
 }
 
 async fn run_export_inner(
+    job: &Arc<Mutex<ExportJob>>,
+    dir: &Path,
+    scope: Option<HashSet<u64>>,
+    plan: ExportPlan,
+) -> BichonResult<()> {
+    match plan {
+        ExportPlan::Mbox(filter) => run_mbox_export(job, dir, scope, filter).await,
+        ExportPlan::Attachments(filter) => run_attachments_export(job, dir, scope, filter).await,
+    }
+}
+
+async fn run_mbox_export(
     job: &Arc<Mutex<ExportJob>>,
     dir: &Path,
     scope: Option<HashSet<u64>>,
@@ -742,13 +955,37 @@ async fn run_export_inner(
         .unwrap_or(0);
     let artifact_hash = sha256_file(&mbox_path).await.ok();
 
-    let (username, export_id, saved_search_id, saved_search_name, accounts, exported, failed, created_at) = {
+    finish_export(job, dir, &artifact_name, artifact_size, artifact_hash).await
+}
+
+/// Shared completion tail for both export runners: writes the summary
+/// manifest, flips the job to finished with its artifact, and emits the
+/// completion event.
+async fn finish_export(
+    job: &Arc<Mutex<ExportJob>>,
+    dir: &Path,
+    artifact_name: &str,
+    artifact_size: u64,
+    artifact_hash: Option<String>,
+) -> BichonResult<()> {
+    let (
+        username,
+        export_id,
+        saved_search_id,
+        saved_search_name,
+        format,
+        accounts,
+        exported,
+        failed,
+        created_at,
+    ) = {
         let guard = job.lock().unwrap();
         (
             guard.username.clone(),
             guard.job_id.clone(),
             guard.saved_search_id.clone(),
             guard.saved_search_name.clone(),
+            guard.format,
             guard.accounts.clone(),
             guard.exported,
             guard.failed,
@@ -758,7 +995,9 @@ async fn run_export_inner(
 
     write_summary_manifest(
         dir,
-        &artifact_name,
+        &export_id,
+        format,
+        artifact_name,
         artifact_size,
         artifact_hash.as_deref(),
         &username,
@@ -774,7 +1013,7 @@ async fn run_export_inner(
     {
         let mut guard = job.lock().unwrap();
         guard.status = STATUS_FINISHED.to_string();
-        guard.artifact_name = Some(artifact_name);
+        guard.artifact_name = Some(artifact_name.to_string());
         guard.artifact_size = artifact_size;
         guard.artifact_hash = artifact_hash.clone();
         guard.finished_at = Some(now_ms());
@@ -784,6 +1023,7 @@ async fn run_export_inner(
         user: username,
         export_id: export_id.clone(),
         saved_search_id,
+        saved_search_name,
         exported,
         failed,
         artifact_size,
@@ -791,6 +1031,191 @@ async fn run_export_inner(
     });
     info!("Export {export_id} finished: {exported} exported, {failed} failed");
     Ok(())
+}
+
+/// Attachment-export runner: pages the attachment search the saved search
+/// defines and writes every matching attachment once — deduplicated by
+/// content hash, so a photo attached to ten exports exactly one file — into
+/// a zip artifact, plus one manifest line per exported file.
+///
+/// Unlike the mbox path this branch is synchronous I/O end to end: the
+/// search and `retrieve_attachment_content` are plain blob reads, so there
+/// is nothing to await inside the loop (the sync calls sit in this async
+/// task exactly like the mbox runner's own sync `search_messages_impl`).
+async fn run_attachments_export(
+    job: &Arc<Mutex<ExportJob>>,
+    dir: &Path,
+    scope: Option<HashSet<u64>>,
+    filter: AttachmentSearchFilter,
+) -> BichonResult<()> {
+    let job_id = job.lock().unwrap().job_id.clone();
+    let artifact_name = format!("{job_id}.zip");
+    let zip_path = dir.join(&artifact_name);
+    let zip_file = std::fs::File::create(&zip_path).map_err(|e| {
+        raise_error!(
+            format!("Failed to create zip file: {e}"),
+            ErrorCode::InternalError
+        )
+    })?;
+    let mut zip = zip::ZipWriter::new(zip_file);
+
+    let manifest_path = dir.join("manifest.jsonl");
+    let mut manifest = std::fs::File::create(&manifest_path).map_err(|e| {
+        raise_error!(
+            format!("Failed to create manifest file: {e}"),
+            ErrorCode::InternalError
+        )
+    })?;
+
+    let mut seen: HashSet<String> = HashSet::new();
+    let mut page: u64 = 1;
+    loop {
+        if is_cancelled(job) {
+            return Ok(());
+        }
+        let request = AttachmentSearchRequest {
+            filter: filter.clone(),
+            page,
+            page_size: EXPORT_PAGE_SIZE,
+            sort_by: Some(SortBy::DATE),
+            desc: Some(false),
+        };
+        let data = search_attachment_impl(scope.clone(), request)?;
+        let pages = data.total_pages.unwrap_or(1).max(1);
+
+        for att in &data.items {
+            if is_cancelled(job) {
+                return Ok(());
+            }
+            // The same content reached from several mails exports once; the
+            // first hit (oldest first) decides the entry's date.
+            if !seen.insert(att.content_hash.clone()) {
+                continue;
+            }
+            let ok = export_attachment_one(&mut zip, &mut manifest, att);
+            let mut guard = job.lock().unwrap();
+            guard.processed += 1;
+            match ok {
+                Ok(()) => guard.exported += 1,
+                Err(e) => {
+                    guard.failed += 1;
+                    warn!(
+                        "Failed to export attachment {} (account {}): {e}",
+                        att.content_hash, att.account_id
+                    );
+                }
+            }
+        }
+
+        if page >= pages {
+            break;
+        }
+        page += 1;
+    }
+
+    zip.finish().map_err(|e| {
+        raise_error!(
+            format!("Failed to finalize zip file: {e}"),
+            ErrorCode::InternalError
+        )
+    })?;
+    let artifact_size = std::fs::metadata(&zip_path)
+        .map(|m| m.len())
+        .unwrap_or(0);
+    let artifact_hash = sha256_file(&zip_path).await.ok();
+
+    finish_export(job, dir, &artifact_name, artifact_size, artifact_hash).await
+}
+
+/// Writes one attachment into the zip plus its manifest line. Content comes
+/// from the same retrieval the single-attachment download uses, so the bytes
+/// in the zip are identical to what the UI serves.
+fn export_attachment_one(
+    zip: &mut zip::ZipWriter<std::fs::File>,
+    manifest: &mut std::fs::File,
+    att: &bichon_core::store::tantivy::model::AttachmentModel,
+) -> BichonResult<()> {
+    let mut cursor = bichon_core::message::attachment::retrieve_attachment_content(
+        att.account_id,
+        att.envelope_id.clone(),
+        &att.content_hash,
+    )?;
+    let mut bytes = Vec::with_capacity(att.size.min(u32::MAX as u64) as usize);
+    // Fully qualified: `AsyncReadExt` is also in scope module-wide and the
+    // Cursor implements both.
+    std::io::Read::read_to_end(&mut cursor, &mut bytes).map_err(|e| {
+        raise_error!(
+            format!("Failed to read attachment {}: {e}", att.content_hash),
+            ErrorCode::InternalError
+        )
+    })?;
+
+    let zip_name = attachment_zip_name(att);
+    let options = zip::write::SimpleFileOptions::default()
+        .compression_method(compression_for(&att.category));
+    zip.start_file(zip_name.clone(), options).map_err(|e| {
+        raise_error!(
+            format!("Failed to add zip entry '{zip_name}': {e}"),
+            ErrorCode::InternalError
+        )
+    })?;
+    std::io::Write::write_all(zip, &bytes).map_err(|e| {
+        raise_error!(
+            format!("Failed to write zip entry '{zip_name}': {e}"),
+            ErrorCode::InternalError
+        )
+    })?;
+
+    let line = serde_json::json!({
+        "account_id": att.account_id,
+        "envelope_id": att.envelope_id,
+        "content_hash": att.content_hash,
+        "filename": att.name,
+        "subject": att.subject,
+        "size": att.size,
+        "zip_name": zip_name,
+    });
+    let mut buf = serde_json::to_vec(&line).map_err(|e| {
+        raise_error!(
+            format!("Failed to serialize manifest line: {e}"),
+            ErrorCode::InternalError
+        )
+    })?;
+    buf.push(b'\n');
+    std::io::Write::write_all(manifest, &buf).map_err(|e| {
+        raise_error!(
+            format!("Failed to write manifest line: {e}"),
+            ErrorCode::InternalError
+        )
+    })?;
+
+    Ok(())
+}
+
+/// Deterministic zip entry name: mail date, short content hash, extension.
+/// The hash keeps it unique across same-named attachments from different
+/// mails; the date prefix makes the set chronologically sortable for a photo
+/// library import.
+fn attachment_zip_name(att: &bichon_core::store::tantivy::model::AttachmentModel) -> String {
+    let date = Utc
+        .timestamp_opt(att.date / 1000, 0)
+        .unwrap()
+        .format("%Y%m%d-%H%M%S");
+    let hash_prefix: String = att.content_hash.chars().take(8).collect();
+    let ext = att
+        .ext
+        .clone()
+        .unwrap_or_else(|| "bin".to_string());
+    format!("{date}-{hash_prefix}.{ext}")
+}
+
+/// Media that is already compressed gains nothing from deflate and only
+/// burns CPU on large exports; store those entries verbatim.
+fn compression_for(category: &str) -> zip::CompressionMethod {
+    match category {
+        "image" | "video" | "audio" | "archive" => zip::CompressionMethod::Stored,
+        _ => zip::CompressionMethod::Deflated,
+    }
 }
 
 /// Streams a file and returns its lowercase hex SHA-256.
@@ -926,12 +1351,13 @@ fn verify_progress_view(job: &ExportJob) -> ExportVerifyProgressView {
 /// The verification worker: reads the manifest, cross-checks every message
 /// against the archive and writes progress/result back onto the job.
 async fn verify_job(job: &Arc<Mutex<ExportJob>>) -> BichonResult<ExportVerifyView> {
-    let (job_id, status, artifact_name) = {
+    let (job_id, status, artifact_name, format) = {
         let guard = job.lock().unwrap();
         (
             guard.job_id.clone(),
             guard.status.clone(),
             guard.artifact_name.clone(),
+            guard.format,
         )
     };
     if status != STATUS_FINISHED {
@@ -991,7 +1417,15 @@ async fn verify_job(job: &Arc<Mutex<ExportJob>>) -> BichonResult<ExportVerifyVie
             let expected_hash = entry.get("content_hash").and_then(|v| v.as_str());
             checked += 1;
 
-            let actual = read_blob_content_hash(account_id, envelope_id).await;
+            // The mbox manifest lists one message per line and is checked
+            // against the live message; the attachments manifest lists one
+            // attachment per line and is checked against the live attachment.
+            let actual = match format {
+                ExportFormat::Mbox => read_blob_content_hash(account_id, envelope_id).await,
+                ExportFormat::Attachments => {
+                    read_attachment_content_hash(account_id, envelope_id, expected_hash).await
+                }
+            };
             match (expected_hash, actual.as_ref()) {
                 // Matched when the reconstructed content is byte-identical, or
                 // when every detached attachment blob is present. The blob
@@ -1112,6 +1546,28 @@ async fn read_blob_content_hash(
     let mut raw = Vec::new();
     reader.read_to_end(&mut raw).await.ok()?;
     Some((compute_content_hash(&raw), missing_attachment_hashes(&raw)))
+}
+
+/// Attachment-manifest verify unit: re-reads the exported attachment from
+/// the archive and re-hashes its content. `None` means the attachment is no
+/// longer retrievable — the same shape `read_blob_content_hash` returns for
+/// a message whose blob is gone.
+async fn read_attachment_content_hash(
+    account_id: u64,
+    envelope_id: &str,
+    content_hash: Option<&str>,
+) -> Option<(String, Vec<String>)> {
+    let content_hash = content_hash?;
+    let mut cursor =
+        bichon_core::message::attachment::retrieve_attachment_content(
+            account_id,
+            envelope_id.to_string(),
+            content_hash,
+        )
+        .ok()?;
+    let mut bytes = Vec::new();
+    std::io::Read::read_to_end(&mut cursor, &mut bytes).ok()?;
+    Some((compute_content_hash(&bytes), Vec::new()))
 }
 
 /// True when `raw` still contains a detached-attachment placeholder.
@@ -1278,6 +1734,8 @@ async fn export_one(
 
 async fn write_summary_manifest(
     dir: &Path,
+    job_id: &str,
+    format: ExportFormat,
     artifact_name: &str,
     artifact_size: u64,
     artifact_hash: Option<&str>,
@@ -1290,12 +1748,12 @@ async fn write_summary_manifest(
     created_at: i64,
 ) -> BichonResult<()> {
     let summary = serde_json::json!({
-        "job_id": artifact_name.trim_end_matches(".mbox"),
+        "job_id": job_id,
         "status": "finished",
         "user": username,
         "saved_search_id": saved_search_id,
         "saved_search_name": saved_search_name,
-        "format": ExportFormat::Mbox.as_str(),
+        "format": format.as_str(),
         "created_at": created_at,
         "finished_at": now_ms(),
         "accounts": accounts,
@@ -1405,14 +1863,15 @@ pub fn load_persisted_exports() {
             );
             continue;
         };
-        let format = if manifest.format == ExportFormat::Mbox.as_str() {
-            ExportFormat::Mbox
-        } else {
-            warn!(
-                "Skipping export {}: unknown format {}",
-                manifest.job_id, manifest.format
-            );
-            continue;
+        let format = match export_format_from_wire(&manifest.format) {
+            Some(format) => format,
+            None => {
+                warn!(
+                    "Skipping export {}: unknown format {}",
+                    manifest.job_id, manifest.format
+                );
+                continue;
+            }
         };
         // Restore any persisted compliance verification state so results
         // survive a restart. A `running` state cannot outlive the process, so

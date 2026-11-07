@@ -2,7 +2,7 @@ use crate::api::export::{
     create_export_job, download_export_to_file, get_export_job, list_saved_searches,
     preview_export, verify_export_job,
 };
-use bichon_core::export::ExportJobView;
+use bichon_core::export::{ExportFormat, ExportJobView};
 use bichon_core::saved_search::SavedSearchKind;
 use dialoguer::Select;
 use crate::api::download::download_and_export_with_json_header;
@@ -221,37 +221,64 @@ fn get_unique_mbox_path(base_dir: &Path, account_id: u64, email: &str) -> PathBu
     final_path
 }
 
-/// Saved-search driven batch export: list email saved searches, preview the
-/// scope, confirm, start the server-side job, poll until it finishes and
-/// download the mbox artifact.
+/// Saved-search driven batch export: pick a format (mbox of whole messages,
+/// or a zip of the attachments an attachment search matches), list matching
+/// saved searches, preview the scope, confirm, start the server-side job,
+/// poll until it finishes and download the artifact.
 pub async fn handle_export(config: &BichonCliConfig, theme: &ColorfulTheme) {
     let client = Client::new();
 
+    let format = Select::with_theme(theme)
+        .with_prompt("Select export format")
+        .items(&[
+            "Mbox — whole messages (requires an email saved search)",
+            "Attachments — matching attachments packed in a zip (requires an attachment saved search)",
+        ])
+        .default(0)
+        .interact()
+        .unwrap();
+    let format = match format {
+        0 => ExportFormat::Mbox,
+        _ => ExportFormat::Attachments,
+    };
+    let kind = match format {
+        ExportFormat::Mbox => SavedSearchKind::Email,
+        ExportFormat::Attachments => SavedSearchKind::Attachment,
+    };
+    let item_label = match format {
+        ExportFormat::Mbox => "emails",
+        ExportFormat::Attachments => "attachments",
+    };
+
     println!("Fetching saved searches...");
-    let saved = list_saved_searches(&client, config).await;
-    let email_searches: Vec<_> = saved
+    let saved = list_saved_searches(&client, config, &kind).await;
+    let searches: Vec<_> = saved
         .into_iter()
-        .filter(|s| s.kind == SavedSearchKind::Email)
+        .filter(|s| s.kind == kind)
         .collect();
-    if email_searches.is_empty() {
+    if searches.is_empty() {
         eprintln!(
-            " {} No email saved searches found. Save a search on the web UI first, then retry.",
-            style("✘").red()
+            " {} No {} saved searches found. Save a search on the web UI first, then retry.",
+            style("✘").red(),
+            match kind {
+                SavedSearchKind::Email => "email",
+                SavedSearchKind::Attachment => "attachment",
+            }
         );
         return;
     }
 
-    let names: Vec<String> = email_searches.iter().map(|s| s.name.clone()).collect();
+    let names: Vec<String> = searches.iter().map(|s| s.name.clone()).collect();
     let idx = Select::with_theme(theme)
         .with_prompt("Select a saved search to export")
         .items(&names)
         .default(0)
         .interact()
         .unwrap();
-    let search = &email_searches[idx];
+    let search = &searches[idx];
 
     println!("\n--- Export Preview ---");
-    let Some(preview) = preview_export(&client, config, &search.id).await else {
+    let Some(preview) = preview_export(&client, config, &search.id, format).await else {
         return;
     };
     println!("  Saved search: {}", style(&preview.saved_search_name).cyan());
@@ -259,13 +286,14 @@ pub async fn handle_export(config: &BichonCliConfig, theme: &ColorfulTheme) {
     for account in &preview.accounts {
         println!("    - {}", style(&account.email).yellow());
     }
-    println!("  Emails:       {}", style(preview.total_emails).cyan());
+    // Attachments are deduplicated by content: the count is unique files.
+    println!("  Items:        {}", style(preview.total_emails).cyan());
     println!("  Estimated:    {}", style(format_bytes(preview.total_size)).cyan());
 
     if !Confirm::with_theme(theme)
         .with_prompt(format!(
-            "Export {} emails from '{}'?",
-            preview.total_emails, preview.saved_search_name
+            "Export {} {} from '{}'?",
+            preview.total_emails, item_label, preview.saved_search_name
         ))
         .default(true)
         .interact()
@@ -276,7 +304,7 @@ pub async fn handle_export(config: &BichonCliConfig, theme: &ColorfulTheme) {
     }
 
     println!(" {} Starting export job...", style("✔").green());
-    let Some(mut job) = create_export_job(&client, config, &search.id).await else {
+    let Some(mut job) = create_export_job(&client, config, &search.id, format).await else {
         return;
     };
     println!(" {} Job: {}", style("✔").green(), job.job_id);
@@ -316,7 +344,7 @@ pub async fn handle_export(config: &BichonCliConfig, theme: &ColorfulTheme) {
 
     let path = loop {
         let input: String = Input::with_theme(theme)
-            .with_prompt("Enter directory to save the mbox file")
+            .with_prompt("Enter directory to save the export file")
             .default(".".into())
             .interact_text()
             .unwrap();
@@ -331,7 +359,13 @@ pub async fn handle_export(config: &BichonCliConfig, theme: &ColorfulTheme) {
         }
         break p;
     };
-    let target = path.join(format!("{}.mbox", job.job_id));
+    // The server names the artifact ({job_id}.mbox / {job_id}.zip); keep its
+    // extension rather than guessing from the format.
+    let file_name = job
+        .artifact_name
+        .clone()
+        .unwrap_or_else(|| format!("{}.mbox", job.job_id));
+    let target = path.join(file_name);
     println!(
         " {} Downloading to '{}'...",
         style("✔").green(),
