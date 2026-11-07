@@ -20,7 +20,7 @@ use crate::error::code::IntoStatusCode;
 use bichon_core::error::BichonError;
 use poem::http::StatusCode;
 use poem_openapi::{payload::Json, ApiResponse, Object};
-use std::{fmt::Formatter, u32};
+use std::fmt::Formatter;
 
 pub mod code;
 pub mod handler;

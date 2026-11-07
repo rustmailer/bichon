@@ -136,7 +136,7 @@ impl BlobManager {
     /// to whichever runtime created the manager, so a test that used the
     /// process-global `BLOB_MANAGER` would silently depend on which other test
     /// initialized it first and on that test's runtime still being alive.
-    fn open(blob_dir: std::path::PathBuf) -> Self {
+    pub(crate) fn open(blob_dir: std::path::PathBuf) -> Self {
         let mut config = Config::default();
         config.default_codec = Codec::Zstd;
         config.compress_threshold = 1024;

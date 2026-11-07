@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-use mail_parser::{parsers::MessageStream, MessageParser, MimeHeaders};
+use mail_parser::{HeaderForm, MessageParser};
 
 
 #[tokio::test]
@@ -64,11 +64,17 @@ R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7
 "#;
 
     let message = MessageParser::default().parse(MESSAGE).unwrap();
-    let header = message.header_raw("X-Gmail-Labels").unwrap().as_bytes();
+    let header = message
+        .headers()
+        .get("X-Gmail-Labels")
+        .unwrap()
+        .raw_value();
 
-    let data = MessageStream::new(header)
-        .parse_unstructured()
-        .unwrap_text()
+    let data = HeaderForm::Text
+        .parse(header)
+        .value()
+        .as_text()
+        .unwrap()
         .to_string();
 
     println!("{}", data);

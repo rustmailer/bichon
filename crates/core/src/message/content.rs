@@ -18,13 +18,16 @@
 
 use crate::account::migration::AccountModel;
 use crate::base64_encode;
-use crate::envelope::extractor::{extract_envelope_from_nested_message, reattach_eml_content};
+use crate::envelope::extractor::{
+    attachment_parts, extract_envelope_from_nested_message, first_body_html, first_body_text,
+    part_contents, reattach_eml_content,
+};
 use crate::error::code::ErrorCode;
 use crate::store::envelope::Envelope;
 use crate::utils::compute_content_hash;
 use crate::utils::html::block_remote_content;
 use crate::{error::BichonResult, raise_error};
-use mail_parser::{Message, MessageParser, MessagePart, MimeHeaders};
+use mail_parser::{Message, MessageParser, MessagePart};
 use tracing::debug;
 //use poem_openapi::Object;
 use serde::{Deserialize, Serialize};
@@ -196,8 +199,8 @@ pub fn retrieve_email_content(
             ErrorCode::InternalError
         )
     })?;
-    let mut html: Option<String> = message.body_html(0).map(|cow| cow.into_owned());
-    let text: Option<String> = message.body_text(0).map(|cow| cow.into_owned());
+    let mut html: Option<String> = first_body_html(&message);
+    let text: Option<String> = first_body_text(&message);
     let attachments = collect_attachments(&message, &mut html);
     let mut has_remote_content = false;
     if let Some(ref html_body) = html {
@@ -225,13 +228,7 @@ pub fn retrieve_email_content(
 fn attachment_file_type(attachment: &MessagePart) -> String {
     attachment
         .content_type()
-        .map(|ct| {
-            format!(
-                "{}/{}",
-                ct.c_type.as_ref(),
-                ct.c_subtype.as_deref().unwrap_or("")
-            )
-        })
+        .map(|ct| format!("{}/{}", ct.ctype(), ct.subtype().unwrap_or("")))
         .unwrap_or_else(|| {
             debug!(
                 filename = attachment.attachment_name().unwrap_or_default(),
@@ -245,8 +242,8 @@ fn attachment_file_type(attachment: &MessagePart) -> String {
 /// referenced by `cid:` into the HTML body as data URIs.
 fn collect_attachments(message: &Message, html: &mut Option<String>) -> Vec<AttachmentInfo> {
     let mut attachments = Vec::new();
-    for attachment in message.attachments() {
-        let file_type = attachment_file_type(attachment);
+    for attachment in attachment_parts(message) {
+        let file_type = attachment_file_type(&attachment);
         let filename = attachment.attachment_name().map(|name| name.to_string());
         let disposition = attachment.content_disposition();
 
@@ -258,8 +255,8 @@ fn collect_attachments(message: &Message, html: &mut Option<String>) -> Vec<Atta
             if let Some(html1) = html.as_deref() {
                 if let Some(cid) = attachment.content_id() {
                     if html1.contains(cid) {
-                        let data = attachment.contents();
-                        let base64_encoded = base64_encode!(data);
+                        let data = part_contents(&attachment);
+                        let base64_encoded = base64_encode!(&data);
                         let html_content = html1.replace(
                             &format!("cid:{}", cid),
                             &format!("data:{};base64,{}", file_type, base64_encoded),
@@ -274,10 +271,11 @@ fn collect_attachments(message: &Message, html: &mut Option<String>) -> Vec<Atta
             continue;
         }
         let is_message = attachment.is_message();
-        let content_hash = compute_content_hash(attachment.contents());
+        let contents = part_contents(&attachment);
+        let content_hash = compute_content_hash(&contents);
         attachments.push(AttachmentInfo {
             filename: filename.or(Some(content_hash.clone())),
-            size: attachment.contents().len(),
+            size: contents.len(),
             inline,
             file_type,
             is_message,
@@ -306,10 +304,9 @@ pub fn retrieve_nested_eml_content(
         )
     })?;
 
-    let attachment_content = parent_message
-        .attachments()
-        .find(|att| compute_content_hash(att.contents()) == content_hash)
-        .map(|att| att.contents())
+    let attachment_content = attachment_parts(&parent_message)
+        .find(|att| compute_content_hash(&part_contents(att)) == content_hash)
+        .map(|att| part_contents(&att))
         .ok_or_else(|| {
             raise_error!(
                 "Target nested EML not found".into(),
@@ -318,7 +315,7 @@ pub fn retrieve_nested_eml_content(
         })?;
 
     let nested_message = MessageParser::default()
-        .parse(attachment_content)
+        .parse(&attachment_content)
         .ok_or_else(|| {
             raise_error!(
                 "Failed to parse nested EML".into(),
@@ -326,14 +323,14 @@ pub fn retrieve_nested_eml_content(
             )
         })?;
 
-    let mut html = nested_message.body_html(0).map(|c| c.into_owned());
-    let text = nested_message.body_text(0).map(|c| c.into_owned());
+    let mut html = first_body_html(&nested_message);
+    let text = first_body_text(&nested_message);
 
     let mut attachments = Vec::new();
 
     let has_html = html.is_some();
 
-    for attachment in nested_message.attachments() {
+    for attachment in attachment_parts(&nested_message) {
         let cid = attachment.content_id();
         let disposition = attachment.content_disposition();
         let is_inline = disposition
@@ -346,26 +343,27 @@ pub fn retrieve_nested_eml_content(
 
             let cid_pattern = format!("cid:{}", content_id);
             if html_ref.contains(&cid_pattern) {
-                let data = attachment.contents();
+                let data = part_contents(&attachment);
                 let ct = attachment
                     .content_type()
-                    .map(|ct| format!("{}/{}", ct.c_type, ct.c_subtype.as_deref().unwrap_or("")))
+                    .map(|ct| format!("{}/{}", ct.ctype(), ct.subtype().unwrap_or("")))
                     .unwrap_or_else(|| "image/png".to_string());
 
-                let base64_data = format!("data:{};base64,{}", ct, base64_encode!(data));
+                let base64_data = format!("data:{};base64,{}", ct, base64_encode!(&data));
                 *html_ref = html_ref.replace(&cid_pattern, &base64_data);
                 continue;
             }
         }
 
-        let file_type = attachment_file_type(attachment);
-        let content_hash = compute_content_hash(attachment.contents());
+        let file_type = attachment_file_type(&attachment);
+        let contents = part_contents(&attachment);
+        let content_hash = compute_content_hash(&contents);
         attachments.push(AttachmentInfo {
             filename: attachment
                 .attachment_name()
                 .map(|n| n.to_string())
                 .or(Some(content_hash.clone())),
-            size: attachment.contents().len(),
+            size: contents.len(),
             inline: is_inline,
             file_type,
             content_hash,
@@ -524,7 +522,7 @@ mod tests {
         let message = MessageParser::default()
             .parse(eml)
             .expect("EML should parse");
-        let mut html = message.body_html(0).map(|c| c.into_owned());
+        let mut html = first_body_html(&message);
         let attachments = collect_attachments(&message, &mut html);
 
         assert_eq!(
@@ -564,7 +562,7 @@ mod tests {
         let message = MessageParser::default()
             .parse(eml)
             .expect("EML should parse");
-        let mut html = message.body_html(0).map(|c| c.into_owned());
+        let mut html = first_body_html(&message);
         let attachments = collect_attachments(&message, &mut html);
 
         assert_eq!(attachments.len(), 1);

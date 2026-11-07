@@ -15,9 +15,11 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+use std::borrow::Cow;
+
 use async_imap::types::Fetch;
 use bytes::Bytes;
-use mail_parser::{Address, HeaderName, Message, MessageParser, MimeHeaders};
+use mail_parser::{AddressList, HeaderName, Message, MessageParser, MessagePart, PartKind};
 use tantivy::{schema::Facet, TantivyDocument};
 use tracing::error;
 use uuid::Uuid;
@@ -199,15 +201,26 @@ fn record_ingest_outcome(
     result
 }
 
+/// Raw value of the first field named `name`, as written (folding preserved).
+///
+/// Equivalent to `mail-parser` 0.11's `header_raw`; the 1.0 API only exposes
+/// the raw bytes through [`mail_parser::Header::raw_value`].
+fn header_raw_str<'a, 'n>(
+    message: &'a Message<'_>,
+    name: impl Into<HeaderName<'n>>,
+) -> Option<&'a str> {
+    message
+        .headers()
+        .get(name)
+        .and_then(|header| std::str::from_utf8(header.raw_value()).ok())
+}
+
 /// First mailbox of `From`: `(display name, address)`.
 fn first_mailbox(message: &Message<'_>) -> Option<(Option<String>, Option<String>)> {
-    let first = match message.from()? {
-        Address::List(list) => list.first(),
-        Address::Group(groups) => groups.iter().find_map(|group| group.addresses.first()),
-    }?;
+    let first = message.from()?.first()?;
     Some((
-        first.name.as_ref().map(|name| name.to_string()),
-        first.address.as_ref().map(|address| address.to_string()),
+        first.name().map(|name| name.to_string()),
+        first.address().map(|address| address.to_string()),
     ))
 }
 
@@ -215,6 +228,64 @@ fn first_mailbox(message: &Message<'_>) -> Option<(Option<String>, Option<String
 /// display name.
 fn first_sender(message: &Message<'_>) -> Option<String> {
     first_mailbox(message).and_then(|(_, address)| address)
+}
+
+/// The parts the archive stores as attachments.
+///
+/// `mail-parser` 1.0 follows RFC 8621 and omits inline media shown in both
+/// body lists from [`MessageRef::attachments`](mail_parser::MessageRef::attachments).
+/// Bichon has always archived those parts (they are detached into blobs and
+/// exposed by content hash, and `cid:` images are inlined from them), so this
+/// keeps every non-multipart part that is binary, a nested message, or a text
+/// part its own body list does not carry.
+///
+/// This can include parts 0.11 left in the body (a `Content-Disposition:
+/// attachment` text part inside `multipart/alternative`, which 0.11 ignored
+/// and 1.0 classifies as an attachment). Archiving an explicitly attached
+/// part is the RFC-correct behaviour, so the difference is kept.
+pub fn attachment_parts<'a>(
+    message: &'a Message<'_>,
+) -> impl Iterator<Item = MessagePart<'a>> + 'a {
+    message.root().parts().filter(|part| match part.kind() {
+        PartKind::Multipart => false,
+        PartKind::Binary | PartKind::InlineBinary | PartKind::Message(_) => true,
+        PartKind::Text => !part.in_text_body(),
+        PartKind::Html => !part.in_html_body(),
+    })
+}
+
+/// The bytes Bichon hashes and stores for a part.
+///
+/// `mail-parser` 0.11's `MessagePart::contents()` returned charset-decoded
+/// UTF-8 for text and HTML parts, and transfer-decoded bytes for the rest.
+/// 1.0's `decoded()` stops after the transfer encoding, so a text attachment
+/// in a non-UTF-8 charset would hash differently from the record stored by an
+/// earlier version. Use `text()` for text parts to keep those hashes (and the
+/// attachment sizes derived from them) stable.
+pub fn part_contents<'a>(part: &MessagePart<'a>) -> Cow<'a, [u8]> {
+    match part.kind() {
+        PartKind::Text | PartKind::Html => match part.text() {
+            Some(text) => Cow::Owned(text.into_owned().into_bytes()),
+            None => part.decoded(),
+        },
+        _ => part.decoded(),
+    }
+}
+
+/// The first text body that actually renders as text.
+///
+/// Both `mail-parser` versions put inline media in the body lists, so
+/// `body_text(0)` is `None` when an image precedes the text part — a
+/// long-standing bug in Bichon's body extraction, not an upgrade regression.
+/// Iterating the converted bodies skips the media slots; `text_bodies()` also
+/// converts HTML fallbacks.
+pub fn first_body_text(message: &Message<'_>) -> Option<String> {
+    message.text_bodies().next().map(Cow::into_owned)
+}
+
+/// The first HTML body that actually renders as HTML; see [`first_body_text`].
+pub fn first_body_html(message: &Message<'_>) -> Option<String> {
+    message.html_bodies().next().map(Cow::into_owned)
 }
 
 /// The sender an envelope is stored with.
@@ -268,7 +339,7 @@ pub fn resolve_sender(
         return resolved;
     };
     for header in headers {
-        let Some(raw) = message.header_raw(header.as_str()) else {
+        let Some(raw) = header_raw_str(message, header.as_str()) else {
             continue;
         };
         let Some((header_name, header_address)) = parse_header_mailbox(raw) else {
@@ -301,8 +372,7 @@ pub fn resolve_sender(
 fn has_spam_header(message: &Message<'_>, spam_headers: &[String]) -> bool {
     !spam_headers.is_empty()
         && spam_headers.iter().any(|h| {
-            message
-                .header_raw(h.clone())
+            header_raw_str(message, h.as_str())
                 .map(|v| matches!(v.trim().to_lowercase().as_str(), "yes" | "true"))
                 .unwrap_or(false)
         })
@@ -354,7 +424,7 @@ pub fn journal_delivery_inner(raw: &[u8]) -> Option<Vec<u8>> {
     let inner = message
         .attachments()
         .find(|att| att.is_message())
-        .map(|att| att.contents().to_vec());
+        .map(|att| att.decoded().to_vec());
     inner
 }
 
@@ -408,10 +478,10 @@ async fn extract_envelope_core(
     }
 
     let preview_limit = 100;
-    let text = if let Some(text) = message.body_text(0).map(|cow| cow.into_owned()) {
+    let text = if let Some(text) = first_body_text(&message) {
         text
-    } else if let Some(html) = message.body_html(0) {
-        extract_text(html.as_ref())
+    } else if let Some(html) = first_body_html(&message) {
+        extract_text(&html)
     } else {
         String::new()
     };
@@ -431,13 +501,15 @@ async fn extract_envelope_core(
         .map(String::from)
         .unwrap_or_else(generate_message_id);
 
-    let in_reply_to = message.in_reply_to().as_text().map(String::from);
+    let in_reply_to = message
+        .in_reply_to()
+        .and_then(|list| list.last().map(String::from));
     let references = extract_references(&message);
     let thread_id = compute_thread_id(in_reply_to, references, &message_id);
 
     let mut subject = message.subject().map(String::from).unwrap_or_default();
     if subject.contains('\u{FFFD}') {
-        subject = normalize_subject(message.header_raw(HeaderName::Subject));
+        subject = normalize_subject(header_raw_str(&message, HeaderName::Subject));
     }
 
     let date = message.date().map(|d| d.to_timestamp() * 1000).unwrap_or(0);
@@ -469,7 +541,7 @@ async fn extract_envelope_core(
             }
         }
     }
-    let parse_addrs = |addrs: Option<&Address<'_>>| {
+    let parse_addrs = |addrs: Option<AddressList<'_>>| {
         addrs
             .map(|addr| {
                 AddrVec::from(addr)
@@ -495,7 +567,7 @@ async fn extract_envelope_core(
             .and_then(|a| a.override_from_headers.as_deref()),
     );
     let from = sender.address.clone().unwrap_or_else(|| "unknown".to_string());
-    let attachment_count = message.attachment_count();
+    let attachment_count = attachment_parts(&message).count();
     let attachments = detach_and_store_attachments(
         body,
         &message,
@@ -511,7 +583,7 @@ async fn extract_envelope_core(
 
     let mut final_tags = Vec::new();
 
-    if let Some(meta_header) = message.header_raw("X-Bichon-Metadata") {
+    if let Some(meta_header) = header_raw_str(&message, "X-Bichon-Metadata") {
         if let Some(bmd) = parse_bichon_metadata(meta_header) {
             if let Some(tags) = bmd.tags {
                 let validated_tags: Result<Vec<String>, _> = tags
@@ -631,10 +703,10 @@ pub fn extract_envelope_from_nested_message(
     message: Message<'_>,
     account_id: u64,
 ) -> BichonResult<Envelope> {
-    let text = if let Some(text) = message.body_text(0).map(|cow| cow.into_owned()) {
+    let text = if let Some(text) = first_body_text(&message) {
         text
-    } else if let Some(html) = message.body_html(0) {
-        extract_text(html.as_ref())
+    } else if let Some(html) = first_body_html(&message) {
+        extract_text(&html)
     } else {
         String::new()
     };
@@ -644,18 +716,20 @@ pub fn extract_envelope_from_nested_message(
         .map(String::from)
         .unwrap_or_else(generate_message_id);
 
-    let in_reply_to = message.in_reply_to().as_text().map(String::from);
+    let in_reply_to = message
+        .in_reply_to()
+        .and_then(|list| list.last().map(String::from));
     let references = extract_references(&message);
     let thread_id = compute_thread_id(in_reply_to, references, &message_id);
 
     let mut subject = message.subject().map(String::from).unwrap_or_default();
     if subject.contains('\u{FFFD}') {
-        subject = normalize_subject(message.header_raw(HeaderName::Subject));
+        subject = normalize_subject(header_raw_str(&message, HeaderName::Subject));
     }
 
     let date = message.date().map(|d| d.to_timestamp() * 1000).unwrap_or(0);
 
-    let parse_addrs = |addrs: Option<&Address<'_>>| {
+    let parse_addrs = |addrs: Option<AddressList<'_>>| {
         addrs
             .map(|addr| {
                 AddrVec::from(addr)
@@ -744,13 +818,9 @@ pub fn generate_message_id() -> String {
 }
 
 pub fn extract_references(message: &Message<'_>) -> Option<Vec<String>> {
-    match message.references() {
-        mail_parser::HeaderValue::Text(cow) => Some(vec![cow.to_string()]),
-        mail_parser::HeaderValue::TextList(vec) => {
-            Some(vec.iter().map(|cow| cow.to_string()).collect())
-        }
-        _ => None,
-    }
+    message
+        .references()
+        .map(|list| list.iter().map(str::to_string).collect())
 }
 
 /// Prefix of the placeholder that replaces an attachment body inside a
@@ -822,17 +892,16 @@ pub fn strip_attachment_bodies(
 ) -> DetachedBody {
     let mut stripped_eml = original_body.to_vec();
     let mut infos = Vec::new();
-    let mut blobs = Vec::with_capacity(message.attachment_count());
+    let mut blobs = Vec::with_capacity(attachment_parts(message).count());
     let mut text_candidates = Vec::new();
 
     // Collect and sort attachment ranges in reverse to maintain offset
     // integrity while splicing placeholders.
-    let mut ranges: Vec<_> = message
-        .attachments()
+    let mut ranges: Vec<_> = attachment_parts(message)
         .map(|att| {
             (
-                att.raw_body_offset() as usize,
-                att.raw_end_offset() as usize,
+                att.offset_body() as usize,
+                att.offset_end() as usize,
                 att,
             )
         })
@@ -849,7 +918,8 @@ pub fn strip_attachment_bodies(
 
         // content hash is computed from the decoded attachment contents,
         // which is always available regardless of raw offset validity.
-        let content_hash = compute_content_hash(att.contents());
+        let contents = part_contents(&att);
+        let content_hash = compute_content_hash(&contents);
 
         let raw_content_hash = if range_valid {
             let raw_bytes = &original_body[raw_start..raw_end];
@@ -878,8 +948,8 @@ pub fn strip_attachment_bodies(
             .map(|ct| {
                 format!(
                     "{}/{}",
-                    ct.c_type.as_ref(),
-                    ct.c_subtype.as_deref().unwrap_or("")
+                    ct.ctype(),
+                    ct.subtype().unwrap_or("")
                 )
             })
             .unwrap_or_else(|| "application/octet-stream".to_string());
@@ -909,21 +979,21 @@ pub fn strip_attachment_bodies(
 
             if (!inline || !has_cid)
                 && should_extract
-                && att.contents().len() <= crate::ext::text_extractor::max_extract_bytes()
+                && contents.len() <= crate::ext::text_extractor::max_extract_bytes()
                 && crate::ext::text_extractor::should_try_extract(&file_type, &ext)
             {
                 text_candidates.push(TextCandidate {
                     content_hash: content_hash.clone(),
                     file_type: file_type.clone(),
                     ext: ext.clone(),
-                    bytes: att.contents().to_vec(),
+                    bytes: contents.to_vec(),
                 });
             }
         }
 
         infos.push(AttachmentInfo {
             filename: att.attachment_name().map(|n| n.to_string()),
-            size: att.contents().len(),
+            size: contents.len(),
             inline,
             file_type,
             content_id: att.content_id().map(|id| id.to_string()),
@@ -2374,7 +2444,7 @@ Inner body\r\n\
         let message = mail_parser::MessageParser::new()
             .parse(&raw)
             .expect("parse valid MIME message");
-        assert_eq!(message.attachment_count(), 1);
+        assert_eq!(super::attachment_parts(&message).count(), 1);
 
         // Truncate the raw body so the attachment's raw_end_offset lies
         // past the body end — exactly the scenario reported by users.
@@ -2389,6 +2459,122 @@ Inner body\r\n\
         // The attachment count must still match so the consistency check
         // in reattach_eml_content doesn't fail later.
         assert_eq!(infos.len(), 1);
+    }
+
+    /// Text attachments are hashed on their charset-decoded bytes, matching
+    /// `mail-parser` 0.11's `contents()`. Records written before the 1.0
+    /// upgrade store that hash; hashing `decoded()` instead (transfer
+    /// decoding only) would stop them from being found again.
+    #[test]
+    fn text_attachment_contents_are_charset_decoded() {
+        let raw = concat!(
+            "From: sender@example.com\r\n",
+            "MIME-Version: 1.0\r\n",
+            "Content-Type: multipart/mixed; boundary=\"charset\"\r\n",
+            "\r\n",
+            "--charset\r\n",
+            "Content-Type: text/plain; charset=\"iso-8859-1\"\r\n",
+            "Content-Transfer-Encoding: quoted-printable\r\n",
+            "Content-Disposition: attachment; filename=\"latin1.txt\"\r\n",
+            "\r\n",
+            "Die H=E4schen\r\n",
+            "--charset--\r\n",
+        )
+        .as_bytes();
+
+        let message = super::MessageParser::new().parse(raw).expect("fixture parses");
+        let parts: Vec<_> = super::attachment_parts(&message).collect();
+        assert_eq!(parts.len(), 1);
+
+        // The transfer encoding alone leaves latin-1 bytes, which are not
+        // valid UTF-8; 0.11 stored the charset-decoded text instead.
+        assert!(std::str::from_utf8(parts[0].decoded().as_ref()).is_err());
+        let contents = super::part_contents(&parts[0]);
+        assert_eq!(
+            String::from_utf8(contents.to_vec()).expect("charset-decoded UTF-8"),
+            "Die Häschen"
+        );
+    }
+
+    /// RFC 8621 removes inline media shown in the body from `attachments()`,
+    /// but Bichon has always archived those parts (they become blobs, and
+    /// `cid:` references are inlined from them). The filter has to keep them.
+    #[test]
+    fn attachment_parts_keeps_inline_media() {
+        let raw = concat!(
+            "From: sender@example.com\r\n",
+            "MIME-Version: 1.0\r\n",
+            "Content-Type: multipart/mixed; boundary=\"mixed\"\r\n",
+            "\r\n",
+            "--mixed\r\n",
+            "Content-Type: text/plain\r\n",
+            "\r\n",
+            "text\r\n",
+            "--mixed\r\n",
+            "Content-Type: image/png\r\n",
+            "Content-Disposition: inline\r\n",
+            "\r\n",
+            "image\r\n",
+            "--mixed--\r\n",
+        )
+        .as_bytes();
+
+        let message = super::MessageParser::new().parse(raw).expect("fixture parses");
+        // 1.0 shows this inline image in the body and drops it from the
+        // attachment list; 0.11, and therefore Bichon, archives it.
+        assert_eq!(message.root().attachments().count(), 0);
+        let parts: Vec<_> = super::attachment_parts(&message).collect();
+        assert_eq!(parts.len(), 1);
+        assert!(matches!(
+            parts[0].kind(),
+            super::PartKind::InlineBinary
+        ));
+    }
+
+    /// Inline media occupies body-list slots in both parser versions, so an
+    /// image that precedes the text makes `body_text(0)`/`body_html(0)`
+    /// return `None`. The first *renderable* body must still be found.
+    #[test]
+    fn first_body_skips_inline_media_that_precedes_the_text() {
+        let raw = concat!(
+            "MIME-Version: 1.0\r\n",
+            "Content-Type: multipart/mixed; boundary=\"m\"\r\n",
+            "\r\n",
+            "--m\r\n",
+            "Content-Type: image/png\r\n",
+            "Content-Transfer-Encoding: base64\r\n",
+            "Content-Disposition: inline; filename=\"logo.png\"\r\n",
+            "\r\n",
+            "iVBORw0KGgo=\r\n",
+            "--m\r\n",
+            "Content-Type: multipart/alternative; boundary=\"a\"\r\n",
+            "\r\n",
+            "--a\r\n",
+            "Content-Type: text/plain; charset=us-ascii\r\n",
+            "\r\n",
+            "Hello body\r\n",
+            "--a\r\n",
+            "Content-Type: text/html; charset=us-ascii\r\n",
+            "\r\n",
+            "<html><b>Hello body</b></html>\r\n",
+            "--a--\r\n",
+            "--m--\r\n",
+        )
+        .as_bytes();
+
+        let message = super::MessageParser::default()
+            .parse(raw)
+            .expect("fixture parses");
+        assert!(message.body_text(0).is_none());
+        assert!(message.body_html(0).is_none());
+
+        assert_eq!(
+            super::first_body_text(&message).as_deref(),
+            Some("Hello body")
+        );
+        assert!(super::first_body_html(&message)
+            .expect("html body")
+            .contains("Hello body"));
     }
 }
 

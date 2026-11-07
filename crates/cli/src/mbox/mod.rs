@@ -28,7 +28,7 @@ use bichon_core::envelope::meta::{parse_bichon_metadata, BichonMetadata};
 use console::style;
 use dialoguer::{theme::ColorfulTheme, Input};
 use dialoguer::{Confirm, Select};
-use mail_parser::MessageParser;
+use mail_parser::{HeaderForm, MessageParser};
 use reqwest::Client;
 
 /// Skip emails larger than this with a warning (100 MB).
@@ -160,8 +160,7 @@ pub async fn run_import(
         }
 
         let message = match MessageParser::new()
-            .with_minimal_headers()
-            .default_header_text()
+            .unknown_headers(HeaderForm::Text)
             .parse(body)
         {
             Some(msg) => msg,
@@ -178,14 +177,19 @@ pub async fn run_import(
         };
 
         let mut metadata: Option<BichonMetadata> = None;
-        if let Some(meta_header) = message.header_raw("X-Bichon-Metadata") {
+        if let Some(meta_header) = message
+            .headers()
+            .value("X-Bichon-Metadata")
+            .and_then(|v| v.as_text())
+        {
             metadata = parse_bichon_metadata(meta_header);
         }
 
         let get_default_folder = || {
             let labels = message
-                .header("X-Gmail-Labels")
-                .and_then(|h| h.as_text())
+                .headers()
+                .value("X-Gmail-Labels")
+                .and_then(|v| v.as_text())
                 .map(|s| s.to_string())
                 .unwrap_or_else(|| "INBOX".to_string());
             determine_folder(&labels)

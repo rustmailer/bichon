@@ -43,7 +43,9 @@ use bichon_core::{
     account::migration::AccountModel,
     archive::imap::stable_uid::AccountUidAssigner,
     database::MemDbModel,
-    envelope::extractor::{resolve_sender, ResolvedSender},
+    envelope::extractor::{
+        first_body_html, first_body_text, resolve_sender, ResolvedSender,
+    },
     error::{code::ErrorCode, BichonResult},
     ext::text_extractor,
     message::content::AttachmentInfo,
@@ -2030,10 +2032,10 @@ fn extract_content(
     // avoids the `Vec<&str>` that `split_whitespace().collect()` builds — on a
     // large newsletter that vector is several bytes per word, i.e. comparable
     // to the text itself, and it exists only to be joined.
-    let text = match message.body_text(0) {
-        Some(body) => normalize_whitespace(body.as_ref()),
-        None => match message.body_html(0) {
-            Some(html) => normalize_whitespace(&extract_text(html.as_ref())),
+    let text = match first_body_text(&message) {
+        Some(body) => normalize_whitespace(&body),
+        None => match first_body_html(&message) {
+            Some(html) => normalize_whitespace(&extract_text(&html)),
             None => String::new(),
         },
     };

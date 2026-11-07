@@ -18,7 +18,7 @@
 
 use std::ops::Deref;
 
-use mail_parser::{Addr as ImapAddr, Address as ImapAddress};
+use mail_parser::{AddressList as ImapAddressList, Mailbox as ImapMailbox};
 use serde::{Deserialize, Serialize};
 pub mod auth;
 pub mod paginated;
@@ -49,11 +49,11 @@ impl std::fmt::Display for Addr {
     }
 }
 
-impl<'x> From<&ImapAddr<'x>> for Addr {
-    fn from(original: &ImapAddr<'x>) -> Self {
+impl<'x> From<ImapMailbox<'x>> for Addr {
+    fn from(original: ImapMailbox<'x>) -> Self {
         Addr {
-            name: original.name.as_ref().map(|s| s.to_string()),
-            address: original.address.as_ref().map(|s| s.to_string()),
+            name: original.name().map(|s| s.to_string()),
+            address: original.address().map(|s| s.to_string()),
         }
     }
 }
@@ -69,15 +69,9 @@ impl Deref for AddrVec {
     }
 }
 
-impl<'x> From<&ImapAddress<'x>> for AddrVec {
-    fn from(original: &ImapAddress<'x>) -> Self {
-        let vec = match original {
-            ImapAddress::List(addrs) => addrs.iter().map(Addr::from).collect(),
-            ImapAddress::Group(groups) => groups
-                .iter()
-                .flat_map(|group| group.addresses.iter().map(Addr::from))
-                .collect(),
-        };
-        AddrVec(vec)
+impl<'x> From<ImapAddressList<'x>> for AddrVec {
+    fn from(original: ImapAddressList<'x>) -> Self {
+        // `mailboxes()` flattens groups, preserving document order.
+        AddrVec(original.mailboxes().map(Addr::from).collect())
     }
 }

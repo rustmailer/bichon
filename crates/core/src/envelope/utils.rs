@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-use mail_parser::parsers::MessageStream;
+use mail_parser::HeaderForm;
 use regex::{Captures, Regex};
 
 fn merge_contiguous_encoded_words(input: &str) -> String {
@@ -81,8 +81,9 @@ pub fn normalize_subject(raw_subject: Option<&str>) -> String {
         None => return String::new(),
     };
 
-    MessageStream::new(subject.as_bytes())
-        .parse_unstructured()
+    HeaderForm::Text
+        .parse(subject.as_bytes())
+        .value()
         .as_text()
         .map(String::from)
         .unwrap_or_default()
@@ -174,6 +175,17 @@ mod tests {
         assert_eq!(normalize_subject(None), "");
     }
 
+    /// The raw-subject fallback parses the header bytes after
+    /// `merge_contiguous_encoded_words`; folded encoded words must survive
+    /// that path (it runs when the decoded subject contains U+FFFD).
+    #[test]
+    fn normalize_subject_decodes_folded_encoded_words() {
+        assert_eq!(
+            normalize_subject(Some(" =?UTF-8?B?5L2g?=\r\n =?UTF-8?B?5aW9?=\r\n")),
+            "你好"
+        );
+    }
+
     #[test]
     fn cp1253_subject_and_base64_body() {
         let eml = concat!(
@@ -187,6 +199,9 @@ mod tests {
 
         let message = MessageParser::default().parse(eml).unwrap();
         assert_eq!(message.subject(), Some("Χρέωση λογαριασμού"));
-        assert_eq!(message.body_text(0).as_deref(), Some("Αγαπητέ πελάτη"));
+        assert_eq!(
+            crate::envelope::extractor::first_body_text(&message).as_deref(),
+            Some("Αγαπητέ πελάτη")
+        );
     }
 }

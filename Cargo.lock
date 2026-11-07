@@ -333,7 +333,7 @@ dependencies = [
  "hex",
  "indicatif",
  "itertools 0.15.0",
- "mail-parser",
+ "mail-parser 1.0.1",
  "native_db",
  "native_model",
  "serde",
@@ -378,7 +378,7 @@ dependencies = [
  "console",
  "dialoguer",
  "indicatif",
- "mail-parser",
+ "mail-parser 1.0.1",
  "memmap2",
  "outlook-pst",
  "reqwest 0.12.28",
@@ -418,7 +418,7 @@ dependencies = [
  "itertools 0.15.0",
  "itoa",
  "lru 0.18.5",
- "mail-parser",
+ "mail-parser 1.0.1",
  "mail-send",
  "memmap2",
  "murmur3",
@@ -1409,6 +1409,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "34aa73646ffb006b8f5147f3dc182bd4bcb190227ce861fc4a4844bf8e3cb2c0"
 
 [[package]]
+name = "encodify"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e95d6e27686e1d6991a3077f4dbec9d33d18903466d234165ad86cd08c3ebc79"
+dependencies = [
+ "memchr",
+ "simdutf8",
+]
+
+[[package]]
 name = "encoding_rs"
 version = "0.8.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1876,6 +1886,17 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
+]
+
+[[package]]
+name = "hashify"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "04a037b1848eada162d6534c206770180e6bfc0eaa97292250c3e7179d8b1f73"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 3.0.9",
 ]
 
 [[package]]
@@ -2651,11 +2672,11 @@ dependencies = [
  "flate2",
  "getrandom 0.2.17",
  "getrandom 0.4.3",
- "hashify",
+ "hashify 0.2.9",
  "hickory-resolver",
  "idna",
  "mail-builder 0.4.4",
- "mail-parser",
+ "mail-parser 0.11.9",
  "quick-xml 0.41.0",
  "rustls-pki-types",
  "serde",
@@ -2689,8 +2710,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4ec00bda90c6e645a54506c630c2820cd6b1890cfd2b0a169b50f74b2b8c7c86"
 dependencies = [
  "encoding_rs",
- "hashify",
+ "hashify 0.2.9",
+]
+
+[[package]]
+name = "mail-parser"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3d4ea9311ef3ca6189aa85c5f984bd47b2f12079bcabae28917d900ab26c9ecc"
+dependencies = [
+ "encodify",
+ "hashify 0.3.2",
+ "memchr",
  "serde",
+ "simdutf8",
 ]
 
 [[package]]

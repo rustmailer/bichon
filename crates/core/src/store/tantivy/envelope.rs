@@ -2925,10 +2925,11 @@ fn rebuild_envelope_doc(
     {
         if let Some(eml_bytes) = body_of(content_hash) {
             if let Some(message) = MessageParser::new().parse(&eml_bytes) {
-                let text = message
-                    .body_text(0)
-                    .map(|cow| cow.into_owned())
-                    .or_else(|| message.body_html(0).map(|cow| extract_text(cow.as_ref())))
+                let text = crate::envelope::extractor::first_body_text(&message)
+                    .or_else(|| {
+                        crate::envelope::extractor::first_body_html(&message)
+                            .map(|html| extract_text(&html))
+                    })
                     .unwrap_or_default();
                 let body_text = crate::utils::normalize_whitespace(&text);
                 if !body_text.is_empty() {
