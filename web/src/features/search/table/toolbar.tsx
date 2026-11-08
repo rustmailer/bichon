@@ -1,12 +1,9 @@
 import { type Table } from '@tanstack/react-table'
-import { History, Sparkles } from 'lucide-react'
+import { Sparkles } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { SearchRefreshButton } from '@/components/search-refresh-button'
-import { useCurrentUser } from '@/hooks/use-current-user'
-import { ExportResultsButton } from '../../exports/export-results-button'
-import { SavedSearchesDropdown } from '../../saved-searches/saved-searches-dropdown'
+import { SearchActionsMenu } from '../search-actions-menu'
 import { AccountPopover } from '../account-popover'
 import { MailFilterPopover } from '../contact-popover'
 import { useSearchContext } from '../context'
@@ -31,22 +28,17 @@ export function DataTableToolbar<TData>({
     effectiveSort,
     refetch,
     isFetching,
-    setRepairHistoryOpen,
   } = useSearchContext()
   const { t } = useTranslation()
-  const { require_any_permission } = useCurrentUser()
-
-  // No accountId: the drawer is global, so any account the caller may repair
-  // is enough to make the button meaningful.
-  const canSeeRepairHistory = require_any_permission([
-    'system:root',
-    'data:manage',
-  ])
   return (
     <div className='flex flex-col gap-1 p-1 bg-background'>
       <div className='mb-2 flex items-center justify-center w-full'>
-        <div className='w-full max-w-3xl'>
+        {/* `items-start`: the search input is taller than its pill (it carries
+            the hint line below). Centering the row would push Reset below the
+            Search button; `mt-1` centers it on the 36px pill instead. */}
+        <div className='flex items-start justify-center gap-1.5 w-full max-w-[740px]'>
           <TextSearchInput />
+          <FilterResetButton className='mt-1 shrink-0' />
         </div>
       </div>
       <div className='flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-1'>
@@ -58,13 +50,6 @@ export function DataTableToolbar<TData>({
             <TagFilterPopover />
             <MoreFiltersPopover />
           </div>
-          <FilterResetButton />
-          <SavedSearchesDropdown
-            kind='Email'
-            filter={filter}
-            onApply={(f) => setFilter(f)}
-          />
-          <ExportResultsButton kind='email' filter={filter} />
         </div>
         <div className='flex items-center gap-1 shrink-0'>
           {effectiveSort === 'RELEVANCE' && (
@@ -79,17 +64,11 @@ export function DataTableToolbar<TData>({
           )}
           <TimePopover />
           <DataTableViewOptions table={table} />
-          {canSeeRepairHistory && (
-            <Button
-              variant='outline'
-              size='sm'
-              className='h-6 gap-1 px-2 text-xs rounded-none'
-              onClick={() => setRepairHistoryOpen(true)}
-            >
-              <History className='h-3.5 w-3.5' />
-              {t('repair_message.history', 'Repair history')}
-            </Button>
-          )}
+          <SearchActionsMenu
+            kind='Email'
+            filter={filter}
+            onApply={(next) => setFilter(next)}
+          />
           <SearchRefreshButton onRefresh={refetch} isRefreshing={isFetching} />
         </div>
       </div>

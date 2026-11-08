@@ -1491,6 +1491,10 @@
     "title": "Opgeslagen zoekopdracht exporteren",
     "titleAttachments": "Bijlagen exporteren"
   },
+  "history": {
+    "deletionsEmpty": "Nog geen verwijderingstaken.",
+    "filter": "Filter"
+  },
   "import": {
     "account": "Account",
     "chooseFiles": "2. Kies bestanden",
@@ -2297,6 +2301,35 @@
     "any_recipient": "Elke ontvanger",
     "attachmentName": "Naam Bijlage",
     "attachmentsSize": "Bijlagen & Grootte",
+    "batchDelete": {
+      "cancel": "Taak annuleren",
+      "cancelRequested": "Annulering aangevraagd - de taak stopt na de huidige batch.",
+      "clearScope": "Selectie wissen",
+      "confirmDetail": "Alle berichten die overeenkomen met de huidige zoekopdracht worden permanent verwijderd. De taak draait op de achtergrond en kan niet ongedaan worden gemaakt.",
+      "empty": "Nog geen batchverwijderingen.",
+      "failedCount": "{{count}} mislukt",
+      "heldWarning": "Accounts met legal hold vallen binnen het bereik; de server weigert deze verwijdering.",
+      "history": "Verwijdergeschiedenis",
+      "historyDesc": "De meest recente batchverwijderingen. Alleen de laatste 30 worden bewaard.",
+      "noneDeletable": "U heeft geen verwijderrechten voor de overeenkomende berichten.",
+      "progress": "{{processed}} van {{total}} verwijderd",
+      "scopeLabel": "Alle overeenkomende berichten",
+      "selectAllMatching": "Alle {{formatted}} overeenkomende resultaten selecteren",
+      "selectAllMatchingShort": "Alles selecteren ({{formatted}})",
+      "skippedNoPermission": "{{formatted}} overeenkomende berichten staan in accounts waarin u niet mag verwijderen; ze blijven ongewijzigd.",
+      "skippedTitle": "Sommige berichten worden overgeslagen",
+      "startedDesc": "De taak draait op de achtergrond. U kunt deze pagina sluiten; de voortgang blijft zichtbaar in de verwijdergeschiedenis.",
+      "startedTitle": "Batchverwijdering gestart",
+      "status": {
+        "cancelled": "Geannuleerd",
+        "cancelling": "Annuleren",
+        "failed": "Mislukt",
+        "interrupted": "Onderbroken door herstart",
+        "running": "Actief",
+        "success": "Voltooid"
+      },
+      "submit": "Op de achtergrond verwijderen"
+    },
     "bcc": "BCC",
     "before": "Voor:",
     "bulkActions": {

@@ -1491,6 +1491,10 @@
     "title": "Gespeicherte Suche exportieren",
     "titleAttachments": "Anhänge exportieren"
   },
+  "history": {
+    "deletionsEmpty": "Noch keine Löschaufträge.",
+    "filter": "Filter"
+  },
   "import": {
     "account": "Konto",
     "chooseFiles": "2. Dateien auswählen",
@@ -2297,6 +2301,35 @@
     "any_recipient": "Beliebiger Empfänger",
     "attachmentName": "Anhangsname",
     "attachmentsSize": "Anhänge & Größe",
+    "batchDelete": {
+      "cancel": "Auftrag abbrechen",
+      "cancelRequested": "Abbruch angefordert - der Auftrag stoppt nach dem aktuellen Block.",
+      "clearScope": "Auswahl aufheben",
+      "confirmDetail": "Alle Nachrichten, die der aktuellen Suche entsprechen, werden dauerhaft gelöscht. Der Auftrag läuft im Hintergrund und kann nicht rückgängig gemacht werden.",
+      "empty": "Noch keine Batch-Löschungen.",
+      "failedCount": "{{count}} fehlgeschlagen",
+      "heldWarning": "Konten mit Legal Hold sind betroffen; der Server lehnt diese Löschung ab.",
+      "history": "Löschverlauf",
+      "historyDesc": "Die letzten Batch-Löschungen. Es werden nur die letzten 30 aufbewahrt.",
+      "noneDeletable": "Sie haben für keine der passenden Nachrichten eine Löschberechtigung.",
+      "progress": "{{processed}} von {{total}} gelöscht",
+      "scopeLabel": "Alle passenden Nachrichten",
+      "selectAllMatching": "Alle {{formatted}} passenden Ergebnisse auswählen",
+      "selectAllMatchingShort": "Alle {{formatted}} auswählen",
+      "skippedNoPermission": "{{formatted}} passende Nachrichten liegen in Konten, in denen Sie keine Löschberechtigung haben; sie bleiben unberührt.",
+      "skippedTitle": "Einige Nachrichten werden übersprungen",
+      "startedDesc": "Der Auftrag läuft im Hintergrund. Sie können diese Seite schließen; der Fortschritt bleibt im Löschverlauf sichtbar.",
+      "startedTitle": "Batch-Löschung gestartet",
+      "status": {
+        "cancelled": "Abgebrochen",
+        "cancelling": "Wird abgebrochen",
+        "failed": "Fehlgeschlagen",
+        "interrupted": "Durch Neustart unterbrochen",
+        "running": "Läuft",
+        "success": "Abgeschlossen"
+      },
+      "submit": "Im Hintergrund löschen"
+    },
     "bcc": "BCC",
     "before": "Vor:",
     "bulkActions": {

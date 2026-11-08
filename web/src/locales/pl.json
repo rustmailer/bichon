@@ -1491,6 +1491,10 @@
     "title": "Eksportuj zapisane wyszukiwanie",
     "titleAttachments": "Eksportuj załączniki"
   },
+  "history": {
+    "deletionsEmpty": "Brak zadań usuwania.",
+    "filter": "Filtr"
+  },
   "import": {
     "account": "Konto",
     "chooseFiles": "2. Wybierz pliki",
@@ -2297,6 +2301,35 @@
     "any_recipient": "Dowolny odbiorca",
     "attachmentName": "Nazwa załącznika",
     "attachmentsSize": "Załączniki & Rozmiar",
+    "batchDelete": {
+      "cancel": "Anuluj zadanie",
+      "cancelRequested": "Poproszono o anulowanie - zadanie zatrzyma się po bieżącej partii.",
+      "clearScope": "Wyczyść zaznaczenie",
+      "confirmDetail": "Wszystkie wiadomości pasujące do bieżącego wyszukiwania zostaną trwale usunięte. Zadanie działa w tle i nie można go cofnąć.",
+      "empty": "Brak usunięć wsadowych.",
+      "failedCount": "{{count}} niepowodzeń",
+      "heldWarning": "W zakresie są konta z legal hold; serwer odrzuci to usunięcie.",
+      "history": "Historia usuwania",
+      "historyDesc": "Najnowsze usunięcia wsadowe. Zachowywanych jest tylko 30 ostatnich.",
+      "noneDeletable": "Nie masz uprawnień do usuwania żadnej z pasujących wiadomości.",
+      "progress": "Usunięto {{processed}} z {{total}}",
+      "scopeLabel": "Wszystkie pasujące wiadomości",
+      "selectAllMatching": "Zaznacz wszystkie {{formatted}} pasujących wyników",
+      "selectAllMatchingShort": "Zaznacz wszystkie ({{formatted}})",
+      "skippedNoPermission": "{{formatted}} pasujących wiadomości znajduje się na kontach, na których nie masz uprawnień do usuwania; pozostaną nietknięte.",
+      "skippedTitle": "Niektóre wiadomości zostaną pominięte",
+      "startedDesc": "Zadanie działa w tle. Możesz zamknąć tę stronę; postęp pozostaje widoczny w historii usuwania.",
+      "startedTitle": "Rozpoczęto usuwanie wsadowe",
+      "status": {
+        "cancelled": "Anulowano",
+        "cancelling": "Anulowanie",
+        "failed": "Niepowodzenie",
+        "interrupted": "Przerwano przez restart",
+        "running": "W toku",
+        "success": "Ukończono"
+      },
+      "submit": "Usuń w tle"
+    },
     "bcc": "UDW",
     "before": "Przed:",
     "bulkActions": {

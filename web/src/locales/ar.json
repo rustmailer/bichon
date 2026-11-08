@@ -1491,6 +1491,10 @@
     "title": "تصدير البحث المحفوظ",
     "titleAttachments": "تصدير المرفقات"
   },
+  "history": {
+    "deletionsEmpty": "لا توجد مهام حذف بعد.",
+    "filter": "عامل التصفية"
+  },
   "import": {
     "account": "الحساب",
     "chooseFiles": "2. اختر الملفات",
@@ -2297,6 +2301,35 @@
     "any_recipient": "أي مستلم",
     "attachmentName": "اسم المرفق",
     "attachmentsSize": "المرفقات والحجم",
+    "batchDelete": {
+      "cancel": "إلغاء المهمة",
+      "cancelRequested": "تم طلب الإلغاء - ستتوقف المهمة بعد الدفعة الحالية.",
+      "clearScope": "مسح التحديد",
+      "confirmDetail": "سيتم حذف كل الرسائل المطابقة للبحث الحالي نهائيًا. تعمل المهمة في الخلفية ولا يمكن التراجع عنها.",
+      "empty": "لا توجد عمليات حذف دفعي بعد.",
+      "failedCount": "فشل {{count}}",
+      "heldWarning": "توجد حسابات ضمن الحجز القانوني؛ سيرفض الخادم هذا الحذف.",
+      "history": "سجل الحذف",
+      "historyDesc": "أحدث عمليات الحذف الدفعي. يتم الاحتفاظ بآخر 30 فقط.",
+      "noneDeletable": "ليس لديك صلاحية حذف أي من الرسائل المطابقة.",
+      "progress": "تم حذف {{processed}} من {{total}}",
+      "scopeLabel": "جميع الرسائل المطابقة",
+      "selectAllMatching": "تحديد جميع النتائج المطابقة ({{formatted}})",
+      "selectAllMatchingShort": "تحديد الكل {{formatted}}",
+      "skippedNoPermission": "توجد {{formatted}} من الرسائل المطابقة في حسابات لا تملك صلاحية الحذف فيها؛ وستبقى دون تغيير.",
+      "skippedTitle": "سيتم تخطي بعض الرسائل",
+      "startedDesc": "تعمل المهمة في الخلفية. يمكنك إغلاق هذه الصفحة؛ سيبقى التقدم ظاهرًا في سجل الحذف.",
+      "startedTitle": "بدأ الحذف الدفعي",
+      "status": {
+        "cancelled": "ملغى",
+        "cancelling": "جارٍ الإلغاء",
+        "failed": "فشل",
+        "interrupted": "توقف بسبب إعادة التشغيل",
+        "running": "قيد التشغيل",
+        "success": "مكتمل"
+      },
+      "submit": "حذف في الخلفية"
+    },
     "bcc": "نسخة مخفية",
     "before": "قبل:",
     "bulkActions": {

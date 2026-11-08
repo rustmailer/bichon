@@ -18,6 +18,7 @@
 
 pub mod append;
 pub mod attachment;
+pub mod batch_delete;
 pub mod contacts;
 pub mod content;
 pub mod delete;

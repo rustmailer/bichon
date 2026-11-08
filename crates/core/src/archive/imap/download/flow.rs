@@ -28,6 +28,7 @@ use crate::{
                 download::rebuild::{rebuild_mailbox_cache, rebuild_mailbox_cache_by_date},
                 find_intersecting_mailboxes, find_missing_mailboxes,
                 mailbox::MailBox,
+                tombstones,
             },
             SEMAPHORE,
         },
@@ -204,6 +205,23 @@ pub async fn fetch_and_save_by_date(
     // sort small -> bigger
     let mut uid_vec: Vec<u32> = uid_list.into_iter().collect();
     uid_vec.sort();
+
+    // Messages deleted locally must stay deleted. This path is reached on a
+    // re-sync (initial date window / UIDVALIDITY change), which would
+    // otherwise fetch the deleted messages again.
+    let uid_vec =
+        tombstones::filter_uids(account.id, mailbox.id, mailbox.uid_validity, uid_vec)?;
+    if uid_vec.is_empty() {
+        DownloadState::update_folder_progress(
+            account_id,
+            mailbox.name.clone(),
+            0,
+            0,
+            FolderStatus::Success,
+            Some("Nothing to download: every candidate was deleted locally.".into()),
+        )?;
+        return Ok(None);
+    }
 
     let max_uid = uid_vec.last().copied();
     let planned = uid_vec.len() as u64;
@@ -440,6 +458,10 @@ pub async fn fetch_and_save_full_mailbox(
     // ascending order (stable while new mail only grows UIDs).
     let mut uid_list: Vec<u32> = uid_list.into_iter().collect();
     uid_list.sort();
+
+    // Locally deleted messages are tombstoned; a full re-sync must not bring
+    // them back.
+    let uid_list = tombstones::filter_uids(account.id, mailbox.id, mailbox.uid_validity, uid_list)?;
 
     let planned = uid_list.len() as u64;
     if planned == 0 {

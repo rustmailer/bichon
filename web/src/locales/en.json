@@ -1491,6 +1491,10 @@
     "title": "Export saved search",
     "titleAttachments": "Export attachments"
   },
+  "history": {
+    "deletionsEmpty": "No deletion jobs yet.",
+    "filter": "Filter"
+  },
   "import": {
     "account": "Account",
     "chooseFiles": "2. Choose files",
@@ -2297,6 +2301,35 @@
     "any_recipient": "Any recipient",
     "attachmentName": "Attachment Name",
     "attachmentsSize": "Attachments & Size",
+    "batchDelete": {
+      "cancel": "Cancel job",
+      "cancelRequested": "Cancellation requested - the job stops after the current batch.",
+      "clearScope": "Clear the selection",
+      "confirmDetail": "Every message matching the current search is permanently deleted. The job runs in the background and cannot be undone.",
+      "empty": "No batch deletions yet.",
+      "failedCount": "{{count}} failed",
+      "heldWarning": "Accounts under legal hold are in scope; the server will refuse this deletion.",
+      "history": "Deletion history",
+      "historyDesc": "The most recent batch deletions. Only the last 30 are kept.",
+      "noneDeletable": "You do not have delete permission on any matching message.",
+      "progress": "{{processed}} of {{total}} deleted",
+      "scopeLabel": "All matching messages",
+      "selectAllMatching": "Select all {{formatted}} matching results",
+      "selectAllMatchingShort": "Select all {{formatted}}",
+      "skippedNoPermission": "{{formatted}} matching messages are on accounts you cannot delete; they will be left untouched.",
+      "skippedTitle": "Some messages will be skipped",
+      "startedDesc": "The job runs in the background. You can close this page; progress stays visible in the deletion history.",
+      "startedTitle": "Batch deletion started",
+      "status": {
+        "cancelled": "Cancelled",
+        "cancelling": "Cancelling",
+        "failed": "Failed",
+        "interrupted": "Interrupted by restart",
+        "running": "Running",
+        "success": "Completed"
+      },
+      "submit": "Delete in background"
+    },
     "bcc": "BCC",
     "before": "Before:",
     "bulkActions": {

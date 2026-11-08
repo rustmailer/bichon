@@ -49,6 +49,14 @@ pub enum ArtifactKey {
     Integrity,
     /// Full timestamp anchor database copy.
     TimestampAnchor,
+    /// Source-UID tombstones (`tombstones/` packaged as one artifact). Without
+    /// them a restored archive would re-download messages the operator had
+    /// deleted.
+    Tombstones,
+    /// Pro dual-control frozen message sets (`approval-details/`). The
+    /// approval ledger lives in memdb and references these files; without them
+    /// a restored queue holds requests whose exact targets are unreadable.
+    ApprovalDetails,
     /// Deployment identity: a small JSON package holding `instance-id` (the
     /// id licenses are bound to) and, when present, `license.txt`. Restoring
     /// it keeps the licence valid on the restored data set instead of forcing
@@ -68,6 +76,8 @@ impl ArtifactKey {
             ArtifactKey::TantivyEnvelope => "envelope-index",
             ArtifactKey::TantivyAttachment => "attachment-index",
             ArtifactKey::AuditBase | ArtifactKey::AuditDelta(_, _) => "audit",
+            ArtifactKey::Tombstones => "tombstones",
+            ArtifactKey::ApprovalDetails => "approval-details",
             ArtifactKey::Integrity => "integrity",
             ArtifactKey::TimestampAnchor => "timestamp",
             ArtifactKey::DeploymentIdentity => "deployment",

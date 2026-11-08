@@ -19,7 +19,7 @@
 
 
 import { useRef } from 'react'
-import { X, Trash2, Upload, TagIcon, ShieldAlert } from 'lucide-react'
+import { X, Trash2, Upload, TagIcon, ShieldAlert, ListChecks } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -39,12 +39,27 @@ import { useCurrentUser } from '@/hooks/use-current-user'
 
 type MailBulkActionsProps = {
     children?: React.ReactNode
+    /** Total matching the current filter, when the page is fully selected and
+     *  more results exist. Present means "offer to widen to all matches". */
+    selectAllMatchingCount?: number
 }
 
-export function MailBulkActions({ children }: MailBulkActionsProps) {
-    const { selected, setSelected, setOpen, setToDelete, setCurrentEnvelope } = useSearchContext()
+export function MailBulkActions({
+    children,
+    selectAllMatchingCount,
+}: MailBulkActionsProps) {
+    const {
+        selected,
+        setSelected,
+        selectAllScope,
+        setSelectAllScope,
+        filter,
+        setOpen,
+        setToDelete,
+        setCurrentEnvelope,
+    } = useSearchContext()
     const toolbarRef = useRef<HTMLDivElement>(null)
-    const { t } = useTranslation()
+    const { t, i18n } = useTranslation()
     const { countPendingMessages, hasPendingMessage } = usePendingApprovals()
     // GDPR erasure requests are an Enterprise feature — the record they leave
     // is part of the compliance suite. Hidden rather than shown-and-refused:
@@ -56,34 +71,59 @@ export function MailBulkActions({ children }: MailBulkActionsProps) {
     // selection, so one account without the permission would make the request
     // fail. Judged per message's account, skipping the action otherwise.
     const { require_any_permission } = useCurrentUser()
+    const scopeMode = !!selectAllScope
     const selectedAccountIds = Array.from(selected.keys())
     const canForAll = (perms: string[]) =>
         selectedAccountIds.length > 0 &&
         selectedAccountIds.every((id) => require_any_permission(perms, id))
-    const canRestoreAll = canForAll([
+    // A scope has no explicit account list on the client. Only deletion
+    // supports it in v1; the server resolves and checks the accounts when the
+    // job is created (and the preview returns a clear error otherwise).
+    const canRestoreAll = !scopeMode && canForAll([
         'system:root',
         'data:export:batch',
         'data:export:batch:all',
     ])
-    const canTagAll = canForAll(['system:root', 'data:manage'])
-    const canDeleteAll = canForAll([
+    const canTagAll = !scopeMode && canForAll(['system:root', 'data:manage'])
+    const canDeleteAll = scopeMode || canForAll([
         'system:root',
         'data:delete',
         'data:delete:all',
     ])
     const noPermission = t('common.noPermission', 'No permission')
 
-    const selectedCount = Array.from(selected.values())
-        .reduce((sum, set) => sum + set.size, 0)
+    // In "all matching results" mode the count comes from the search total,
+    // not from the explicit selection: there are no per-message ids on the
+    // client, which is the whole point.
+    const selectedCount = scopeMode
+        ? selectAllScope.total
+        : Array.from(selected.values()).reduce((sum, set) => sum + set.size, 0)
+    // Locale-aware grouping (12,345 / 12.345 / 12 345). Paired with
+    // `tabular-nums` below, the floating bar's width follows the digit count
+    // instead of jittering as the displayed number changes.
+    const formatCount = (value: number) =>
+        new Intl.NumberFormat(i18n.language).format(value)
 
     // Part of the selection may already be queued. The server has no dedup —
     // it would happily queue a message twice — so those are filtered out
     // before the dialog opens, and this count explains the difference between
     // what was selected and what will actually be submitted.
-    const queuedCount = countPendingMessages(OP_MESSAGE_DELETE, selected)
+    // Scope mode has no per-message ids to compare against the approval queue;
+    // the server deduplicates nothing, so the dialog warns instead of showing
+    // a precise skipped count.
+    const queuedCount = scopeMode
+        ? 0
+        : countPendingMessages(OP_MESSAGE_DELETE, selected)
 
     const handleClearSelection = () => {
+        setSelectAllScope(null)
         setSelected(new Map())
+    }
+
+    /** Scope mode: the delete dialog resolves the count and starts the job. */
+    const handleDeleteScope = () => {
+        setToDelete(new Map())
+        setOpen('delete')
     }
 
     const handleDelete = () => {
@@ -279,9 +319,39 @@ export function MailBulkActions({ children }: MailBulkActionsProps) {
                     </Tooltip>
                     <Separator orientation="vertical" className="h-5" />
                     <div className="flex items-center gap-x-1 text-sm">
-                        <Badge variant="default" className="min-w-8 rounded-lg">
-                            {selectedCount}
+                        <Badge
+                            variant="default"
+                            className="min-w-8 rounded-lg tabular-nums"
+                        >
+                            {formatCount(selectedCount)}
                         </Badge>{' '}
+                        {scopeMode ? (
+                            <span className="text-xs text-muted-foreground">
+                                {t('search.batchDelete.scopeLabel', 'All matching messages')}
+                            </span>
+                        ) : selectAllMatchingCount !== undefined ? (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 gap-1 px-2 text-xs tabular-nums"
+                                title={t('search.batchDelete.selectAllMatching', {
+                                    formatted: formatCount(selectAllMatchingCount),
+                                    defaultValue: 'Select all {{formatted}} matching results',
+                                })}
+                                onClick={() =>
+                                    setSelectAllScope({
+                                        filterJson: JSON.stringify(filter),
+                                        total: selectAllMatchingCount,
+                                    })
+                                }
+                            >
+                                <ListChecks className="h-3.5 w-3.5" />
+                                {t('search.batchDelete.selectAllMatchingShort', {
+                                    formatted: formatCount(selectAllMatchingCount),
+                                    defaultValue: 'All {{formatted}}',
+                                })}
+                            </Button>
+                        ) : null}
                     </div>
                     <Separator orientation="vertical" className="h-5" />
                     <Tooltip>
@@ -367,12 +437,12 @@ export function MailBulkActions({ children }: MailBulkActionsProps) {
                             <Button
                                 variant="destructive"
                                 size="sm"
-                                onClick={handleDeleteSkippingQueued}
+                                onClick={scopeMode ? handleDeleteScope : handleDeleteSkippingQueued}
                                 disabled={!canDeleteAll}
                                 className="gap-1"
                             >
                                 <Trash2 className="h-3.5 w-3.5" />
-                                {queuedCount > 0 && (
+                                {!scopeMode && queuedCount > 0 && (
                                     <span className="text-[10px] leading-none">
                                         {selectedCount - queuedCount}
                                     </span>

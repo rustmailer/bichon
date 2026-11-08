@@ -26,6 +26,7 @@ pub mod mailbox;
 pub mod mailbox_cache;
 pub mod stable_uid;
 pub mod task;
+pub mod tombstones;
 
 pub fn find_missing_mailboxes(
     local_mailboxes: &[MailBox],

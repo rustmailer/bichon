@@ -116,6 +116,13 @@ pub struct ManifestObjects {
     pub audit: Option<AuditObjects>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub integrity: Option<ObjectRef>,
+    /// Source-UID tombstones package (`tombstones/`). Absent in backups
+    /// written before this artifact existed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tombstones: Option<ObjectRef>,
+    /// Pro dual-control frozen message sets (`approval-details/`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub approval_details: Option<ObjectRef>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub timestamp: Option<ObjectRef>,
     /// Deployment identity package (`instance-id` + optional `license.txt`).
@@ -202,6 +209,8 @@ impl Manifest {
                 });
             }
             ArtifactKey::Integrity => self.objects.integrity = Some(obj),
+            ArtifactKey::Tombstones => self.objects.tombstones = Some(obj),
+            ArtifactKey::ApprovalDetails => self.objects.approval_details = Some(obj),
             ArtifactKey::TimestampAnchor => self.objects.timestamp = Some(obj),
             ArtifactKey::DeploymentIdentity => self.objects.deployment = Some(obj),
         }
@@ -229,6 +238,8 @@ impl Manifest {
         for slot in [
             &self.objects.memdb,
             &self.objects.integrity,
+            &self.objects.tombstones,
+            &self.objects.approval_details,
             &self.objects.timestamp,
             &self.objects.deployment,
         ]
@@ -258,6 +269,8 @@ impl Manifest {
         for slot in [
             &self.objects.memdb,
             &self.objects.integrity,
+            &self.objects.tombstones,
+            &self.objects.approval_details,
             &self.objects.timestamp,
             &self.objects.deployment,
         ]
@@ -414,5 +427,35 @@ mod tests {
         let audit = m.objects.audit.unwrap();
         assert_eq!(audit.cursor, 7);
         assert_eq!(audit.cumulative_delta_bytes, 0);
+    }
+
+    #[test]
+    fn tombstones_artifact_is_wired_into_the_manifest() {
+        let mut m = Manifest::new("m-tomb".to_string(), "manual", None);
+        let art = artifact(ArtifactKey::Tombstones, 0x77, 4096);
+        m.add_artifact(&art).unwrap();
+        let slot = m
+            .objects
+            .tombstones
+            .as_ref()
+            .expect("tombstones slot must be populated");
+        assert_eq!(slot.bytes, 4096);
+        assert_eq!(slot.sha256, hex::encode([0x77u8; 32]));
+        assert!(m.object_keys().contains(&slot.key.as_str()));
+        assert!(m
+            .object_refs()
+            .iter()
+            .any(|(_, bytes)| *bytes == 4096));
+
+        // Older manifests have no such field; they must still deserialize.
+        let json = serde_json::json!({
+            "version": MANIFEST_VERSION,
+            "id": "m-old",
+            "created": "2026-01-01T00:00:00.000Z",
+            "trigger": "manual",
+            "objects": {}
+        });
+        let old: Manifest = serde_json::from_value(json).unwrap();
+        assert!(old.objects.tombstones.is_none());
     }
 }

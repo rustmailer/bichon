@@ -1491,6 +1491,10 @@
     "title": "Esportazione della ricerca salvata",
     "titleAttachments": "Esporta allegati"
   },
+  "history": {
+    "deletionsEmpty": "Nessuna attività di eliminazione.",
+    "filter": "Filtro"
+  },
   "import": {
     "account": "Account",
     "chooseFiles": "2. Scegli i file",
@@ -2297,6 +2301,35 @@
     "any_recipient": "Qualsiasi destinatario",
     "attachmentName": "Nome Allegato",
     "attachmentsSize": "Allegati e Dimensione",
+    "batchDelete": {
+      "cancel": "Annulla operazione",
+      "cancelRequested": "Annullamento richiesto - l'operazione si ferma dopo il blocco corrente.",
+      "clearScope": "Annulla selezione",
+      "confirmDetail": "Tutti i messaggi corrispondenti alla ricerca corrente verranno eliminati definitivamente. L'operazione viene eseguita in background e non può essere annullata.",
+      "empty": "Nessuna eliminazione in blocco.",
+      "failedCount": "{{count}} non riusciti",
+      "heldWarning": "Sono inclusi account con legal hold; il server rifiuterà questa eliminazione.",
+      "history": "Cronologia eliminazioni",
+      "historyDesc": "Le eliminazioni in blocco più recenti. Vengono conservate solo le ultime 30.",
+      "noneDeletable": "Non hai il permesso di eliminare nessuno dei messaggi corrispondenti.",
+      "progress": "{{processed}} di {{total}} eliminati",
+      "scopeLabel": "Tutti i messaggi corrispondenti",
+      "selectAllMatching": "Seleziona tutti i {{formatted}} risultati corrispondenti",
+      "selectAllMatchingShort": "Seleziona tutti ({{formatted}})",
+      "skippedNoPermission": "{{formatted}} messaggi corrispondenti si trovano in account in cui non puoi eliminare; rimarranno intatti.",
+      "skippedTitle": "Alcuni messaggi verranno saltati",
+      "startedDesc": "L'operazione viene eseguita in background. Puoi chiudere questa pagina; l'avanzamento resta visibile nella cronologia delle eliminazioni.",
+      "startedTitle": "Eliminazione in blocco avviata",
+      "status": {
+        "cancelled": "Annullata",
+        "cancelling": "Annullamento",
+        "failed": "Non riuscita",
+        "interrupted": "Interrotta dal riavvio",
+        "running": "In esecuzione",
+        "success": "Completata"
+      },
+      "submit": "Elimina in background"
+    },
     "bcc": "BCC",
     "before": "Prima:",
     "bulkActions": {

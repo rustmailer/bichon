@@ -98,6 +98,40 @@ impl EmailSearchFilter {
     fn has_tag_selection(&self) -> bool {
         self.tags.as_ref().is_some_and(|tags| !tags.is_empty())
     }
+
+    /// True when the filter constrains nothing. A batch deletion refuses this
+    /// (unless a view scope supplies the constraint): deleting the whole
+    /// archive by accident is not a recoverable mistake.
+    pub fn is_empty(&self) -> bool {
+        self.text.is_none()
+            && self.subject.is_none()
+            && self.id.is_none()
+            && self.body.is_none()
+            && self.from.is_none()
+            && self.to.is_none()
+            && self.cc.is_none()
+            && self.bcc.is_none()
+            && self.any_recipient.is_none()
+            && self.any_participant.is_none()
+            && self.since.is_none()
+            && self.before.is_none()
+            && self.internal_date_since.is_none()
+            && self.internal_date_before.is_none()
+            && self.ingest_since.is_none()
+            && self.ingest_before.is_none()
+            && self.account_ids.as_ref().is_none_or(|s| s.is_empty())
+            && self.mailbox_ids.as_ref().is_none_or(|s| s.is_empty())
+            && self.min_size.is_none()
+            && self.max_size.is_none()
+            && self.message_id.is_none()
+            && self.has_attachment.is_none()
+            && self.attachment_name.is_none()
+            && !self.has_tag_selection()
+            && self.has_tags.is_none()
+            && self.attachment_extension.is_none()
+            && self.attachment_category.is_none()
+            && self.attachment_content_type.is_none()
+    }
 }
 
 #[derive(Debug, Clone, Default, Eq, PartialEq, Serialize, Deserialize)]
@@ -540,5 +574,29 @@ mod tests {
             ..Default::default()
         });
         assert!(request.validate().is_ok());
+    }
+
+    #[test]
+    fn empty_filter_detection() {
+        assert!(EmailSearchFilter::default().is_empty());
+        // An empty account set is not a constraint.
+        let empty_accounts = EmailSearchFilter {
+            account_ids: Some(HashSet::new()),
+            ..Default::default()
+        };
+        assert!(empty_accounts.is_empty());
+        // Any real dimension makes it non-empty — including "no attachment",
+        // which is a constraint, not an omitted field.
+        for filter in [
+            EmailSearchFilter { text: Some("x".into()), ..Default::default() },
+            EmailSearchFilter { account_ids: Some(HashSet::from([1])), ..Default::default() },
+            EmailSearchFilter { mailbox_ids: Some(HashSet::from([2])), ..Default::default() },
+            EmailSearchFilter { since: Some(1), ..Default::default() },
+            EmailSearchFilter { has_attachment: Some(false), ..Default::default() },
+            EmailSearchFilter { has_tags: Some(false), ..Default::default() },
+            EmailSearchFilter { tags: Some(HashSet::from(["t".into()])), ..Default::default() },
+        ] {
+            assert!(!filter.is_empty(), "{filter:?} must count as a constraint");
+        }
     }
 }

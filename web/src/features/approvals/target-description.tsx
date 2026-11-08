@@ -86,7 +86,10 @@ export function TargetDescription({ target }: { target: ApprovalTarget }) {
       )
 
     case 'messages': {
-      const accounts = Object.keys(target.by_account)
+      const accounts =
+        Object.keys(target.by_account).length > 0
+          ? Object.keys(target.by_account)
+          : (target.account_ids ?? []).map(String)
       return (
         <div>
           <div className='font-medium'>
@@ -104,6 +107,11 @@ export function TargetDescription({ target }: { target: ApprovalTarget }) {
               }
             )}
           </div>
+          {typeof target.filter?.text === 'string' && target.filter.text && (
+            <div className='text-xs text-muted-foreground'>
+              “{target.filter.text}”
+            </div>
+          )}
         </div>
       )
     }

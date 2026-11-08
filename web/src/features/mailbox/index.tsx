@@ -41,7 +41,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import SearchProvider, { SearchDialogType } from '@/features/search/context'
+import SearchProvider, {
+  SearchDialogType,
+  SelectAllScope,
+} from '@/features/search/context'
 import { EnvelopeDeleteDialog } from '@/features/search/delete-dialog'
 import { MailBoxDeleteDialog } from '@/features/search/delete-mailbox-dialog'
 import { EditTagsDialog } from '@/features/search/edit-tag-dialog'
@@ -315,9 +318,12 @@ export default function MailboxView() {
   const [selected, setSelected] = React.useState<Map<number, Set<string>>>(
     new Map()
   )
+  // The mailbox view has no cross-page scope; the field exists so both views
+  // can share the search context type.
+  const [selectAllScope, setSelectAllScope] =
+    React.useState<SelectAllScope | null>(null)
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [editTagsOpen, setEditTagsOpen] = React.useState(false)
-  const [repairHistoryOpen, setRepairHistoryOpen] = React.useState(false)
   const [deleteMailboxId, setDeleteMailboxId] = React.useState<
     string | undefined
   >(undefined)
@@ -355,6 +361,8 @@ export default function MailboxView() {
             setToDelete,
             selected,
             setSelected,
+            selectAllScope,
+            setSelectAllScope,
             sorting,
             setSorting,
             filter: dialogFilter,
@@ -369,8 +377,6 @@ export default function MailboxView() {
             handleTagToggle: () => {},
             editTagsOpen,
             setEditTagsOpen,
-            repairHistoryOpen,
-            setRepairHistoryOpen,
             dateDisplay,
             setDateDisplay,
           }}

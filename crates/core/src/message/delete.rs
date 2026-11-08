@@ -77,6 +77,23 @@ pub fn plan_delete_audit(request: &HashMap<u64, Vec<String>>) -> DeleteAuditPlan
 /// on a failed delete would write "deleted" records for messages that still
 /// exist — the two call sites are the only enforcement of that ordering.
 pub fn emit_delete_audit(plan: DeleteAuditPlan, user: &str) {
+    emit_delete_audit_scoped(plan, user, None, None);
+}
+
+/// Same as [`emit_delete_audit`], additionally recording which batch job ran
+/// the delete and the search filter that produced its id set.
+///
+/// A batch can span many HTTP requests (and, under dual control, two people),
+/// so "who deleted these messages" is incomplete without "under which search".
+/// Single deletes pass `None` for both: their ids were chosen explicitly.
+pub fn emit_delete_audit_scoped(
+    plan: DeleteAuditPlan,
+    user: &str,
+    job_id: Option<&str>,
+    filter: Option<&crate::message::search::EmailSearchFilter>,
+) {
+    let job_id = job_id.map(str::to_string);
+    let filter = filter.cloned();
     match plan {
         DeleteAuditPlan::Inline(snapshots) => {
             for s in snapshots {
@@ -87,6 +104,8 @@ pub fn emit_delete_audit(plan: DeleteAuditPlan, user: &str) {
                     mailbox_id: s.mailbox_id,
                     subject: s.subject,
                     snapshot: s.snapshot,
+                    job_id: job_id.clone(),
+                    filter: filter.clone(),
                 });
             }
         }
@@ -99,9 +118,55 @@ pub fn emit_delete_audit(plan: DeleteAuditPlan, user: &str) {
                 detail_file: r.rel_path,
                 detail_size: r.size,
                 detail_sha256: r.sha256,
+                job_id,
+                filter,
             });
         }
     }
+}
+
+/// Remember the source UIDs of the messages about to be deleted so gap-fill
+/// and full re-syncs do not fetch them again.
+///
+/// Written *before* the delete: a crash can leave a tombstone for a message
+/// that still exists locally (harmless — gap-fill only consults it when the
+/// message is missing), but never a committed deletion without one.
+async fn record_source_tombstones(request: &HashMap<u64, Vec<String>>) -> BichonResult<()> {
+    for (account_id, ids) in request {
+        let mut by_mailbox: HashMap<u64, Vec<u32>> = HashMap::new();
+        // One term per id: chunk large REST batches so the query stays bounded.
+        for chunk in ids.chunks(500) {
+            let refs = ENVELOPE_MANAGER.get_source_refs(*account_id, chunk)?;
+            for r in refs {
+                // uid == 0: SMTP journal / imported messages have no remote
+                // counterpart, so there is nothing that could be re-downloaded.
+                if r.uid == 0 || r.mailbox_id == 0 {
+                    continue;
+                }
+                by_mailbox.entry(r.mailbox_id).or_default().push(r.uid);
+            }
+        }
+        for (mailbox_id, uids) in by_mailbox {
+            // A missing mailbox row means there is no remote folder left to
+            // re-download from; skip rather than failing the delete.
+            let Some(mailbox) =
+                crate::archive::imap::mailbox::MailBox::find_mailbox(*account_id, mailbox_id)?
+            else {
+                continue;
+            };
+            let Some(uid_validity) = mailbox.uid_validity else {
+                continue;
+            };
+            crate::archive::imap::tombstones::record_uids(
+                *account_id,
+                mailbox_id,
+                uid_validity,
+                &uids,
+            )
+            .await?;
+        }
+    }
+    Ok(())
 }
 
 pub async fn delete_messages_impl(request: HashMap<u64, Vec<String>>) -> BichonResult<()> {
@@ -124,10 +189,152 @@ pub async fn delete_messages_impl(request: HashMap<u64, Vec<String>>) -> BichonR
             ));
         }
     }
+    record_source_tombstones(&request).await?;
     ENVELOPE_MANAGER
         .delete_envelopes_multi_account(request.clone())
         .await?;
     ATTACHMENT_MANAGER
         .delete_attachments_multi_account(request)
         .await
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Once;
+
+    use super::*;
+    use crate::account::migration::{AccountModel, AccountType};
+    use crate::account::payload::AccountCreateRequest;
+    use crate::archive::imap::mailbox::MailBox;
+    use crate::archive::imap::tombstones;
+    use crate::database::{insert_impl, manager::DB_MANAGER};
+    use crate::settings::cli::SETTINGS;
+    use crate::settings::dir::DATA_DIR_MANAGER;
+    use crate::store::tantivy::schema::SchemaTools;
+    use tantivy::TantivyDocument;
+
+    static ENV: Once = Once::new();
+
+    fn init_test_env() {
+        ENV.call_once(|| {
+            let root = crate::test_support::unique_test_root("bichon-core-test");
+            std::env::set_var("BICHON_ROOT_DIR", &root);
+            std::env::set_var("BICHON_ENCRYPT_PASSWORD", "test-password");
+            let _ = &*SETTINGS;
+            let _ = &*DATA_DIR_MANAGER;
+            let _ = &*DB_MANAGER;
+            let _ = &*ENVELOPE_MANAGER;
+        });
+    }
+
+    fn insert_account(id: u64, email: &str) -> AccountModel {
+        let request = AccountCreateRequest {
+            email: email.to_string(),
+            login_name: None,
+            account_name: None,
+            imap: None,
+            enabled: true,
+            date_since: None,
+            date_before: None,
+            account_type: AccountType::NoSync,
+            download_interval_min: None,
+            download_batch_size: None,
+            max_email_size_bytes: None,
+            use_dangerous: false,
+            pgp_key: None,
+            imap_quota_bytes: None,
+            imap_quota_window: None,
+            auto_download_new_mailboxes: None,
+            download_schedule: None,
+            archive_rules: None,
+            extraction_rules: None,
+            override_from_headers: None,
+            retention_days: None,
+            remote_cleanup: None,
+            kind: None,
+            view: None,
+        };
+        let mut account = AccountModel::new(id, request).unwrap();
+        // `AccountModel::new` assigns its own id; tests need the id they chose
+        // so the fixture rows line up.
+        account.id = id;
+        insert_impl(DB_MANAGER.db(), account.clone()).unwrap();
+        account
+    }
+
+    async fn write_doc(id: &str, account_id: u64, mailbox_id: u64, uid: u32) {
+        let f = SchemaTools::email_fields();
+        let mut doc = TantivyDocument::new();
+        doc.add_text(f.f_id, id);
+        doc.add_text(f.f_message_id, format!("{id}@test"));
+        doc.add_u64(f.f_account_id, account_id);
+        doc.add_u64(f.f_mailbox_id, mailbox_id);
+        doc.add_u64(f.f_uid, uid as u64);
+        doc.add_u64(f.f_imap_uid, uid as u64 + 1000);
+        doc.add_i64(f.f_date, 1);
+        doc.add_i64(f.f_internal_date, 1);
+        doc.add_u64(f.f_size, 10);
+        let mut writer = ENVELOPE_MANAGER.index_writer().lock().await;
+        writer.add_document(doc).unwrap();
+        writer.commit().unwrap();
+    }
+
+    fn mailbox(id: u64, account_id: u64, uid_validity: Option<u32>) -> MailBox {
+        MailBox {
+            id,
+            account_id,
+            name: format!("INBOX-{id}"),
+            uid_validity,
+            ..Default::default()
+        }
+    }
+
+    #[tokio::test]
+    async fn delete_records_source_uid_tombstone() {
+        init_test_env();
+        let _index_guard = crate::test_support::GLOBAL_INDEX_LOCK.lock().await;
+        let account_id = 92_001;
+        let mailbox_id = 92_002;
+        insert_account(account_id, "tombstone-delete@test.example");
+        insert_impl(DB_MANAGER.db(), mailbox(mailbox_id, account_id, Some(77))).unwrap();
+        write_doc("tombstone-env-1", account_id, mailbox_id, 42).await;
+
+        let mut request = HashMap::new();
+        request.insert(account_id, vec!["tombstone-env-1".to_string()]);
+        delete_messages_impl(request).await.unwrap();
+
+        let recorded = tombstones::load(account_id, mailbox_id)
+            .unwrap()
+            .expect("deletion must leave a tombstone");
+        assert_eq!(recorded.uid_validity, 77);
+        assert!(recorded.bitmap.contains(42));
+        assert_eq!(recorded.bitmap.len(), 1);
+
+        // A message that never came from IMAP (uid 0) has no remote copy and
+        // must not produce a tombstone entry.
+        write_doc("tombstone-env-2", account_id, mailbox_id, 0).await;
+        let mut request = HashMap::new();
+        request.insert(account_id, vec!["tombstone-env-2".to_string()]);
+        delete_messages_impl(request).await.unwrap();
+        let recorded = tombstones::load(account_id, mailbox_id).unwrap().unwrap();
+        assert_eq!(recorded.bitmap.len(), 1);
+
+        tombstones::remove_account(account_id).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn delete_skips_tombstones_for_mailboxes_without_uid_validity() {
+        init_test_env();
+        let _index_guard = crate::test_support::GLOBAL_INDEX_LOCK.lock().await;
+        let account_id = 92_011;
+        let mailbox_id = 92_012;
+        insert_account(account_id, "no-validity@test.example");
+        insert_impl(DB_MANAGER.db(), mailbox(mailbox_id, account_id, None)).unwrap();
+        write_doc("no-validity-env", account_id, mailbox_id, 7).await;
+
+        let mut request = HashMap::new();
+        request.insert(account_id, vec!["no-validity-env".to_string()]);
+        delete_messages_impl(request).await.unwrap();
+        assert!(tombstones::load(account_id, mailbox_id).unwrap().is_none());
+    }
 }

@@ -1491,6 +1491,10 @@
     "title": "Export av sparad sökning",
     "titleAttachments": "Exportera bilagor"
   },
+  "history": {
+    "deletionsEmpty": "Inga borttagningsjobb ännu.",
+    "filter": "Filter"
+  },
   "import": {
     "account": "Konto",
     "chooseFiles": "2. Välj filer",
@@ -2297,6 +2301,35 @@
     "any_recipient": "Valfri mottagare",
     "attachmentName": "Filnamn på bilaga",
     "attachmentsSize": "Bilagor & storlek",
+    "batchDelete": {
+      "cancel": "Avbryt uppgift",
+      "cancelRequested": "Avbrytning begärd - uppgiften stoppar efter aktuell batch.",
+      "clearScope": "Rensa val",
+      "confirmDetail": "Alla meddelanden som matchar den aktuella sökningen raderas permanent. Uppgiften körs i bakgrunden och kan inte ångras.",
+      "empty": "Inga batchraderingar ännu.",
+      "failedCount": "{{count}} misslyckades",
+      "heldWarning": "Konton med legal hold ingår; servern kommer att avvisa denna radering.",
+      "history": "Raderingshistorik",
+      "historyDesc": "De senaste batchraderingarna. Endast de 30 senaste sparas.",
+      "noneDeletable": "Du har inte behörighet att radera något av de matchande meddelandena.",
+      "progress": "{{processed}} av {{total}} raderade",
+      "scopeLabel": "Alla matchande meddelanden",
+      "selectAllMatching": "Markera alla {{formatted}} matchande resultat",
+      "selectAllMatchingShort": "Markera alla {{formatted}}",
+      "skippedNoPermission": "{{formatted}} matchande meddelanden finns i konton du inte får radera; de lämnas orörda.",
+      "skippedTitle": "Vissa meddelanden hoppas över",
+      "startedDesc": "Uppgiften körs i bakgrunden. Du kan stänga den här sidan; förloppet finns kvar i raderingshistoriken.",
+      "startedTitle": "Batchradering startad",
+      "status": {
+        "cancelled": "Avbruten",
+        "cancelling": "Avbryter",
+        "failed": "Misslyckades",
+        "interrupted": "Avbruten av omstart",
+        "running": "Körs",
+        "success": "Slutförd"
+      },
+      "submit": "Radera i bakgrunden"
+    },
     "bcc": "Hemlig kopia (BCC)",
     "before": "Före:",
     "bulkActions": {

@@ -1491,6 +1491,10 @@
     "title": "保存した検索をエクスポート",
     "titleAttachments": "添付ファイルをエクスポート"
   },
+  "history": {
+    "deletionsEmpty": "削除ジョブはまだありません。",
+    "filter": "フィルター"
+  },
   "import": {
     "account": "アカウント",
     "chooseFiles": "2. ファイルを選択",
@@ -2297,6 +2301,35 @@
     "any_recipient": "すべての受信者",
     "attachmentName": "添付ファイル名",
     "attachmentsSize": "添付ファイルとサイズ",
+    "batchDelete": {
+      "cancel": "ジョブをキャンセル",
+      "cancelRequested": "キャンセルを要求しました。現在のバッチ終了後に停止します。",
+      "clearScope": "選択を解除",
+      "confirmDetail": "現在の検索に一致するすべてのメッセージが完全に削除されます。処理はバックグラウンドで実行され、元に戻せません。",
+      "empty": "一括削除はまだありません。",
+      "failedCount": "{{count}} 件失敗",
+      "heldWarning": "対象にリーガルホールド中のアカウントが含まれるため、サーバーはこの削除を拒否します。",
+      "history": "削除履歴",
+      "historyDesc": "最近の一括削除です。直近 30 件のみ保持されます。",
+      "noneDeletable": "一致するメールの削除権限がありません。",
+      "progress": "{{total}} 件中 {{processed}} 件を削除",
+      "scopeLabel": "一致するすべてのメッセージ",
+      "selectAllMatching": "{{formatted}} 件の一致する結果をすべて選択",
+      "selectAllMatchingShort": "すべて {{formatted}} 件を選択",
+      "skippedNoPermission": "一致する {{formatted}} 件のメールは削除権限のないアカウントにあり、そのまま残されます。",
+      "skippedTitle": "一部のメールはスキップされます",
+      "startedDesc": "処理はバックグラウンドで実行されます。このページを閉じても、削除履歴で進捗を確認できます。",
+      "startedTitle": "一括削除を開始しました",
+      "status": {
+        "cancelled": "キャンセル済み",
+        "cancelling": "キャンセル中",
+        "failed": "失敗",
+        "interrupted": "再起動により中断",
+        "running": "実行中",
+        "success": "完了"
+      },
+      "submit": "バックグラウンドで削除"
+    },
     "bcc": "BCC（ブラインド写し）",
     "before": "以前:",
     "bulkActions": {

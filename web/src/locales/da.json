@@ -1491,6 +1491,10 @@
     "title": "Eksport af gemt søgning",
     "titleAttachments": "Eksporter vedhæftede filer"
   },
+  "history": {
+    "deletionsEmpty": "Ingen sletningsjob endnu.",
+    "filter": "Filter"
+  },
   "import": {
     "account": "Konto",
     "chooseFiles": "2. Vælg filer",
@@ -2297,6 +2301,35 @@
     "any_recipient": "Enhver modtager",
     "attachmentName": "Vedhæftningsfilnavn",
     "attachmentsSize": "Vedhæftninger & Størrelse",
+    "batchDelete": {
+      "cancel": "Annuller opgave",
+      "cancelRequested": "Annullering anmodet - opgaven stopper efter den aktuelle batch.",
+      "clearScope": "Ryd valg",
+      "confirmDetail": "Alle meddelelser, der matcher den aktuelle søgning, slettes permanent. Opgaven kører i baggrunden og kan ikke fortrydes.",
+      "empty": "Ingen batchsletninger endnu.",
+      "failedCount": "{{count}} mislykkedes",
+      "heldWarning": "Konti med legal hold er omfattet; serveren afviser denne sletning.",
+      "history": "Slettehistorik",
+      "historyDesc": "De seneste batchsletninger. Kun de sidste 30 gemmes.",
+      "noneDeletable": "Du har ikke tilladelse til at slette nogen af de matchende meddelelser.",
+      "progress": "{{processed}} af {{total}} slettet",
+      "scopeLabel": "Alle matchende meddelelser",
+      "selectAllMatching": "Vælg alle {{formatted}} matchende resultater",
+      "selectAllMatchingShort": "Vælg alle {{formatted}}",
+      "skippedNoPermission": "{{formatted}} matchende meddelelser ligger i konti, du ikke må slette; de forbliver urørte.",
+      "skippedTitle": "Nogle meddelelser springes over",
+      "startedDesc": "Opgaven kører i baggrunden. Du kan lukke denne side; fremdriften forbliver synlig i slettehistorikken.",
+      "startedTitle": "Batchsletning startet",
+      "status": {
+        "cancelled": "Annulleret",
+        "cancelling": "Annullerer",
+        "failed": "Mislykkedes",
+        "interrupted": "Afbrudt af genstart",
+        "running": "Kører",
+        "success": "Fuldført"
+      },
+      "submit": "Slet i baggrunden"
+    },
     "bcc": "Blindkopi (BCC)",
     "before": "Før:",
     "bulkActions": {

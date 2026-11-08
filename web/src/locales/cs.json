@@ -1491,6 +1491,10 @@
     "title": "Exportovat uložené hledání",
     "titleAttachments": "Exportovat přílohy"
   },
+  "history": {
+    "deletionsEmpty": "Zatím žádné úlohy mazání.",
+    "filter": "Filtr"
+  },
   "import": {
     "account": "Účet",
     "chooseFiles": "2. Vyberte soubory",
@@ -2297,6 +2301,35 @@
     "any_recipient": "Libovolný příjemce",
     "attachmentName": "Název přílohy",
     "attachmentsSize": "Přílohy a velikost",
+    "batchDelete": {
+      "cancel": "Zrušit úlohu",
+      "cancelRequested": "Požadováno zrušení - úloha se zastaví po aktuální dávce.",
+      "clearScope": "Zrušit výběr",
+      "confirmDetail": "Všechny zprávy odpovídající aktuálnímu hledání budou trvale smazány. Úloha běží na pozadí a nelze ji vrátit zpět.",
+      "empty": "Zatím žádná dávková mazání.",
+      "failedCount": "{{count}} selhalo",
+      "heldWarning": "V rozsahu jsou účty s legal hold; server toto mazání odmítne.",
+      "history": "Historie mazání",
+      "historyDesc": "Nejnovější dávková mazání. Uchovává se pouze posledních 30.",
+      "noneDeletable": "Nemáte oprávnění mazat žádnou z odpovídajících zpráv.",
+      "progress": "Smazáno {{processed}} z {{total}}",
+      "scopeLabel": "Všechny odpovídající zprávy",
+      "selectAllMatching": "Vybrat všech {{formatted}} odpovídajících výsledků",
+      "selectAllMatchingShort": "Vybrat vše ({{formatted}})",
+      "skippedNoPermission": "{{formatted}} odpovídajících zpráv je na účtech, kde nemáte oprávnění mazat; zůstanou nedotčeny.",
+      "skippedTitle": "Některé zprávy budou přeskočeny",
+      "startedDesc": "Úloha běží na pozadí. Můžete tuto stránku zavřít; průběh zůstává viditelný v historii mazání.",
+      "startedTitle": "Dávkové mazání zahájeno",
+      "status": {
+        "cancelled": "Zrušeno",
+        "cancelling": "Rušení",
+        "failed": "Selhalo",
+        "interrupted": "Přerušeno restartem",
+        "running": "Běží",
+        "success": "Dokončeno"
+      },
+      "submit": "Smazat na pozadí"
+    },
     "bcc": "Skrytá kopie",
     "before": "Před:",
     "bulkActions": {

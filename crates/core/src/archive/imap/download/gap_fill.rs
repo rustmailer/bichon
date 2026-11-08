@@ -30,6 +30,7 @@ use crate::{
     archive::imap::{
         download::flow::{is_retryable_error, retry_backoff_secs},
         mailbox::MailBox,
+        tombstones,
     },
     envelope::extractor::should_archive_from_headers,
     error::BichonResult,
@@ -346,8 +347,26 @@ pub async fn gap_fill_mailbox(
     let local_snapshots = crate::store::tantivy::envelope::ENVELOPE_MANAGER
         .get_envelope_snapshots_for_mailbox(account_id, local_mailbox.id)?;
 
-    // Phase 4: diff
-    let missing_uids = compute_missing_uids(&remote_headers, &local_snapshots);
+    // Phase 3.5: drop tombstones for UIDs the server no longer has. Only
+    // when every header batch succeeded: a partial enumeration would make us
+    // forget tombstones that are still needed and re-download those messages.
+    if stats.failed == 0 {
+        if let Some(uid_validity) = local_mailbox.uid_validity {
+            let remote_set: HashSet<u32> = remote_headers.iter().map(|h| h.uid).collect();
+            tombstones::retain_remote_uids(
+                account_id,
+                local_mailbox.id,
+                uid_validity,
+                &remote_set,
+            )
+            .await?;
+        }
+    }
+
+    // Phase 4: diff. Locally deleted messages are recorded as tombstones and
+    // must not be re-downloaded; this is what keeps deletion permanent.
+    let missing_uids =
+        tombstones::filter_uids(account_id, local_mailbox.id, local_mailbox.uid_validity, compute_missing_uids(&remote_headers, &local_snapshots))?;
     stats.candidate_count = missing_uids.len() as u64;
     if missing_uids.is_empty() {
         info!(

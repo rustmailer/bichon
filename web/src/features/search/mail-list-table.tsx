@@ -36,10 +36,15 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { DataTableToolbar } from "./table/toolbar"
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card"
 import { useSearchMessages } from "@/hooks/use-search-messages"
+import { nextSelectAllAction } from './select-all'
 import useMinimalAccountList from "@/hooks/use-minimal-account-list"
 
 interface MailListProps {
   items: EmailEnvelope[]
+  /// Total matching messages across all pages (not just the page in `items`).
+  /// Needed to decide whether a second click on the header checkbox can mean
+  /// "all matching results".
+  total: number
   isLoading: boolean
   onEnvelopeChanged: (envelope: EmailEnvelope) => void
   setSortBy: (sortBy: "DATE" | "SIZE" | "RELEVANCE") => void
@@ -48,6 +53,7 @@ interface MailListProps {
 
 export function MailListTable({
   items,
+  total,
   isLoading,
   onEnvelopeChanged,
   setSortBy,
@@ -56,7 +62,13 @@ export function MailListTable({
   const { t, i18n } = useTranslation()
 
   const locale = dateFnsLocaleMap[i18n.language.toLowerCase()] ?? enUS
-  const { selected, setSelected, dateDisplay } = useSearchContext()
+  const {
+    selected,
+    setSelected,
+    selectAllScope,
+    setSelectAllScope,
+    dateDisplay,
+  } = useSearchContext()
   const { minimalList = [] } = useMinimalAccountList()
 
   // Which accounts this user may name in a filter. A view is not one of them:
@@ -67,13 +79,61 @@ export function MailListTable({
   // clickable.
   const filterableAccounts = new Set(minimalList.map((account) => account.id))
 
+  const totalSelected = Array.from(selected.values()).reduce(
+    (sum, set) => sum + set.size,
+    0
+  )
+  const hasSelected = (accountId: number, mailId: string) =>
+    selected.get(accountId)?.has(mailId) ?? false
+  const pageAllSelected =
+    items.length > 0 &&
+    items.every((item) => selected.get(item.account_id)?.has(item.id))
+
+  /// The header checkbox acts on the page only. Widening to "every matching
+  /// result" is the banner's job, where the action and its count are visible
+  /// before it is clicked.
+  const handleToggleAll = () => {
+    switch (
+      nextSelectAllAction({
+        scopeActive: !!selectAllScope,
+        pageAllSelected,
+      })
+    ) {
+      case 'clear':
+        setSelectAllScope(null)
+        setSelected(new Map())
+        return
+      case 'deselect-page':
+        setSelected((prev) => {
+          const next = new Map(prev)
+          for (const item of items) {
+            const set = next.get(item.account_id)
+            set?.delete(item.id)
+            if (set && set.size === 0) next.delete(item.account_id)
+          }
+          return next
+        })
+        return
+      case 'select-page':
+        setSelected((prev) => {
+          const next = new Map(prev)
+          for (const item of items) {
+            const set = new Set(next.get(item.account_id) || [])
+            set.add(item.id)
+            next.set(item.account_id, set)
+          }
+          return next
+        })
+    }
+  }
+
   const columns: ColumnDef<EmailEnvelope>[] = [
     {
       accessorKey: "id",
       header: () => (
         <Checkbox
           checked={
-            totalSelected === items.length && items.length > 0
+            selectAllScope || pageAllSelected
               ? true
               : totalSelected > 0
                 ? "indeterminate"
@@ -81,6 +141,11 @@ export function MailListTable({
           }
           onCheckedChange={handleToggleAll}
           className="h-4 w-4"
+          title={
+            selectAllScope
+              ? t('search.batchDelete.clearScope', 'Clear the selection')
+              : undefined
+          }
         />
       ),
       cell: ({ row }) => (
@@ -340,25 +405,15 @@ export function MailListTable({
     },
   ]
 
-  const handleToggleAll = () => {
-    const total = Array.from(selected.values()).reduce((sum, set) => sum + set.size, 0)
-
-    if (total === items.length && items.length > 0) {
-      setSelected(new Map())
-    } else {
-      setSelected(prev => {
-        const next = new Map(prev)
-        for (const item of items) {
-          const set = new Set(next.get(item.account_id) || [])
-          set.add(item.id)
-          next.set(item.account_id, set)
-        }
-        return next
-      })
-    }
-  }
-
   const toggleSelected = (accountId: number, mailId: string) => {
+    // A row click while "all matching" is active is a deliberate narrowing:
+    // drop the scope and start an explicit selection instead of silently
+    // mixing the two models.
+    if (selectAllScope) {
+      setSelectAllScope(null)
+      setSelected(new Map([[accountId, new Set([mailId])]]))
+      return
+    }
     setSelected(prev => {
       const next = new Map(prev)
       const set = new Set(next.get(accountId) || [])
@@ -374,10 +429,6 @@ export function MailListTable({
       return next
     })
   }
-
-  const totalSelected = Array.from(selected.values()).reduce((sum, set) => sum + set.size, 0)
-
-  const hasSelected = (accountId: number, mailId: string) => selected.get(accountId)?.has(mailId) ?? false
 
   if (isLoading) {
     return (
@@ -412,7 +463,15 @@ export function MailListTable({
         }}
 
       </SearchTable>
-      {totalSelected > 0 && <MailBulkActions />}
+      {(totalSelected > 0 || selectAllScope) && (
+        <MailBulkActions
+          selectAllMatchingCount={
+            !selectAllScope && pageAllSelected && total > items.length
+              ? total
+              : undefined
+          }
+        />
+      )}
     </>
   )
 }

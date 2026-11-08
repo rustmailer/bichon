@@ -1491,6 +1491,10 @@
     "title": "Vie tallennettu haku",
     "titleAttachments": "Vie liitteet"
   },
+  "history": {
+    "deletionsEmpty": "Ei poistotehtäviä vielä.",
+    "filter": "Suodatin"
+  },
   "import": {
     "account": "Tili",
     "chooseFiles": "2. Valitse tiedostot",
@@ -2297,6 +2301,35 @@
     "any_recipient": "Kuka tahansa vastaanottaja",
     "attachmentName": "Liitteen nimi",
     "attachmentsSize": "Liitteet ja koko",
+    "batchDelete": {
+      "cancel": "Peruuta tehtävä",
+      "cancelRequested": "Peruutus pyydetty - tehtävä pysähtyy nykyisen erän jälkeen.",
+      "clearScope": "Tyhjennä valinnat",
+      "confirmDetail": "Kaikki nykyistä hakua vastaavat viestit poistetaan pysyvästi. Tehtävä suoritetaan taustalla, eikä sitä voi peruuttaa.",
+      "empty": "Ei vielä eräpoistoja.",
+      "failedCount": "{{count}} epäonnistui",
+      "heldWarning": "Laajuudessa on legal hold -tilejä; palvelin hylkää tämän poiston.",
+      "history": "Poistohistoria",
+      "historyDesc": "Viimeisimmät eräpoistot. Vain 30 viimeisintä säilytetään.",
+      "noneDeletable": "Sinulla ei ole poisto-oikeutta yhteenkään vastaavaan viestiin.",
+      "progress": "{{processed}} / {{total}} poistettu",
+      "scopeLabel": "Kaikki täsmäävät viestit",
+      "selectAllMatching": "Valitse kaikki {{formatted}} täsmäävää tulosta",
+      "selectAllMatchingShort": "Valitse kaikki {{formatted}}",
+      "skippedNoPermission": "{{formatted}} vastaavaa viestiä on tileillä, joilla sinulla ei ole poisto-oikeutta; ne jätetään ennalleen.",
+      "skippedTitle": "Jotkin viestit ohitetaan",
+      "startedDesc": "Tehtävä suoritetaan taustalla. Voit sulkea tämän sivun; edistyminen näkyy poistohistoriassa.",
+      "startedTitle": "Eräpoisto aloitettu",
+      "status": {
+        "cancelled": "Peruutettu",
+        "cancelling": "Peruutetaan",
+        "failed": "Epäonnistui",
+        "interrupted": "Keskeytyi uudelleenkäynnistyksen vuoksi",
+        "running": "Käynnissä",
+        "success": "Valmis"
+      },
+      "submit": "Poista taustalla"
+    },
     "bcc": "Piilokopio",
     "before": "Ennen:",
     "bulkActions": {

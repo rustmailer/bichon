@@ -35,6 +35,7 @@ const TMP_DIR: &str = "tmp";
 const LOG_DIR: &str = "logs";
 const EXPORTS_DIR: &str = "exports";
 const BACKUP_STAGING: &str = "backup-staging";
+const TOMBSTONES_DIR: &str = "tombstones";
 
 const TLS_CERT: &str = "cert.pem";
 const TLS_KEY: &str = "key.pem";
@@ -57,6 +58,10 @@ pub struct DataDirManager {
     pub storage_dir: PathBuf,
     pub log_dir: PathBuf,
     pub exports_dir: PathBuf,
+    /// Source-UID tombstones for messages deleted locally, stored as one
+    /// compressed bitmap per `account_id/mailbox_id`. See
+    /// `archive::imap::tombstones`.
+    pub tombstones_dir: PathBuf,
     /// Scratch space inside the data root used by Pro/Enterprise backup
     /// preparers to stage online snapshots (e.g. `VACUUM INTO` copies) that
     /// must be included in the backup. Lives under the data root so
@@ -75,6 +80,8 @@ impl Initialize for DataDirManager {
         std::fs::create_dir_all(&DATA_DIR_MANAGER.storage_dir)
             .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;
         std::fs::create_dir_all(&DATA_DIR_MANAGER.exports_dir)
+            .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;
+        std::fs::create_dir_all(&DATA_DIR_MANAGER.tombstones_dir)
             .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;
         std::fs::create_dir_all(&DATA_DIR_MANAGER.backup_staging_dir)
             .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;
@@ -123,6 +130,7 @@ impl DataDirManager {
             temp_dir: root_dir.join(TMP_DIR),
             storage_dir,
             exports_dir: root_dir.join(EXPORTS_DIR),
+            tombstones_dir: root_dir.join(TOMBSTONES_DIR),
             backup_staging_dir: root_dir.join(BACKUP_STAGING),
         }
     }

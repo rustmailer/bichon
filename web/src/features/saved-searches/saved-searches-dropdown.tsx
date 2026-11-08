@@ -47,11 +47,13 @@ import { SavedSearchKind, SavedSearchModel } from '@/api/saved-search/api'
 import type { ExportRequest } from '@/api/export/api'
 import { ExportDialog } from '@/features/exports/export-dialog'
 
-interface SavedSearchesDropdownProps {
+interface SavedSearchesPanelProps {
   kind: SavedSearchKind
   filter: Record<string, unknown>
   onApply: (filter: Record<string, unknown>) => void
 }
+
+type SavedSearchesDropdownProps = SavedSearchesPanelProps
 
 const normalizeFilter = (
   filter: Record<string, unknown>
@@ -81,11 +83,10 @@ const getErrorMessage = (error: unknown) => {
   return error instanceof Error ? error.message : String(error)
 }
 
-export function SavedSearchesDropdown({ kind, filter, onApply }: SavedSearchesDropdownProps) {
+export function SavedSearchesPanel({ kind, filter, onApply }: SavedSearchesPanelProps) {
   const { t } = useTranslation()
   const { searches, createSearch, renameSearch, deleteSearch } = useSavedSearches(kind)
 
-  const [open, setOpen] = React.useState(false)
   const [query, setQuery] = React.useState('')
   const [name, setName] = React.useState('')
   const [renameTarget, setRenameTarget] = React.useState<SavedSearchModel | null>(null)
@@ -178,19 +179,7 @@ export function SavedSearchesDropdown({ kind, filter, onApply }: SavedSearchesDr
 
   return (
     <>
-      <Popover open={open} onOpenChange={(o) => { setOpen(o); if (!o) setQuery('') }}>
-        <PopoverTrigger asChild>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 px-2 text-xs gap-1.5 font-medium rounded-md text-foreground/70 hover:text-foreground hover:bg-accent transition-all duration-200"
-            title={t('saved_searches.buttonTooltip')}
-          >
-            <Bookmark className="h-4 w-4" />
-            <span>{t('saved_searches.button')}</span>
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent align="end" className="w-80 p-0">
+      <div className="w-full">
           <div className="p-3">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -312,8 +301,7 @@ export function SavedSearchesDropdown({ kind, filter, onApply }: SavedSearchesDr
               )}
             </div>
           </ScrollArea>
-        </PopoverContent>
-      </Popover>
+      </div>
 
       <Dialog
         open={renameTarget !== null}
@@ -376,5 +364,65 @@ export function SavedSearchesDropdown({ kind, filter, onApply }: SavedSearchesDr
       />
 
     </>
+  )
+}
+
+/** The panel in a popover — the attachment toolbar still uses this shape. */
+export function SavedSearchesDropdown(props: SavedSearchesDropdownProps) {
+  const { t } = useTranslation()
+  const [open, setOpen] = React.useState(false)
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 px-2 text-xs gap-1.5 font-medium rounded-md text-foreground/70 hover:text-foreground hover:bg-accent transition-all duration-200"
+          title={t('saved_searches.buttonTooltip')}
+        >
+          <Bookmark className="h-4 w-4" />
+          <span>{t('saved_searches.button')}</span>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-80 p-0">
+        <SavedSearchesPanel
+          {...props}
+          onApply={(filter) => {
+            props.onApply(filter)
+            setOpen(false)
+          }}
+        />
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+/** The same panel as a dialog, opened from the consolidated actions menu. */
+export function SavedSearchesDialog({
+  open,
+  onOpenChange,
+  ...props
+}: SavedSearchesDropdownProps & {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
+  const { t } = useTranslation()
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="w-full max-w-md p-0">
+        <DialogHeader className="px-4 pt-4">
+          <DialogTitle>{t('saved_searches.title')}</DialogTitle>
+        </DialogHeader>
+        <div className="max-h-[70vh] overflow-y-auto pb-2">
+          <SavedSearchesPanel
+            {...props}
+            onApply={(filter) => {
+              props.onApply(filter)
+              onOpenChange(false)
+            }}
+          />
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }

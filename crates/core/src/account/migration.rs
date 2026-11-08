@@ -1036,6 +1036,7 @@ impl Account {
         }
         OAuth2AccessToken::try_delete(account.id)?;
         UserModel::cleanup_account(account.id)?;
+        crate::archive::imap::tombstones::remove_account(account.id).await?;
         MailBox::clean(account.id)?;
         ENVELOPE_MANAGER
             .delete_account_envelopes(account.id)

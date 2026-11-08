@@ -156,6 +156,7 @@ pub fn register_base_preparers() {
     register_preparer(Arc::new(BlobPreparer));
     register_preparer(Arc::new(EnvelopeIndexPreparer));
     register_preparer(Arc::new(AttachmentIndexPreparer));
+    register_preparer(Arc::new(TombstonesPreparer));
 }
 
 /// Snapshot of the registered preparers, in registration order. Used by the
@@ -256,6 +257,11 @@ pub(crate) fn sha256_file(path: &Path) -> BichonResult<[u8; 32]> {
 /// layout, which read every file into memory — untenable for multi-GB tantivy
 /// indexes.
 const IDX_PACKAGE_MAGIC: &[u8] = b"BICHON.IDX1\n";
+
+/// Package header for the recursive tree format (tombstones). The index
+/// format only accepts flat names; a tree package carries `a/b` relative
+/// paths and validates every component separately on restore.
+const TREE_PACKAGE_MAGIC: &[u8] = b"BICHON.TREE1\n";
 
 /// Maximum accepted package entry name length (a safety cap so a crafted
 /// stream cannot force a huge allocation; real index file names are short).
@@ -675,6 +681,280 @@ impl BackupPreparer for AttachmentIndexPreparer {
     }
 }
 
+/// Source-UID tombstones: one directory of compressed bitmaps. Packaged as a
+/// single artifact — the total is small, and one object keeps the manifest and
+/// restore path simple.
+pub struct TombstonesPreparer;
+
+impl BackupPreparer for TombstonesPreparer {
+    fn name(&self) -> &'static str {
+        "tombstones"
+    }
+
+    fn prepare<'a>(
+        &'a self,
+        ctx: &'a PreparerContext,
+    ) -> Pin<Box<dyn Future<Output = BichonResult<Vec<Artifact>>> + Send + 'a>> {
+        Box::pin(async move {
+            let dir = DATA_DIR_MANAGER.tombstones_dir.clone();
+            std::fs::create_dir_all(&dir).map_err(|e| {
+                raise_error!(
+                    format!("backup: cannot create {}: {e}", dir.display()),
+                    ErrorCode::InternalError
+                )
+            })?;
+            remove_stale_temp_files(&dir)?;
+            let out = ctx.staging_dir.join("tombstones.tomb.gz");
+            package_tree(&dir, &out)?;
+            artifact_from_file(out, ArtifactKey::Tombstones).map(|a| vec![a])
+        })
+    }
+}
+
+/// A crash can leave `.<mailbox>.<pid>.tmp` files behind; they are never
+/// meaningful state and must not be carried into a backup.
+fn remove_stale_temp_files(dir: &Path) -> BichonResult<()> {
+    let entries = match std::fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => {
+            return Err(raise_error!(
+                format!("backup: cannot read {}: {e}", dir.display()),
+                ErrorCode::InternalError
+            ))
+        }
+    };
+    for account in entries.flatten() {
+        let path = account.path();
+        if !path.is_dir() {
+            continue;
+        }
+        if let Ok(files) = std::fs::read_dir(&path) {
+            for file in files.flatten() {
+                let name = file.file_name();
+                if !name.to_string_lossy().ends_with(".tmp") {
+                    continue;
+                }
+                // Only sweep leftovers from a crash. A write in flight holds
+                // the backup gate, so in production none can be running here —
+                // but tests and a stuck writer must not lose their temp file.
+                let stale = file
+                    .metadata()
+                    .and_then(|m| m.modified())
+                    .ok()
+                    .and_then(|modified| modified.elapsed().ok())
+                    .is_some_and(|age| age > std::time::Duration::from_secs(3600));
+                if stale {
+                    let _ = std::fs::remove_file(file.path());
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+
+/// Recursively package a directory tree. Each record's name is the file's
+/// relative path with `/` separators (e.g. `42/7`). The tombstone store is
+/// laid out by account and mailbox, so the flat index format cannot express
+/// it.
+pub fn package_tree(dir: &Path, out: &Path) -> BichonResult<()> {
+    fn collect(dir: &Path, base: &Path, out: &mut Vec<String>) -> BichonResult<()> {
+        let entries = match std::fs::read_dir(dir) {
+            Ok(entries) => entries,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(e) => {
+                return Err(raise_error!(
+                    format!("backup: cannot read {} for packaging: {e}", dir.display()),
+                    ErrorCode::InternalError
+                ))
+            }
+        };
+        for entry in entries {
+            let entry = entry.map_err(|e| {
+                raise_error!(
+                    format!("backup: cannot read {} for packaging: {e}", dir.display()),
+                    ErrorCode::InternalError
+                )
+            })?;
+            let path = entry.path();
+            if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                collect(&path, base, out)?;
+            } else if entry.file_type().map(|t| t.is_file()).unwrap_or(false) {
+                let relative = path.strip_prefix(base).map_err(|_| {
+                    raise_error!(
+                        format!("backup: {} is outside {}", path.display(), base.display()),
+                        ErrorCode::InternalError
+                    )
+                })?;
+                let mut parts = Vec::new();
+                let mut skip = false;
+                for component in relative.components() {
+                    let Some(text) = component.as_os_str().to_str() else {
+                        return Err(raise_error!(
+                            format!("backup: non-UTF-8 file name in {}", path.display()),
+                            ErrorCode::InternalError
+                        ));
+                    };
+                    if text.starts_with('.') {
+                        // In-progress temp files are never part of the state.
+                        skip = true;
+                        break;
+                    }
+                    parts.push(text);
+                }
+                if !skip {
+                    out.push(parts.join("/"));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    let mut names = Vec::new();
+    collect(dir, dir, &mut names)?;
+    names.sort_unstable();
+
+    let file = std::fs::File::create(out).map_err(|e| {
+        raise_error!(
+            format!("backup: cannot create packaged tree {}: {e}", out.display()),
+            ErrorCode::InternalError
+        )
+    })?;
+    let mut enc = GzEncoder::new(std::io::BufWriter::new(file), Compression::default());
+    enc.write_all(TREE_PACKAGE_MAGIC)
+        .map_err(|e| raise_error!(format!("backup: tree header: {e}"), ErrorCode::InternalError))?;
+    for name in names {
+        if name.len() > MAX_PACKAGE_NAME_LEN {
+            return Err(raise_error!(
+                format!("backup: tree entry name too long: {name}"),
+                ErrorCode::InternalError
+            ));
+        }
+        let path = dir.join(&name);
+        let meta = std::fs::metadata(&path).map_err(|e| {
+            raise_error!(
+                format!("backup: cannot stat {}: {e}", path.display()),
+                ErrorCode::InternalError
+            )
+        })?;
+        enc.write_all(&(name.len() as u32).to_be_bytes())
+            .map_err(|e| raise_error!(format!("backup: tree write: {e}"), ErrorCode::InternalError))?;
+        enc.write_all(name.as_bytes())
+            .map_err(|e| raise_error!(format!("backup: tree write: {e}"), ErrorCode::InternalError))?;
+        enc.write_all(&meta.len().to_be_bytes())
+            .map_err(|e| raise_error!(format!("backup: tree write: {e}"), ErrorCode::InternalError))?;
+        let mut src = std::fs::File::open(&path).map_err(|e| {
+            raise_error!(
+                format!("backup: cannot read {}: {e}", path.display()),
+                ErrorCode::InternalError
+            )
+        })?;
+        std::io::copy(&mut src, &mut enc)
+            .map_err(|e| raise_error!(format!("backup: tree stream: {e}"), ErrorCode::InternalError))?;
+    }
+    let mut inner = enc
+        .finish()
+        .map_err(|e| raise_error!(format!("backup: tree gzip: {e}"), ErrorCode::InternalError))?;
+    inner
+        .flush()
+        .map_err(|e| raise_error!(format!("backup: tree flush: {e}"), ErrorCode::InternalError))?;
+    Ok(())
+}
+
+/// Reverse of [`package_tree`]. Every entry must be a relative path whose
+/// components are plain names: no `.`/`..`, separators inside a component,
+/// drive letters or absolute paths. A crafted backup must never write outside
+/// `dest_dir`.
+pub(crate) fn unpackage_tree(package: &Path, dest_dir: &Path) -> BichonResult<()> {
+    fn check_relative(name: &str) -> BichonResult<()> {
+        if name.is_empty() || name.starts_with('/') {
+            return Err(raise_error!(
+                format!("restore: refusing unsafe tree entry {name:?}"),
+                ErrorCode::InvalidParameter
+            ));
+        }
+        for component in name.split('/') {
+            if component.is_empty()
+                || component == "."
+                || component == ".."
+                || component.contains('\\')
+                || component.contains(':')
+            {
+                return Err(raise_error!(
+                    format!("restore: refusing unsafe tree entry {name:?}"),
+                    ErrorCode::InvalidParameter
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    std::fs::create_dir_all(dest_dir).map_err(|e| {
+        raise_error!(
+            format!("restore: cannot create {}: {e}", dest_dir.display()),
+            ErrorCode::InternalError
+        )
+    })?;
+    let file = std::fs::File::open(package).map_err(|e| {
+        raise_error!(
+            format!("restore: cannot read tree package {}: {e}", package.display()),
+            ErrorCode::InternalError
+        )
+    })?;
+    let mut dec = std::io::BufReader::new(flate2::read::GzDecoder::new(
+        std::io::BufReader::new(file),
+    ));
+    let mut magic = [0u8; TREE_PACKAGE_MAGIC.len()];
+    dec.read_exact(&mut magic)
+        .map_err(|e| corrupt_package(package, e))?;
+    if magic != *TREE_PACKAGE_MAGIC {
+        return Err(corrupt_package(package, "bad tree magic"));
+    }
+    loop {
+        let mut name_len = [0u8; 4];
+        match dec.read_exact(&mut name_len) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => return Ok(()),
+            Err(e) => return Err(corrupt_package(package, e)),
+        }
+        let name_len = u32::from_be_bytes(name_len) as usize;
+        if name_len > MAX_PACKAGE_NAME_LEN {
+            return Err(corrupt_package(package, "tree entry name too long"));
+        }
+        let mut name = vec![0u8; name_len];
+        dec.read_exact(&mut name)
+            .map_err(|e| corrupt_package(package, e))?;
+        let name = String::from_utf8(name)
+            .map_err(|_| corrupt_package(package, "non-utf8 tree name"))?;
+        check_relative(&name)?;
+        let mut content_len = [0u8; 8];
+        dec.read_exact(&mut content_len)
+            .map_err(|e| corrupt_package(package, e))?;
+        let content_len = u64::from_be_bytes(content_len);
+        let dest = dest_dir.join(&name);
+        if let Some(parent) = dest.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| {
+                raise_error!(
+                    format!("restore: cannot create {}: {e}", parent.display()),
+                    ErrorCode::InternalError
+                )
+            })?;
+        }
+        let mut out = std::fs::File::create(&dest).map_err(|e| {
+            raise_error!(
+                format!("restore: cannot write {}: {e}", dest.display()),
+                ErrorCode::InternalError
+            )
+        })?;
+        let copied = std::io::copy(&mut dec.by_ref().take(content_len), &mut out)
+            .map_err(|e| corrupt_package(package, e))?;
+        if copied != content_len {
+            return Err(corrupt_package(package, "tree entry content truncated"));
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -689,6 +969,77 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    /// The tombstone directory is packaged as one artifact and unpacks back
+    /// into the layout the delete path and gap-fill expect.
+    #[tokio::test]
+    async fn tombstones_preparer_round_trips_through_the_package() {
+        use crate::settings::cli::SETTINGS;
+        use crate::settings::dir::DATA_DIR_MANAGER;
+
+        static ENV: std::sync::Once = std::sync::Once::new();
+        ENV.call_once(|| {
+            let root = crate::test_support::unique_test_root("bichon-core-test");
+            std::env::set_var("BICHON_ROOT_DIR", &root);
+            let _ = &*SETTINGS;
+            let _ = &*DATA_DIR_MANAGER;
+        });
+
+        // Shares the process-global tombstone root with the tombstone unit
+        // tests; serialize so their cleanup cannot race this walk.
+        let _global = crate::test_support::GLOBAL_INDEX_LOCK.lock().await;
+
+        let account_id = 96_001;
+        let mailbox_id = 96_002;
+        crate::archive::imap::tombstones::record_uids(account_id, mailbox_id, 3, &[1, 2, 3])
+            .await
+            .unwrap();
+
+        let staging = scratch("tombstones-staging");
+        let ctx = PreparerContext {
+            root_dir: DATA_DIR_MANAGER.root_dir.clone(),
+            staging_dir: staging.clone(),
+            previous_manifest: None,
+        };
+        let artifacts = TombstonesPreparer.prepare(&ctx).await.unwrap();
+        assert_eq!(artifacts.len(), 1);
+        assert!(matches!(artifacts[0].logical, ArtifactKey::Tombstones));
+        assert!(artifacts[0].bytes > 0);
+
+        let dest = scratch("tombstones-unpack");
+        unpackage_tree(&artifacts[0].local, &dest).unwrap();
+        let restored = dest.join(account_id.to_string()).join(mailbox_id.to_string());
+        assert!(restored.is_file(), "tombstone file restored");
+
+        crate::archive::imap::tombstones::remove_account(account_id)
+            .await
+            .unwrap();
+        let _ = std::fs::remove_dir_all(&staging);
+        let _ = std::fs::remove_dir_all(&dest);
+    }
+
+    #[test]
+    fn tree_package_rejects_path_traversal() {
+        use std::io::Write as _;
+        let dir = scratch("tree-traversal");
+        let package = dir.join("evil.gz");
+        let file = std::fs::File::create(&package).unwrap();
+        let mut enc = GzEncoder::new(std::io::BufWriter::new(file), Compression::default());
+        enc.write_all(TREE_PACKAGE_MAGIC).unwrap();
+        let name = b"../escape";
+        enc.write_all(&(name.len() as u32).to_be_bytes()).unwrap();
+        enc.write_all(name).unwrap();
+        enc.write_all(&4u64.to_be_bytes()).unwrap();
+        enc.write_all(b"evil").unwrap();
+        enc.finish().unwrap();
+
+        let dest = dir.join("out");
+        let err = unpackage_tree(&package, &dest).unwrap_err();
+        assert!(format!("{err}").contains("unsafe tree entry"));
+        assert!(!dir.join("escape").exists());
+        assert!(!dest.join("escape").exists());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

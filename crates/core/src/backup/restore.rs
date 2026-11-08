@@ -56,7 +56,7 @@ use crate::backup::config::{BackupTargetType, RestoreFileConfig, DEFAULT_PREFIX}
 use crate::backup::engine::{s3_store, BackupEngine, S3Options};
 use crate::backup::manifest::{Manifest, ObjectRef, LATEST_NAME, MANIFEST_PREFIX};
 use crate::backup::path::{check_free_space, path_contains, paths_equal};
-use crate::backup::prepare::unpackage_dir;
+use crate::backup::prepare::{unpackage_dir, unpackage_tree};
 use crate::error::code::ErrorCode;
 use crate::error::BichonResult;
 use crate::migrate::{write_storage_version, CURRENT_STORAGE_VERSION};
@@ -74,6 +74,8 @@ pub(crate) const AUDIT_DIR: &str = "audit";
 pub(crate) const AUDIT_DB_FILE: &str = "audit.db";
 pub(crate) const AUDIT_DELTAS_DIR: &str = "deltas";
 pub(crate) const INTEGRITY_DIR: &str = "integrity";
+pub(crate) const TOMBSTONES_DIR: &str = "tombstones";
+pub(crate) const APPROVAL_DETAILS_DIR: &str = "approval-details";
 pub(crate) const INTEGRITY_DB_FILE: &str = "integrity.db";
 pub(crate) const TIMESTAMP_DIR: &str = "timestamp";
 pub(crate) const ANCHOR_DB_FILE: &str = "anchor.db";
@@ -212,6 +214,11 @@ pub struct RestoreReport {
     pub audit_deltas_copied: usize,
     pub integrity_restored: bool,
     pub timestamp_restored: bool,
+    /// Source-UID tombstones were restored, so gap-fill in the restored
+    /// archive will not re-download locally deleted messages.
+    pub tombstones_restored: bool,
+    /// Pro dual-control frozen message sets were restored.
+    pub approval_details_restored: bool,
     /// `instance-id` was restored from the deployment identity package, so
     /// the existing license still binds to this data set.
     pub instance_id_restored: bool,
@@ -957,6 +964,22 @@ async fn restore_into(
         report.timestamp_restored = true;
     }
 
+    // Source-UID tombstones: a packaged directory of compressed bitmaps.
+    if let Some(obj) = &manifest.objects.tombstones {
+        let package = work.join("tombstones.tomb.gz");
+        download(engine, obj, &package, report).await?;
+        unpackage_tree(&package, &targets.root.join(TOMBSTONES_DIR))?;
+        report.tombstones_restored = true;
+    }
+
+    // Pro dual-control frozen message sets: a packaged directory tree.
+    if let Some(obj) = &manifest.objects.approval_details {
+        let package = work.join("approval-details.tree.gz");
+        download(engine, obj, &package, report).await?;
+        unpackage_tree(&package, &targets.root.join(APPROVAL_DETAILS_DIR))?;
+        report.approval_details_restored = true;
+    }
+
     // tantivy: index copies. When absent (older restore points, pre-index
     // backups) the
     // search index is not restored, and the report says so (R11).
@@ -1014,6 +1037,8 @@ fn manifest_refs(m: &Manifest) -> Vec<(&str, &str, u64)> {
     for slot in [
         &m.objects.memdb,
         &m.objects.integrity,
+        &m.objects.tombstones,
+        &m.objects.approval_details,
         &m.objects.timestamp,
         &m.objects.deployment,
     ]
@@ -1106,6 +1131,8 @@ fn assert_clean_restore_target(dir: &Path, root: &Path) -> BichonResult<()> {
 fn assert_sufficient_space(targets: &RestoreTargets, m: &Manifest) -> BichonResult<()> {
     let root_needed = m.objects.memdb.as_ref().map_or(0, |o| o.bytes)
         + m.objects.integrity.as_ref().map_or(0, |o| o.bytes)
+        + m.objects.tombstones.as_ref().map_or(0, |o| o.bytes)
+        + m.objects.approval_details.as_ref().map_or(0, |o| o.bytes)
         + m.objects.timestamp.as_ref().map_or(0, |o| o.bytes)
         + m.objects.deployment.as_ref().map_or(0, |o| o.bytes)
         + m.objects.audit.as_ref().map_or(0, |a| {
@@ -1190,6 +1217,14 @@ pub fn format_restore_report(report: &RestoreReport) -> String {
         out.push_str(&format!(
             "  timestamp anchor: {}\n",
             yes(report.timestamp_restored)
+        ));
+        out.push_str(&format!(
+            "  tombstones      : {}\n",
+            yes(report.tombstones_restored)
+        ));
+        out.push_str(&format!(
+            "  approval details: {}\n",
+            yes(report.approval_details_restored)
         ));
         if report.instance_id_restored || report.license_restored || report.license_state_restored
         {
@@ -1313,6 +1348,8 @@ mod tests {
                 seg_id: 3,
                 obj: obj.clone(),
             }],
+            tombstones: None,
+            approval_details: None,
             audit: Some(AuditObjects {
                 base: obj.clone(),
                 deltas: vec![

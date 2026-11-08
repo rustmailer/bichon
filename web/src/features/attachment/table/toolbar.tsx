@@ -4,8 +4,7 @@ import { Sparkles } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { SearchRefreshButton } from '@/components/search-refresh-button'
-import { ExportResultsButton } from '../../exports/export-results-button'
-import { SavedSearchesDropdown } from '../../saved-searches/saved-searches-dropdown'
+import { SearchActionsMenu } from '../../search/search-actions-menu'
 import { AccountPopover } from '../account-popover'
 import { MetadataFilter } from '../attachment-metadata-filter'
 import { useAttachmentContext } from '../context'
@@ -30,8 +29,9 @@ export function DataTableToolbar<TData>({
   return (
     <div className='flex flex-col gap-1 p-1 bg-background'>
       <div className='mb-4 flex items-center justify-center w-full'>
-        <div className='w-full max-w-3xl'>
+        <div className='flex items-start justify-center gap-1.5 w-full max-w-[740px]'>
           <TextSearchInput />
+          <FilterResetButton className='mt-1 shrink-0' />
         </div>
       </div>
       <div className='flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-1'>
@@ -55,13 +55,6 @@ export function DataTableToolbar<TData>({
 
             <MoreFiltersPopover />
           </div>
-          <FilterResetButton />
-          <SavedSearchesDropdown
-            kind='Attachment'
-            filter={filter}
-            onApply={(f) => setFilter(f)}
-          />
-          <ExportResultsButton kind='attachment' filter={filter} />
         </div>
         <div className='flex items-center gap-1 shrink-0'>
           {effectiveSort === 'RELEVANCE' && (
@@ -76,6 +69,11 @@ export function DataTableToolbar<TData>({
           )}
           <TimePopover />
           <DataTableViewOptions table={table} />
+          <SearchActionsMenu
+            kind='Attachment'
+            filter={filter}
+            onApply={(next) => setFilter(next)}
+          />
           <SearchRefreshButton onRefresh={refetch} isRefreshing={isFetching} />
         </div>
       </div>

@@ -19,8 +19,13 @@
 use crate::common::auth::WrappedContext;
 use crate::rest::api::ApiTags;
 use crate::rest::ApiResult;
+use bichon_core::account::access::search_scope;
 use bichon_core::account::migration::AccountModel;
+use bichon_core::common::auth::ClientContext;
 use bichon_core::common::paginated::DataPage;
+use bichon_core::message::batch_delete::{
+    self, BatchDeleteJob, BatchDeletePreviewView, BatchDeleteRequest,
+};
 use bichon_core::envelope::extractor::{repair_envelope_blobs, BlobRepairReport};
 use bichon_core::envelope::repair::BlobRepairRecord;
 use bichon_core::error::code::ErrorCode;
@@ -85,6 +90,184 @@ impl MessageApi {
         }
         result?;
         Ok(())
+    }
+
+    /// Estimates how many messages a batch deletion would remove, and whether
+    /// any account in scope is under a legal hold.
+    #[oai(
+        path = "/batch-delete/preview",
+        method = "post",
+        operation_id = "batch_delete_preview"
+    )]
+    async fn batch_delete_preview(
+        &self,
+        payload: Json<BatchDeleteRequest>,
+        context: WrappedContext,
+    ) -> ApiResult<Json<BatchDeletePreviewView>> {
+        let request = payload.0;
+        let scope = search_scope(&context, request.filter.account_ids.as_ref())?;
+        // A caller may read more than they may delete. Resolve the split once,
+        // then report both halves: the job will touch `account_ids` only.
+        let (delete_scope, skipped_account_ids) = batch_delete::split_delete_scope(
+            scope.clone(),
+            |id| context.has_permission(Some(id), Permission::DATA_DELETE),
+        )?;
+        let account_ids =
+            batch_delete::resolve_account_ids(&Some(delete_scope.clone()), &request.filter)?;
+        let matched = search_messages_scoped(
+            scope,
+            EmailSearchRequest {
+                filter: request.filter.clone(),
+                page: 1,
+                page_size: 1,
+                sort_by: None,
+                desc: None,
+            },
+        )?
+        .total_items;
+        let total = if skipped_account_ids.is_empty() {
+            matched
+        } else {
+            search_messages_scoped(
+                Some(delete_scope),
+                EmailSearchRequest {
+                    filter: request.filter,
+                    page: 1,
+                    page_size: 1,
+                    sort_by: None,
+                    desc: None,
+                },
+            )?
+            .total_items
+        };
+        let held_account_ids = account_ids
+            .iter()
+            .filter(|id| {
+                AccountModel::get(**id)
+                    .map(|account| account.is_on_hold())
+                    .unwrap_or(false)
+            })
+            .copied()
+            .collect();
+        Ok(Json(BatchDeletePreviewView {
+            total,
+            matched,
+            skipped_no_permission: matched.saturating_sub(total),
+            account_ids,
+            skipped_account_ids,
+            held_account_ids,
+        }))
+    }
+
+    /// Starts an asynchronous deletion of every message matching the filter.
+    #[oai(
+        path = "/batch-delete",
+        method = "post",
+        operation_id = "create_batch_delete"
+    )]
+    async fn create_batch_delete(
+        &self,
+        payload: Json<BatchDeleteRequest>,
+        context: WrappedContext,
+    ) -> ApiResult<Json<BatchDeleteJob>> {
+        let request = payload.0;
+        let scope = search_scope(&context, request.filter.account_ids.as_ref())?;
+        // Keep the community rule that an unrestricted caller needs at least
+        // one search condition (an empty filter there means "the whole
+        // archive"). After the scope is materialized below, `start_job` can no
+        // longer see that it started unrestricted.
+        if scope.is_none() && request.filter.is_empty() {
+            return Err(raise_error!(
+                "A batch deletion needs at least one search condition.".to_string(),
+                ErrorCode::InvalidParameter
+            )
+            .into());
+        }
+        let (delete_scope, _skipped_account_ids) = batch_delete::split_delete_scope(
+            scope,
+            |id| context.has_permission(Some(id), Permission::DATA_DELETE),
+        )?;
+        if delete_scope.is_empty() {
+            return Err(raise_error!(
+                format!(
+                    "Access Denied: you do not hold '{}' on any account matching this search.",
+                    Permission::DATA_DELETE
+                ),
+                ErrorCode::Forbidden
+            )
+            .into());
+        }
+        let account_ids =
+            batch_delete::resolve_account_ids(&Some(delete_scope.clone()), &request.filter)?;
+        let job = batch_delete::start_job(
+            Some(delete_scope),
+            request,
+            account_ids,
+            context.user.id,
+            context.user.username.clone(),
+        )?;
+        Ok(Json(job))
+    }
+
+    /// Lists the most recent batch deletion jobs (creator sees their own;
+    /// administrators see all).
+    #[oai(
+        path = "/batch-delete",
+        method = "get",
+        operation_id = "list_batch_deletes"
+    )]
+    async fn list_batch_deletes(
+        &self,
+        context: WrappedContext,
+    ) -> ApiResult<Json<Vec<BatchDeleteJob>>> {
+        let mut jobs = batch_delete::list_jobs()?;
+        if !context.user.is_admin() {
+            jobs.retain(|job| job.user_id == context.user.id);
+        }
+        Ok(Json(jobs))
+    }
+
+    /// Returns one batch deletion job.
+    #[oai(
+        path = "/batch-delete/:job_id",
+        method = "get",
+        operation_id = "get_batch_delete"
+    )]
+    async fn get_batch_delete(
+        &self,
+        job_id: Path<String>,
+        context: WrappedContext,
+    ) -> ApiResult<Json<BatchDeleteJob>> {
+        let job = batch_delete::get_job(&job_id.0)?.ok_or_else(|| {
+            raise_error!(
+                format!("Batch deletion job '{}' not found.", job_id.0),
+                ErrorCode::ResourceNotFound
+            )
+        })?;
+        require_job_visible(&context, &job)?;
+        Ok(Json(job))
+    }
+
+    /// Asks a running batch deletion to stop. The job stops between batches;
+    /// already-deleted messages are not restored.
+    #[oai(
+        path = "/batch-delete/:job_id/cancel",
+        method = "post",
+        operation_id = "cancel_batch_delete"
+    )]
+    async fn cancel_batch_delete(
+        &self,
+        job_id: Path<String>,
+        context: WrappedContext,
+    ) -> ApiResult<Json<BatchDeleteJob>> {
+        let job = batch_delete::get_job(&job_id.0)?.ok_or_else(|| {
+            raise_error!(
+                format!("Batch deletion job '{}' not found.", job_id.0),
+                ErrorCode::ResourceNotFound
+            )
+        })?;
+        require_job_visible(&context, &job)?;
+        Ok(Json(batch_delete::request_cancel(&job_id.0)?))
     }
 
     /// Searches messages across all mailboxes using various filter criteria.
@@ -680,3 +863,24 @@ fn attachment_meta_for_audit(
 // `bichon_core::message::delete` when the dual-control executor became a
 // second caller: a handler-private copy would have left the approval path
 // emitting `email.deleted` records with no subject.
+
+/// A batch deletion needs `data:delete` on every account it would touch.
+///
+/// When the scope is unrestricted the caller must hold the global permission;
+/// a view expands into its *source* accounts, and deleting through a view is
+/// not a lesser act than deleting through the source.
+/// Job history is visible to its creator and to administrators. Other users
+/// with delete rights see only the jobs they started.
+fn require_job_visible(
+    context: &ClientContext,
+    job: &BatchDeleteJob,
+) -> bichon_core::error::BichonResult<()> {
+    if job.user_id == context.user.id || context.user.is_admin() {
+        Ok(())
+    } else {
+        Err(raise_error!(
+            format!("Batch deletion job '{}' is not visible to this user.", job.job_id),
+            ErrorCode::Forbidden
+        ))
+    }
+}

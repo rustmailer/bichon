@@ -1491,6 +1491,10 @@
     "title": "导出已保存搜索",
     "titleAttachments": "导出附件"
   },
+  "history": {
+    "deletionsEmpty": "暂无删除任务。",
+    "filter": "过滤条件"
+  },
   "import": {
     "account": "账户",
     "chooseFiles": "2. 选择文件",
@@ -2297,6 +2301,35 @@
     "any_recipient": "任意收件人",
     "attachmentName": "附件名称",
     "attachmentsSize": "附件和大小",
+    "batchDelete": {
+      "cancel": "取消任务",
+      "cancelRequested": "已请求取消，任务将在当前批次后停止。",
+      "clearScope": "清除选择",
+      "confirmDetail": "当前搜索匹配的所有邮件将被永久删除。任务在后台运行，且无法撤销。",
+      "empty": "暂无批量删除记录。",
+      "failedCount": "{{count}} 条失败",
+      "heldWarning": "范围内存在处于 Legal Hold 的账户，服务器将拒绝此删除。",
+      "history": "删除历史",
+      "historyDesc": "最近的批量删除任务，仅保留最近 30 条。",
+      "noneDeletable": "你对任何匹配邮件都没有删除权限。",
+      "progress": "已删除 {{processed}} / {{total}}",
+      "scopeLabel": "所有匹配的邮件",
+      "selectAllMatching": "选择全部 {{formatted}} 条匹配结果",
+      "selectAllMatchingShort": "全选 {{formatted}} 封",
+      "skippedNoPermission": "{{formatted}} 封匹配邮件位于你没有删除权限的账户，将被保留。",
+      "skippedTitle": "部分邮件将被跳过",
+      "startedDesc": "任务在后台运行。你可以关闭此页面；进度仍可在删除历史中查看。",
+      "startedTitle": "批量删除已开始",
+      "status": {
+        "cancelled": "已取消",
+        "cancelling": "正在取消",
+        "failed": "失败",
+        "interrupted": "因重启中断",
+        "running": "运行中",
+        "success": "已完成"
+      },
+      "submit": "后台删除"
+    },
     "bcc": "密送",
     "before": "之前：",
     "bulkActions": {

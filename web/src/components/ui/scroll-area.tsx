@@ -5,12 +5,15 @@ import { cn } from '@/lib/utils'
 interface ScrollAreaProps
   extends React.ComponentPropsWithoutRef<typeof ScrollAreaPrimitive.Root> {
   orientation?: 'horizontal' | 'vertical' | 'both'
+  /** Classes for the scrolling viewport. A `max-h-*` here is the usual way to
+   *  cap a scroll area whose content should size itself otherwise. */
+  viewportClassName?: string
 }
 
 const ScrollArea = React.forwardRef<
   React.ElementRef<typeof ScrollAreaPrimitive.Root>,
   ScrollAreaProps
->(({ className, children, orientation = 'vertical', ...props }, ref) => (
+>(({ className, viewportClassName, children, orientation = 'vertical', ...props }, ref) => (
   <ScrollAreaPrimitive.Root
     ref={ref}
     className={cn('relative overflow-hidden', className)}
@@ -19,7 +22,8 @@ const ScrollArea = React.forwardRef<
     <ScrollAreaPrimitive.Viewport
       className={cn(
         'h-full w-full rounded-[inherit]',
-        orientation === 'horizontal' && '!overflow-x-auto'
+        orientation === 'horizontal' && '!overflow-x-auto',
+        viewportClassName
       )}
     >
       {children}

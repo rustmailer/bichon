@@ -1491,6 +1491,10 @@
     "title": "Export de la recherche enregistrée",
     "titleAttachments": "Exporter les pièces jointes"
   },
+  "history": {
+    "deletionsEmpty": "Aucune tâche de suppression pour l’instant.",
+    "filter": "Filtre"
+  },
   "import": {
     "account": "Compte",
     "chooseFiles": "2. Choisir les fichiers",
@@ -2297,6 +2301,35 @@
     "any_recipient": "N'importe quel destinataire",
     "attachmentName": "Nom de la Pièce Jointe",
     "attachmentsSize": "Pièces Jointes et Taille",
+    "batchDelete": {
+      "cancel": "Annuler la tâche",
+      "cancelRequested": "Annulation demandée - la tâche s'arrête après le lot en cours.",
+      "clearScope": "Effacer la sélection",
+      "confirmDetail": "Tous les messages correspondant à la recherche actuelle seront définitivement supprimés. La tâche s'exécute en arrière-plan et est irréversible.",
+      "empty": "Aucune suppression par lots pour le moment.",
+      "failedCount": "{{count}} échec(s)",
+      "heldWarning": "Des comptes sous legal hold sont concernés ; le serveur refusera cette suppression.",
+      "history": "Historique des suppressions",
+      "historyDesc": "Les suppressions par lots les plus récentes. Seules les 30 dernières sont conservées.",
+      "noneDeletable": "Vous n'avez l'autorisation de supprimer aucun des messages correspondants.",
+      "progress": "{{processed}} sur {{total}} supprimés",
+      "scopeLabel": "Tous les messages correspondants",
+      "selectAllMatching": "Sélectionner les {{formatted}} résultats correspondants",
+      "selectAllMatchingShort": "Tout sélectionner ({{formatted}})",
+      "skippedNoPermission": "{{formatted}} messages correspondants se trouvent dans des comptes que vous ne pouvez pas supprimer ; ils resteront intacts.",
+      "skippedTitle": "Certains messages seront ignorés",
+      "startedDesc": "La tâche s'exécute en arrière-plan. Vous pouvez fermer cette page ; la progression reste visible dans l'historique des suppressions.",
+      "startedTitle": "Suppression par lots démarrée",
+      "status": {
+        "cancelled": "Annulée",
+        "cancelling": "Annulation en cours",
+        "failed": "Échouée",
+        "interrupted": "Interrompue par un redémarrage",
+        "running": "En cours",
+        "success": "Terminée"
+      },
+      "submit": "Supprimer en arrière-plan"
+    },
     "bcc": "Cci",
     "before": "Avant :",
     "bulkActions": {

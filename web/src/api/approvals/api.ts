@@ -68,8 +68,17 @@ export type ApprovalTarget =
     }
   | {
       kind: 'messages'
+      /** Inline set; empty when the ids were externalized to a detail file. */
       by_account: Record<string, string[]>
       messages: number
+      /** Accounts covered, present even when `by_account` is empty. */
+      account_ids?: number[]
+      /** The filter a `batch-delete` request was selected by. */
+      filter?: Record<string, unknown>
+      /** Detail-file reference; the ids themselves are not in the ledger. */
+      detail_file?: string
+      detail_sha256?: string
+      detail_bytes?: number
     }
   | {
       kind: 'token'

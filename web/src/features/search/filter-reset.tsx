@@ -23,7 +23,7 @@ import { useSearchContext } from "./context"
 import { cn } from "@/lib/utils"
 import { useTranslation } from "react-i18next";
 
-export function FilterResetButton() {
+export function FilterResetButton({ className }: { className?: string }) {
     const { filter, setFilter } = useSearchContext();
     const { t } = useTranslation()
     const { q, ...restFilters } = filter;
@@ -43,7 +43,8 @@ export function FilterResetButton() {
             onClick={() => setFilter(q ? { q } : {})}
             className={cn(
                 "h-7 px-2 text-xs gap-1.5 font-medium rounded-md",
-                "text-foreground/70 hover:text-foreground hover:bg-accent transition-all duration-200"
+                "text-foreground/70 hover:text-foreground hover:bg-accent transition-all duration-200",
+                className
             )}
             title={t('search_reset.tooltip')}
         >

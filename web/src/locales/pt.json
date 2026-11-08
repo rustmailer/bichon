@@ -1491,6 +1491,10 @@
     "title": "Exportação da pesquisa salva",
     "titleAttachments": "Exportar anexos"
   },
+  "history": {
+    "deletionsEmpty": "Ainda não há tarefas de exclusão.",
+    "filter": "Filtro"
+  },
   "import": {
     "account": "Conta",
     "chooseFiles": "2. Escolher arquivos",
@@ -2297,6 +2301,35 @@
     "any_recipient": "Qualquer destinatario",
     "attachmentName": "Nome do Anexo",
     "attachmentsSize": "Anexos e Tamanho",
+    "batchDelete": {
+      "cancel": "Cancelar tarefa",
+      "cancelRequested": "Cancelamento solicitado - a tarefa para após o lote atual.",
+      "clearScope": "Limpar seleção",
+      "confirmDetail": "Todas as mensagens que correspondem à pesquisa atual serão excluídas permanentemente. A tarefa é executada em segundo plano e não pode ser desfeita.",
+      "empty": "Ainda não há exclusões em lote.",
+      "failedCount": "{{count}} com falha",
+      "heldWarning": "Há contas em retenção legal no escopo; o servidor recusará esta exclusão.",
+      "history": "Histórico de exclusões",
+      "historyDesc": "As exclusões em lote mais recentes. Apenas as últimas 30 são mantidas.",
+      "noneDeletable": "Você não tem permissão para excluir nenhuma das mensagens correspondentes.",
+      "progress": "{{processed}} de {{total}} excluídos",
+      "scopeLabel": "Todas as mensagens correspondentes",
+      "selectAllMatching": "Selecionar todos os {{formatted}} resultados correspondentes",
+      "selectAllMatchingShort": "Selecionar todas ({{formatted}})",
+      "skippedNoPermission": "{{formatted}} mensagens correspondentes estão em contas nas quais você não pode excluir; elas permanecerão intactas.",
+      "skippedTitle": "Algumas mensagens serão ignoradas",
+      "startedDesc": "A tarefa é executada em segundo plano. Você pode fechar esta página; o progresso continua visível no histórico de exclusões.",
+      "startedTitle": "Exclusão em lote iniciada",
+      "status": {
+        "cancelled": "Cancelada",
+        "cancelling": "Cancelando",
+        "failed": "Falhou",
+        "interrupted": "Interrompida por reinício",
+        "running": "Em execução",
+        "success": "Concluída"
+      },
+      "submit": "Excluir em segundo plano"
+    },
     "bcc": "BCC",
     "before": "Antes de:",
     "bulkActions": {

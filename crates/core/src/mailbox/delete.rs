@@ -67,6 +67,13 @@ pub async fn delete_mailbox_impl(account_id: u64, mailbox_id: u64) -> BichonResu
         return Ok(());
     }
 
+    // Drop the source-UID tombstones together with the mailbox. Leaving them
+    // behind would keep suppressing re-downloads if a mailbox id were reused
+    // and would leak one file per deleted mailbox.
+    for id in &ids_to_delete {
+        crate::archive::imap::tombstones::remove_mailbox(account_id, *id).await?;
+    }
+
     for id in &ids_to_delete {
         MailBox::delete(*id)?;
     }

@@ -28,6 +28,8 @@ export function SearchHarness({
                 setToDelete: noop,
                 selected: new Map(),
                 setSelected: noop,
+                selectAllScope: null,
+                setSelectAllScope: noop,
                 deleteMailboxId: undefined,
                 setDeleteMailboxId: noop,
                 selectedAccountId: undefined,
@@ -43,8 +45,6 @@ export function SearchHarness({
                 handleTagToggle: noop,
                 editTagsOpen: false,
                 setEditTagsOpen: noop,
-                repairHistoryOpen: false,
-                setRepairHistoryOpen: noop,
                 dateDisplay: 'absolute',
                 setDateDisplay: noop,
             }}

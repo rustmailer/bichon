@@ -108,6 +108,16 @@ pub struct EnvelopeSnapshot {
     //pub subject: String,
 }
 
+/// The source-side identity of one archived message, read right before a
+/// delete so the tombstone store can remember it. `uid` is the IMAP UID on
+/// the source mailbox (0 for messages that never came from IMAP).
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct SourceRef {
+    pub envelope_id: String,
+    pub mailbox_id: u64,
+    pub uid: u32,
+}
+
 /// The local proof a cleanup candidate is built from: both the Message-ID and
 /// the content hash are needed to prove the archived copy before moving the
 /// source message. Documents missing either are never candidates.
@@ -547,6 +557,115 @@ impl IndexManager {
             });
         }
         Ok(snapshots)
+    }
+
+    /// Enumerate every envelope id matching the filter, paired with its source
+    /// account. Used by the asynchronous batch-delete worker: it deliberately
+    /// does not materialize `Envelope` values, whose converter looks up the
+    /// account and mailbox rows for every hit.
+    pub fn search_ids(
+        &self,
+        scope: Option<Vec<ViewScopeGroup>>,
+        mut filter: EmailSearchFilter,
+    ) -> BichonResult<Vec<(u64, String)>> {
+        if scope.is_some() {
+            // Same rule as `search_scoped`: the scope already encodes the
+            // account constraint, and a view id here would match nothing.
+            filter.account_ids = None;
+        }
+        let query = self.filter_query(scope.as_deref(), filter)?;
+        let searcher = self.create_searcher()?;
+        let fields = SchemaTools::email_fields();
+        let docs = searcher
+            .search(&query, &DocSetCollector)
+            .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;
+
+        let mut out = Vec::with_capacity(docs.len());
+        for doc_address in docs {
+            let doc = searcher
+                .doc::<TantivyDocument>(doc_address)
+                .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;
+            let account_id = doc
+                .get_first(fields.f_account_id)
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
+            let envelope_id = doc
+                .get_first(fields.f_id)
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            if account_id != 0 && !envelope_id.is_empty() {
+                out.push((account_id, envelope_id));
+            }
+        }
+        Ok(out)
+    }
+
+    /// Source identities for a batch of envelope ids inside one account.
+    ///
+    /// One query for the whole batch: the delete path already runs per-id
+    /// index work, and one term per id is cheaper than a query per id.
+    pub fn get_source_refs(
+        &self,
+        account_id: u64,
+        ids: &[String],
+    ) -> BichonResult<Vec<SourceRef>> {
+        if ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        let fields = SchemaTools::email_fields();
+        let id_queries: Vec<(Occur, Box<dyn Query>)> = ids
+            .iter()
+            .map(|id| {
+                (
+                    Occur::Should,
+                    Box::new(TermQuery::new(
+                        Term::from_field_text(fields.f_id, id),
+                        IndexRecordOption::Basic,
+                    )) as Box<dyn Query>,
+                )
+            })
+            .collect();
+        let account_query = TermQuery::new(
+            Term::from_field_u64(fields.f_account_id, account_id),
+            IndexRecordOption::Basic,
+        );
+        let query = BooleanQuery::new(vec![
+            (Occur::Must, Box::new(account_query) as Box<dyn Query>),
+            (Occur::Must, Box::new(BooleanQuery::new(id_queries))),
+        ]);
+
+        let searcher = self.create_searcher()?;
+        let docs = searcher
+            .search(&query, &DocSetCollector)
+            .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;
+
+        let mut out = Vec::with_capacity(docs.len());
+        for doc_address in docs {
+            let doc = searcher
+                .doc::<TantivyDocument>(doc_address)
+                .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;
+            let envelope_id = doc
+                .get_first(fields.f_id)
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            if envelope_id.is_empty() {
+                continue;
+            }
+            out.push(SourceRef {
+                envelope_id,
+                mailbox_id: doc
+                    .get_first(fields.f_mailbox_id)
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0),
+                uid: doc
+                    .get_first(fields.f_uid)
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0) as u32,
+            });
+        }
+        Ok(out)
     }
 
 /// Everything the source-mailbox cleanup needs about one archived message.

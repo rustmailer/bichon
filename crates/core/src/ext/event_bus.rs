@@ -64,6 +64,12 @@ pub enum Event {
         subject: Option<String>,
         /// Snapshot of the deleted message (attachment names, from/to, ...).
         snapshot: Option<EventPayload>,
+        /// The job that performed the deletion, when it was a batch job.
+        job_id: Option<String>,
+        /// The search filter the job was created with. Recorded so the audit
+        /// trail answers "under which selection was this deleted", not only
+        /// "which messages disappeared".
+        filter: Option<crate::message::search::EmailSearchFilter>,
     },
     /// A large delete batch whose per-message detail was externalized to a
     /// detail file instead of N `email.deleted` records. The row carries the
@@ -85,6 +91,11 @@ pub enum Event {
         detail_size: u64,
         /// SHA-256 of the detail file, bound into the audit hash chain.
         detail_sha256: String,
+        /// The job that produced this batch.
+        job_id: Option<String>,
+        /// The search filter the job was created with. The detail file lists
+        /// *what* was deleted; this records *why that set existed*.
+        filter: Option<crate::message::search::EmailSearchFilter>,
     },
     /// Raw EML file downloaded (export).
     EmailExported {

@@ -27,14 +27,14 @@ import { FixedHeader } from '@/components/layout/fixed-header'
 import { Main } from '@/components/layout/main'
 import { TablePagination } from '@/components/pagination'
 import { UpdateTagsDialog } from './bulk-add-tag-dialog'
-import SearchProvider, { SearchDialogType } from './context'
+import SearchProvider, { SearchDialogType, SelectAllScope } from './context'
 import { EnvelopeDeleteDialog } from './delete-dialog'
 import { MailBoxDeleteDialog } from './delete-mailbox-dialog'
 import { EditTagsDialog } from './edit-tag-dialog'
 import { GdprErasureDialog } from './gdpr-erasure-dialog'
 import { MailDisplayDrawer } from './mail-display-dialog'
 import { MailListTable } from './mail-list-table'
-import { RepairHistoryDrawer } from '@/features/repair/repair-history-drawer'
+import { BatchDeletePanel } from './batch-delete-panel'
 import { RepairMessageDialog } from '@/features/repair/repair-message-dialog'
 import { RestoreMessageDialog } from './restore-message-dialog'
 
@@ -50,6 +50,8 @@ export default function EmailSearch() {
   const [selected, setSelected] = React.useState<Map<number, Set<string>>>(
     new Map()
   )
+  const [selectAllScope, setSelectAllScope] =
+    React.useState<SelectAllScope | null>(null)
   const [selectedTags, setSelectedTags] = React.useState<string[]>([])
   // Start with no client-side sort: the server already orders the page
   // (RELEVANCE when the query has a text term, DATE desc otherwise), and
@@ -63,7 +65,6 @@ export default function EmailSearch() {
     number | undefined
   >(undefined)
   const [editTagsOpen, setEditTagsOpen] = React.useState(false)
-  const [repairHistoryOpen, setRepairHistoryOpen] = React.useState(false)
   const { dateDisplay, setDateDisplay: handleSetDateDisplay } = useDateDisplay()
 
   const {
@@ -89,6 +90,15 @@ export default function EmailSearch() {
     setSearchPageSize(pageSize)
   }
 
+  // A selection belongs to the filter that produced it. Changing the filter
+  // while "all matching" is active would otherwise leave a scope whose count
+  // describes a different result set than the one the toolbar now shows.
+  const filterJson = JSON.stringify(filter)
+  React.useEffect(() => {
+    setSelectAllScope(null)
+    setSelected(new Map())
+  }, [filterJson, setSelectAllScope, setSelected])
+
   const handleTagToggle = (tag: string) => {
     setSelectedTags((prev) =>
       prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
@@ -110,6 +120,8 @@ export default function EmailSearch() {
             setToDelete,
             selected,
             setSelected,
+            selectAllScope,
+            setSelectAllScope,
             sorting,
             setSorting,
             filter,
@@ -124,8 +136,6 @@ export default function EmailSearch() {
             handleTagToggle,
             editTagsOpen,
             setEditTagsOpen,
-            repairHistoryOpen,
-            setRepairHistoryOpen,
             dateDisplay,
             setDateDisplay: handleSetDateDisplay,
           }}
@@ -133,6 +143,7 @@ export default function EmailSearch() {
           <div className='mx-auto w-full px-4'>
             <div className='flex gap-6'>
               <div className='flex-1 min-w-0 space-y-4'>
+                <BatchDeletePanel />
                 {isLoading && (
                   <Card>
                     <CardContent className='py-12'>
@@ -147,6 +158,7 @@ export default function EmailSearch() {
                 <MailListTable
                   isLoading={isLoading}
                   items={emails}
+                  total={total}
                   onEnvelopeChanged={(envelope) => {
                     setOpen('display')
                     setSelectedEnvelope(envelope)
@@ -205,12 +217,6 @@ export default function EmailSearch() {
             accountId={selectedEnvelope?.account_id}
             envelopeId={selectedEnvelope?.id}
             subject={selectedEnvelope?.subject}
-          />
-
-          <RepairHistoryDrawer
-            key='repair-history-drawer'
-            open={repairHistoryOpen}
-            onOpenChange={setRepairHistoryOpen}
           />
 
           <MailBoxDeleteDialog

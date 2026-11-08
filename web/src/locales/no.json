@@ -1491,6 +1491,10 @@
     "title": "Eksport av lagret søk",
     "titleAttachments": "Eksporter vedlegg"
   },
+  "history": {
+    "deletionsEmpty": "Ingen slettejobber ennå.",
+    "filter": "Filter"
+  },
   "import": {
     "account": "Konto",
     "chooseFiles": "2. Velg filer",
@@ -2297,6 +2301,35 @@
     "any_recipient": "Enhver mottaker",
     "attachmentName": "Vedleggsnavn",
     "attachmentsSize": "Vedlegg og størrelse",
+    "batchDelete": {
+      "cancel": "Avbryt jobb",
+      "cancelRequested": "Avbrytelse forespurt - jobben stopper etter gjeldende batch.",
+      "clearScope": "Fjern valg",
+      "confirmDetail": "Alle meldinger som samsvarer med gjeldende søk slettes permanent. Jobben kjører i bakgrunnen og kan ikke angres.",
+      "empty": "Ingen batchslettinger ennå.",
+      "failedCount": "{{count}} mislyktes",
+      "heldWarning": "Kontoer med legal hold er i omfanget; serveren avviser denne slettingen.",
+      "history": "Slettehistorikk",
+      "historyDesc": "De nyeste batchslettene. Bare de siste 30 beholdes.",
+      "noneDeletable": "Du har ikke tillatelse til å slette noen av de samsvarende meldingene.",
+      "progress": "{{processed}} av {{total}} slettet",
+      "scopeLabel": "Alle samsvarende meldinger",
+      "selectAllMatching": "Velg alle {{formatted}} samsvarende resultater",
+      "selectAllMatchingShort": "Velg alle {{formatted}}",
+      "skippedNoPermission": "{{formatted}} samsvarende meldinger ligger i kontoer du ikke kan slette; de blir stående urørt.",
+      "skippedTitle": "Noen meldinger hoppes over",
+      "startedDesc": "Jobben kjører i bakgrunnen. Du kan lukke denne siden; fremdriften forblir synlig i slettehistorikken.",
+      "startedTitle": "Batchsletting startet",
+      "status": {
+        "cancelled": "Avbrutt",
+        "cancelling": "Avbryter",
+        "failed": "Mislyktes",
+        "interrupted": "Avbrutt av omstart",
+        "running": "Kjører",
+        "success": "Fullført"
+      },
+      "submit": "Slett i bakgrunnen"
+    },
     "bcc": "Blindkopi (BCC)",
     "before": "Før:",
     "bulkActions": {

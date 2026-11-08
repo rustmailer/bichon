@@ -1491,6 +1491,10 @@
     "title": "匯出已儲存搜尋",
     "titleAttachments": "匯出附件"
   },
+  "history": {
+    "deletionsEmpty": "尚無刪除工作。",
+    "filter": "篩選條件"
+  },
   "import": {
     "account": "帳戶",
     "chooseFiles": "2. 選擇檔案",
@@ -2297,6 +2301,35 @@
     "any_recipient": "任意收件人",
     "attachmentName": "附件名稱",
     "attachmentsSize": "附件與大小",
+    "batchDelete": {
+      "cancel": "取消工作",
+      "cancelRequested": "已要求取消，工作將在目前批次後停止。",
+      "clearScope": "清除選取",
+      "confirmDetail": "目前搜尋符合的所有郵件將被永久刪除。工作在背景執行，且無法復原。",
+      "empty": "尚無批次刪除記錄。",
+      "failedCount": "{{count}} 筆失敗",
+      "heldWarning": "範圍內有處於 Legal Hold 的帳戶，伺服器將拒絕此刪除。",
+      "history": "刪除歷程",
+      "historyDesc": "最近的批次刪除工作，僅保留最近 30 筆。",
+      "noneDeletable": "你對任何符合的郵件都沒有刪除權限。",
+      "progress": "已刪除 {{processed}} / {{total}}",
+      "scopeLabel": "所有符合的郵件",
+      "selectAllMatching": "選取全部 {{formatted}} 筆符合結果",
+      "selectAllMatchingShort": "全選 {{formatted}} 封",
+      "skippedNoPermission": "{{formatted}} 封符合的郵件位於你沒有刪除權限的帳戶，將被保留。",
+      "skippedTitle": "部分郵件將被略過",
+      "startedDesc": "工作在背景執行。你可以關閉此頁面；進度仍可在刪除歷程中查看。",
+      "startedTitle": "批次刪除已開始",
+      "status": {
+        "cancelled": "已取消",
+        "cancelling": "正在取消",
+        "failed": "失敗",
+        "interrupted": "因重新啟動中斷",
+        "running": "執行中",
+        "success": "已完成"
+      },
+      "submit": "背景刪除"
+    },
     "bcc": "密件副本 (BCC)",
     "before": "前於：",
     "bulkActions": {

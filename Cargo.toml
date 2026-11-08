@@ -76,6 +76,8 @@ time = { version = "0.3", features = [
 ] }
 rust-embed = "8.12"
 murmur3 = "0.5.2"
+roaring = "0.10"
+crc32fast = "1.5"
 urlencoding = "2.1.3"
 dashmap = "6.2.1"
 gethostname = "1.1.0"
