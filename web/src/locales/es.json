@@ -1202,8 +1202,8 @@
     "notFound": "No encontrado",
     "ok": "Aceptar",
     "op_failed": "Operación fallida",
-    "project_description": "Bichon es un proyecto de código abierto.",
-    "project_description_pro": "Bichon Pro es una plataforma autoalojada para archivar correos electrónicos.",
+    "project_description": "Un archivador de correo todo en uno escrito en Rust, sin dependencias externas.",
+    "project_description_pro": "Un archivador de correo todo en uno escrito en Rust, sin dependencias externas y con gobernanza para equipos.",
     "remove": "Eliminar",
     "reset": "Restablecer",
     "retry": "Reintentar",
@@ -2673,7 +2673,9 @@
       "recoveryTitle": "Códigos de recuperación",
       "recoveryWarning": "Guarda estos códigos únicos en un lugar seguro. Cada código se puede usar una vez para iniciar sesión si pierdes acceso a tu aplicación autenticadora",
       "ssoNote": "Su organización usa inicio de sesión único (SSO). La 2FA aquí solo aplica al inicio de sesión con contraseña; el SSO está protegido por su proveedor de identidad",
-      "title": "Autenticación de dos factores"
+      "title": "Autenticación de dos factores",
+      "useAuthenticatorCode": "Usar un código de autenticación",
+      "useRecoveryCode": "Usar un código de recuperación en su lugar"
     },
     "name": "Nombre",
     "noProxies": "Sin proxies",

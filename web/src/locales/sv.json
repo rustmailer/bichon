@@ -1202,8 +1202,8 @@
     "notFound": "Hittades inte",
     "ok": "OK",
     "op_failed": "Åtgärden misslyckades",
-    "project_description": "Bichon är ett open-source-projekt.",
-    "project_description_pro": "Bichon Pro är en självhostad plattform för e-postarkivering.",
+    "project_description": "En allt-i-ett-e-postarkivering skriven i Rust, utan externa beroenden.",
+    "project_description_pro": "En allt-i-ett-e-postarkivering skriven i Rust, utan externa beroenden och med teamstyrning.",
     "remove": "Ta bort",
     "reset": "Återställ",
     "retry": "Försök igen",
@@ -2673,7 +2673,9 @@
       "recoveryTitle": "Återställningskoder",
       "recoveryWarning": "Spara dessa engångskoder på en säker plats. Varje kod kan användas en gång för att logga in om du förlorar åtkomst till din autentiseringsapp",
       "ssoNote": "Din organisation använder SSO. 2FA här gäller endast inloggning med lösenord; SSO-sessioner skyddas av din identitetsleverantör",
-      "title": "Tvåfaktorsautentisering"
+      "title": "Tvåfaktorsautentisering",
+      "useAuthenticatorCode": "Använd en autentiseringskod",
+      "useRecoveryCode": "Använd en återställningskod i stället"
     },
     "name": "Namn",
     "noProxies": "Inga proxys",

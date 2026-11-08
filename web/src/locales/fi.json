@@ -1202,8 +1202,8 @@
     "notFound": "Ei löytynyt",
     "ok": "OK",
     "op_failed": "Toiminto epäonnistui",
-    "project_description": "Bichon on avoimen lähdekoodin projekti.",
-    "project_description_pro": "Bichon Pro on itse ylläpidettävä sähköpostien arkistointialusta.",
+    "project_description": "Kaiken kattava Rustilla kirjoitettu sähköpostiarkisto ilman ulkoisia riippuvuuksia.",
+    "project_description_pro": "Kaiken kattava Rustilla kirjoitettu sähköpostiarkisto ilman ulkoisia riippuvuuksia, mukana tiimihallinta.",
     "remove": "Poista",
     "reset": "Nollaa",
     "retry": "Yritä uudelleen",
@@ -2673,7 +2673,9 @@
       "recoveryTitle": "Palautuskoodit",
       "recoveryWarning": "Säilytä nämä kertakoodit turvallisessa paikassa. Jokaista koodia voidaan käyttää kerran kirjautumiseen, jos menetät pääsyn todennussovellukseen",
       "ssoNote": "Organisaatiosi käyttää SSO:ta. 2FA koskee täällä vain salasanakirjautumista; SSO-istunnot ovat identiteettipalveluntarjoajan suojaamia",
-      "title": "Kaksivaiheinen tunnistautuminen"
+      "title": "Kaksivaiheinen tunnistautuminen",
+      "useAuthenticatorCode": "Käytä todennuskoodia",
+      "useRecoveryCode": "Käytä sen sijaan palautuskoodia"
     },
     "name": "Nimi",
     "noProxies": "Ei välityspalvelimia",

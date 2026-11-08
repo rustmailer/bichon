@@ -33,6 +33,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { OtpInput } from '@/components/otp-input'
 import { toast } from '@/hooks/use-toast'
 import { useEdition } from '@/hooks/use-edition'
 import { copyToClipboard } from '@/lib/clipboard'
@@ -60,6 +61,7 @@ export function MfaSettings() {
   const [code, setCode] = useState('')
   const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null)
   const [disableMode, setDisableMode] = useState(false)
+  const [disableWithRecovery, setDisableWithRecovery] = useState(false)
 
   const enrollMutation = useMutation({
     mutationFn: mfaEnroll,
@@ -269,14 +271,11 @@ export function MfaSettings() {
               <Label htmlFor='mfa-confirm-code'>
                 {t('settings.mfa.codeLabel', 'Verification code')}
               </Label>
-              <Input
+              <OtpInput
                 id='mfa-confirm-code'
-                inputMode='numeric'
-                maxLength={6}
                 value={code}
-                onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
-                placeholder={t('settings.mfa.codePlaceholder', '000000')}
-                className='w-48 text-center text-lg tracking-[0.5em]'
+                onChange={setCode}
+                aria-label={t('settings.mfa.codeLabel', 'Verification code')}
               />
             </div>
 
@@ -318,22 +317,47 @@ export function MfaSettings() {
           <CardContent className='space-y-4'>
             {disableMode ? (
               <>
-                <div className='space-y-1'>
+                <div className='space-y-2'>
                   <Label htmlFor='mfa-disable-code'>
                     {t(
                       'settings.mfa.disableCode',
                       'Enter your current code or a recovery code to disable',
                     )}
                   </Label>
-                  <Input
-                    id='mfa-disable-code'
-                    autoComplete='one-time-code'
-                    maxLength={12}
-                    value={code}
-                    onChange={(e) => setCode(e.target.value.replace(/[^0-9A-Za-z]/g, '').toUpperCase())}
-                    placeholder={t('settings.mfa.codePlaceholder', '000000')}
-                    className='w-56'
-                  />
+                  {disableWithRecovery ? (
+                    <Input
+                      id='mfa-disable-code'
+                      autoComplete='one-time-code'
+                      maxLength={12}
+                      value={code}
+                      onChange={(e) =>
+                        setCode(
+                          e.target.value.replace(/[^0-9A-Za-z]/g, '').toUpperCase(),
+                        )
+                      }
+                      placeholder={t('settings.mfa.codePlaceholder', '000000')}
+                      className='w-56 font-mono'
+                    />
+                  ) : (
+                    <OtpInput
+                      id='mfa-disable-code'
+                      value={code}
+                      onChange={setCode}
+                      aria-label={t('settings.mfa.codeLabel', 'Verification code')}
+                    />
+                  )}
+                  <button
+                    type='button'
+                    className='block text-xs text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline'
+                    onClick={() => {
+                      setDisableWithRecovery((value) => !value)
+                      setCode('')
+                    }}
+                  >
+                    {disableWithRecovery
+                      ? t('settings.mfa.useAuthenticatorCode', 'Use an authenticator code')
+                      : t('settings.mfa.useRecoveryCode', 'Use a recovery code instead')}
+                  </button>
                 </div>
                 <div className='flex gap-2'>
                     <Button
@@ -350,6 +374,7 @@ export function MfaSettings() {
                     variant='outline'
                     onClick={() => {
                       setDisableMode(false)
+                      setDisableWithRecovery(false)
                       setCode('')
                     }}
                   >
@@ -367,7 +392,14 @@ export function MfaSettings() {
                   {enrollMutation.isPending && <Loader2 className='mr-2 h-4 w-4 animate-spin' />}
                   {t('settings.mfa.reEnroll', 'Re-enroll')}
                 </Button>
-                <Button variant='destructive' onClick={() => setDisableMode(true)}>
+                <Button
+                  variant='destructive'
+                  onClick={() => {
+                    setDisableMode(true)
+                    setDisableWithRecovery(false)
+                    setCode('')
+                  }}
+                >
                   <ShieldOff size={16} className='mr-2' />
                   {t('settings.mfa.disable', 'Disable two-factor authentication')}
                 </Button>

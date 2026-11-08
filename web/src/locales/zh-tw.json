@@ -1202,8 +1202,8 @@
     "notFound": "未找到",
     "ok": "確定",
     "op_failed": "操作失敗",
-    "project_description": "Bichon 是一個開源項目。",
-    "project_description_pro": "Bichon Pro 是一個自託管的郵件歸檔平台。",
+    "project_description": "一體化 Rust 郵件歸檔工具，無外部依賴。",
+    "project_description_pro": "一體化 Rust 郵件歸檔工具，無外部依賴，支援團隊治理。",
     "remove": "移除",
     "reset": "重置",
     "retry": "重試",
@@ -2673,7 +2673,9 @@
       "recoveryTitle": "復原碼",
       "recoveryWarning": "請妥善保存這些一次性復原碼，每個僅可使用一次",
       "ssoNote": "組織已啟用單一登入，兩步驟驗證僅用於密碼登入",
-      "title": "兩步驟驗證"
+      "title": "兩步驟驗證",
+      "useAuthenticatorCode": "改用驗證器代碼",
+      "useRecoveryCode": "改用復原碼"
     },
     "name": "名稱",
     "noProxies": "無代理設定",

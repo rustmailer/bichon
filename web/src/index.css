@@ -72,3 +72,15 @@
     @apply min-h-svh w-full bg-background text-foreground;
   }
 }
+
+/* Login mascot: a slow idle bob. The pointer-following transform lives on the
+   inner SVG group, so the two compose instead of fighting each other. */
+@keyframes mascot-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}

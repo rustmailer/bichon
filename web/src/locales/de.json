@@ -1202,8 +1202,8 @@
     "notFound": "Nicht gefunden",
     "ok": "OK",
     "op_failed": "Vorgang fehlgeschlagen",
-    "project_description": "Bichon ist ein Open-Source-Projekt.",
-    "project_description_pro": "Bichon Pro ist eine selbst gehostete Plattform zur E-Mail-Archivierung.",
+    "project_description": "Ein All-in-One-E-Mail-Archivierer, geschrieben in Rust, ohne externe Abhängigkeiten.",
+    "project_description_pro": "Ein All-in-One-E-Mail-Archivierer, geschrieben in Rust, ohne externe Abhängigkeiten und mit Team-Governance.",
     "remove": "Entfernen",
     "reset": "Zurücksetzen",
     "retry": "Wiederholen",
@@ -2673,7 +2673,9 @@
       "recoveryTitle": "Wiederherstellungscodes",
       "recoveryWarning": "Bewahren Sie diese Einmalcodes sicher auf. Jeder Code kann einmal verwendet werden, wenn Sie keinen Zugriff auf Ihre Authenticator-App haben",
       "ssoNote": "Ihre Organisation verwendet Single Sign-On. Die 2FA gilt hier nur für die Passwortanmeldung; SSO wird vom Identity Provider abgesichert",
-      "title": "Zwei-Faktor-Authentifizierung"
+      "title": "Zwei-Faktor-Authentifizierung",
+      "useAuthenticatorCode": "Einen Authentifizierungscode verwenden",
+      "useRecoveryCode": "Stattdessen einen Wiederherstellungscode verwenden"
     },
     "name": "Name",
     "noProxies": "Keine Proxys",

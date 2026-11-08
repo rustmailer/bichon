@@ -1202,8 +1202,8 @@
     "notFound": "Nie znaleziono",
     "ok": "OK",
     "op_failed": "Operacja nie powiodła się",
-    "project_description": "Bichon to projekt open-source.",
-    "project_description_pro": "Bichon Pro to samoobsługowa platforma do archiwizacji poczty e-mail.",
+    "project_description": "Wszechstronny archiwizator poczty e-mail napisany w Rust, bez zewnętrznych zależności.",
+    "project_description_pro": "Wszechstronny archiwizator poczty e-mail napisany w Rust, bez zewnętrznych zależności i z zarządzaniem dla zespołów.",
     "remove": "Usuń",
     "reset": "Resetuj",
     "retry": "Ponów",
@@ -2673,7 +2673,9 @@
       "recoveryTitle": "Kody odzyskiwania",
       "recoveryWarning": "Zapisz te kody jednorazowe w bezpiecznym miejscu. Każdy kod może zostać użyty raz do logowania, jeśli stracisz dostęp do aplikacji uwierzytelniającej",
       "ssoNote": "Twoja organizacja używa SSO. 2FA dotyczy tutaj tylko logowania hasłem; sesje SSO są zabezpieczone przez dostawcę tożsamości",
-      "title": "Uwierzytelnianie dwuskładnikowe"
+      "title": "Uwierzytelnianie dwuskładnikowe",
+      "useAuthenticatorCode": "Użyj kodu uwierzytelniającego",
+      "useRecoveryCode": "Użyj zamiast tego kodu odzyskiwania"
     },
     "name": "Nazwa",
     "noProxies": "Brak Proxy",

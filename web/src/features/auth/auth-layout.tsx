@@ -22,14 +22,17 @@ import { useBranding } from '@/hooks/use-branding'
 import { useEdition } from '@/hooks/use-edition'
 import { useTranslation } from 'react-i18next'
 import { AuthBackground } from './auth-background'
+import { BichonMascot } from './bichon-mascot'
 
 type AuthLayoutProps = {
   children: React.ReactNode
 }
 
-/// Copyright holder shown in the login footer. Always the product vendor,
-/// never the customer's branded company name.
-const COPYRIGHT_HOLDER = 'rustmailer.com'
+/// Copyright holder and official site shown in the login footer. Always the
+/// product vendor, never the customer's branded company name.
+const COPYRIGHT_HOLDER = 'bichon.rustmailer.com'
+const HOMEPAGE = 'https://bichon.rustmailer.com'
+const COPYRIGHT_START_YEAR = 2025
 
 export function AuthLayout({ children }: AuthLayoutProps) {
   const { companyName, tagline, logoUrl } = useBranding()
@@ -37,6 +40,11 @@ export function AuthLayout({ children }: AuthLayoutProps) {
   const { t } = useTranslation()
   const logo = logoUrl ? resolveApiUrl(logoUrl) : Logo
   const displayName = companyName || (isPro ? 'Bichon Pro' : 'Bichon')
+  const currentYear = new Date().getFullYear()
+  const copyrightYears =
+    currentYear > COPYRIGHT_START_YEAR
+      ? `${COPYRIGHT_START_YEAR}-${currentYear}`
+      : `${COPYRIGHT_START_YEAR}`
   const description =
     tagline ||
     (isPro
@@ -79,21 +87,35 @@ export function AuthLayout({ children }: AuthLayoutProps) {
         <AuthBackground />
 
         <div className='relative flex flex-col items-center gap-5 text-center'>
-          <img
-            src={logo}
-            alt={displayName}
-            className='max-h-40 max-w-40 object-contain'
-          />
+          {/* White-label installs keep their own logo; the default branding
+              gets the interactive mascot instead of the static mark. */}
+          {logoUrl ? (
+            <img
+              src={logo}
+              alt={displayName}
+              className='max-h-40 max-w-40 object-contain'
+            />
+          ) : (
+            <BichonMascot className='h-48 w-48' />
+          )}
           <span className='text-3xl font-semibold tracking-tight'>
             {displayName}
           </span>
-          <p className='max-w-md text-lg leading-relaxed text-muted-foreground'>
+          <p className='max-w-md text-balance text-lg leading-relaxed text-muted-foreground'>
             {description}
           </p>
         </div>
 
         <p className='absolute bottom-10 text-sm text-muted-foreground'>
-          © {new Date().getFullYear()} {COPYRIGHT_HOLDER}
+          © {copyrightYears}{' '}
+          <a
+            href={HOMEPAGE}
+            target='_blank'
+            rel='noreferrer'
+            className='underline-offset-4 transition-colors hover:text-foreground hover:underline'
+          >
+            {COPYRIGHT_HOLDER}
+          </a>
         </p>
       </div>
     </div>

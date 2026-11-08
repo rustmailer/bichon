@@ -1202,8 +1202,8 @@
     "notFound": "찾을 수 없음",
     "ok": "확인",
     "op_failed": "작업 실패",
-    "project_description": "Bichon은 오픈 소스 프로젝트입니다.",
-    "project_description_pro": "Bichon Pro는 셀프 호스팅 방식의 이메일 아카이빙 플랫폼입니다.",
+    "project_description": "Rust로 작성된 올인원 이메일 아카이버로, 외부 의존성이 없습니다.",
+    "project_description_pro": "Rust로 작성된 올인원 이메일 아카이버로, 외부 의존성이 없으며 팀 거버넌스를 제공합니다.",
     "remove": "제거",
     "reset": "초기화",
     "retry": "재시도",
@@ -2673,7 +2673,9 @@
       "recoveryTitle": "복구 코드",
       "recoveryWarning": "이 일회용 코드를 안전한 곳에 보관하세요. 인증 앱에 접근할 수 없을 때 각 코드를 한 번씩 사용할 수 있습니다",
       "ssoNote": "조직에서 SSO를 사용합니다. MFA는 비밀번호 로그인에만 적용되며 SSO는 ID 공급자가 보호합니다",
-      "title": "2단계 인증"
+      "title": "2단계 인증",
+      "useAuthenticatorCode": "인증 코드 사용",
+      "useRecoveryCode": "대신 복구 코드 사용"
     },
     "name": "이름",
     "noProxies": "프록시 없음",

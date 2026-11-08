@@ -1202,8 +1202,8 @@
     "notFound": "見つかりません",
     "ok": "OK",
     "op_failed": "操作に失敗しました",
-    "project_description": "Bichonはオープンソースプロジェクトです。",
-    "project_description_pro": "Bichon Proは、セルフホスト型のメールアーカイブプラットフォームです。",
+    "project_description": "Rust で書かれたオールインワンのメールアーカイバ。外部依存なし。",
+    "project_description_pro": "Rust で書かれたオールインワンのメールアーカイバ。外部依存なし、チーム向けガバナンス搭載。",
     "remove": "削除",
     "reset": "リセット",
     "retry": "再試行",
@@ -2673,7 +2673,9 @@
       "recoveryTitle": "リカバリーコード",
       "recoveryWarning": "これらのワンタイムコードは安全な場所に保存してください。認証アプリが使えなくなった場合に各コードを一度だけ使用できます",
       "ssoNote": "組織はSSOを使用しています。MFAはパスワードログインのみに適用され、SSOはIDプロバイダーで保護されます",
-      "title": "二段階認証"
+      "title": "二段階認証",
+      "useAuthenticatorCode": "認証コードを使用",
+      "useRecoveryCode": "代わりにリカバリーコードを使用"
     },
     "name": "名前",
     "noProxies": "プロキシなし",

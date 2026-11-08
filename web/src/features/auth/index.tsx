@@ -32,16 +32,16 @@ export default function SignIn() {
 
   return (
     <AuthLayout>
-      <Card>
-        <CardHeader>
-          <CardTitle className='text-xl tracking-tight'>
+      <Card className='overflow-hidden rounded-2xl border-border/60 shadow-xl shadow-black/5 dark:shadow-black/20'>
+        <CardHeader className='space-y-2 p-8 pb-6'>
+          <CardTitle className='text-2xl tracking-tight'>
             {t('auth.signInTitle', 'Sign in to your account')}
           </CardTitle>
-          <CardDescription>
+          <CardDescription className='leading-relaxed'>
             {t('auth.signInDescription', 'Enter your credentials to continue.')}
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className='p-8 pt-0'>
           <UserAuthForm />
         </CardContent>
       </Card>

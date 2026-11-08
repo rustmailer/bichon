@@ -1202,8 +1202,8 @@
     "notFound": "Nenalezeno",
     "ok": "OK",
     "op_failed": "Operace se nezdařila",
-    "project_description": "Bichon je platforma pro archivaci e-mailů provozovaná na vlastním serveru.",
-    "project_description_pro": "Bichon Pro je platforma pro archivaci e-mailů provozovaná na vlastním serveru.",
+    "project_description": "Komplexní e-mailový archivátor napsaný v Rustu, bez externích závislostí.",
+    "project_description_pro": "Komplexní e-mailový archivátor napsaný v Rustu, bez externích závislostí a se správou pro týmy.",
     "remove": "Odebrat",
     "reset": "Obnovit",
     "retry": "Zkusit znovu",
@@ -2673,7 +2673,9 @@
       "recoveryTitle": "Záchranné kódy",
       "recoveryWarning": "Uložte si tyto jednorázové kódy na bezpečné místo. Každý kód lze jednou použít k přihlášení, pokud ztratíte přístup k ověřovací aplikaci",
       "ssoNote": "Vaše organizace používá jednotné přihlášení (SSO). Dvoufázové ověření zde platí pouze pro přihlášení heslem; relace SSO zabezpečuje váš poskytovatel identity",
-      "title": "Dvoufázové ověření"
+      "title": "Dvoufázové ověření",
+      "useAuthenticatorCode": "Použít ověřovací kód",
+      "useRecoveryCode": "Použít místo toho záložní kód"
     },
     "name": "Název",
     "noProxies": "Žádné proxy",

@@ -17,7 +17,13 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-import { HTMLAttributes, useState } from 'react'
+import {
+  HTMLAttributes,
+  forwardRef,
+  useState,
+  type ComponentProps,
+  type ReactNode,
+} from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { cn, toSearchParams } from '@/lib/utils'
@@ -32,6 +38,7 @@ import {
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { PasswordInput } from '@/components/password-input'
+import { OtpInput } from '@/components/otp-input'
 import { useMutation } from '@tanstack/react-query'
 import { setToken } from '@/stores/authStore'
 import { toast } from '@/hooks/use-toast'
@@ -41,7 +48,7 @@ import { useLocation, useNavigate } from '@tanstack/react-router'
 import { Button } from '@/components/button'
 import { useTranslation } from 'react-i18next'
 import i18n from '@/i18n'
-import { KeyRound, Loader2, LogIn, Shield } from 'lucide-react'
+import { KeyRound, Loader2, Lock, LogIn, Shield, User } from 'lucide-react'
 import { ldapLogin, login, mfaVerify, type LoginResult } from '@/api/users/api'
 import { resolveApiUrl } from '@/api/branding/api'
 import { useTheme } from '@/context/theme-context'
@@ -49,6 +56,41 @@ import { isTheme } from '@/lib/theme'
 import { useEdition } from '@/hooks/use-edition'
 
 type UserAuthFormProps = HTMLAttributes<HTMLDivElement>
+
+/** Input with a leading icon; the ref goes to the input so FormControl can
+ *  still wire the label and the field. */
+const IconField = forwardRef<
+  HTMLInputElement,
+  ComponentProps<typeof Input> & { icon: ReactNode }
+>(({ icon, className, ...props }, ref) => (
+  <div className='relative'>
+    <span className='pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground'>
+      {icon}
+    </span>
+    <Input ref={ref} className={cn('pl-9', className)} {...props} />
+  </div>
+))
+IconField.displayName = 'IconField'
+
+/** The password input already owns a ref for react-hook-form; the lock icon
+ *  sits above its wrapper and the inner input gets the left padding. */
+const PasswordField = forwardRef<
+  HTMLInputElement,
+  ComponentProps<typeof PasswordInput>
+>(({ className, ...props }, ref) => (
+  <div className='relative'>
+    <Lock
+      size={16}
+      className='pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground'
+    />
+    <PasswordInput
+      ref={ref}
+      className={cn('[&_input]:pl-9', className)}
+      {...props}
+    />
+  </div>
+))
+PasswordField.displayName = 'PasswordField'
 
 export function UserAuthForm({ className, ...props }: UserAuthFormProps) {
   const [isLoading, setIsLoading] = useState(false)
@@ -114,15 +156,8 @@ export function UserAuthForm({ className, ...props }: UserAuthFormProps) {
     }
   }
 
-  async function onSubmit(data: LoginFormValues) {
-    if (mfaChallenge && (!data.code || data.code.trim().length !== 6)) {
-      toast({
-        variant: "destructive",
-        title: t('auth.mfaCodeRequired', 'Please enter the 6-digit code from your authenticator app.'),
-      })
-      return
-    }
-
+  function runSubmit(data: LoginFormValues) {
+    if (isLoading) return
     setIsLoading(true)
 
     mutation.mutate(data, {
@@ -162,11 +197,30 @@ export function UserAuthForm({ className, ...props }: UserAuthFormProps) {
     });
   }
 
+  async function onSubmit(data: LoginFormValues) {
+    if (mfaChallenge && (!data.code || data.code.trim().length !== 6)) {
+      toast({
+        variant: "destructive",
+        title: t('auth.mfaCodeRequired', 'Please enter the 6-digit code from your authenticator app.'),
+      })
+      return
+    }
+
+    runSubmit(data)
+  }
+
+  // The sixth digit verifies immediately; the button stays as the fallback for
+  // editing an already-complete code and submitting it again.
+  function submitCode(code: string) {
+    if (code.length !== 6 || isLoading) return
+    runSubmit({ ...form.getValues(), code })
+  }
+
   return (
     <div className={cn('grid gap-6', className)} {...props}>
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)}>
-          <div className='grid gap-2'>
+          <div className='grid gap-5'>
             {mfaChallenge ? (
               <>
                 <p className='text-sm text-muted-foreground'>
@@ -176,16 +230,18 @@ export function UserAuthForm({ className, ...props }: UserAuthFormProps) {
                   control={form.control}
                   name='code'
                   render={({ field }) => (
-                    <FormItem className='space-y-1'>
+                    <FormItem className='space-y-2'>
                       <FormLabel>{t('auth.mfaCodePlaceholder', 'Authentication code')}</FormLabel>
                       <FormControl>
-                        <Input
-                          inputMode='numeric'
-                          autoComplete='off'
-                          maxLength={6}
-                          placeholder='000000'
-                          className='text-center text-lg tracking-[0.5em]'
-                          {...field}
+                        <OtpInput
+                          value={field.value ?? ''}
+                          onChange={(value) => {
+                            field.onChange(value)
+                            if (value.length === 6) submitCode(value)
+                          }}
+                          autoFocus
+                          className='justify-center py-1'
+                          aria-label={t('auth.mfaCodePlaceholder', 'Authentication code')}
                         />
                       </FormControl>
                       <FormMessage />
@@ -199,10 +255,15 @@ export function UserAuthForm({ className, ...props }: UserAuthFormProps) {
                   control={form.control}
                   name='username'
                   render={({ field }) => (
-                    <FormItem className='space-y-1'>
+                    <FormItem className='space-y-2'>
                       <FormLabel>{t('auth.username')}</FormLabel>
                       <FormControl>
-                        <Input autoComplete='username' {...field} />
+                        <IconField
+                          icon={<User size={16} />}
+                          autoFocus
+                          autoComplete='username'
+                          {...field}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -212,18 +273,20 @@ export function UserAuthForm({ className, ...props }: UserAuthFormProps) {
                   control={form.control}
                   name='password'
                   render={({ field }) => (
-                    <FormItem className='space-y-1'>
-                      <div className='flex items-center justify-between'>
-                        <FormLabel>{t('auth.password')}</FormLabel>
-                      </div>
+                    <FormItem className='space-y-2'>
+                      <FormLabel>{t('auth.password')}</FormLabel>
                       <FormControl>
-                        <PasswordInput autoComplete='current-password' placeholder='********' {...field} />
+                        <PasswordField
+                          autoComplete='current-password'
+                          placeholder='********'
+                          {...field}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-                <Button className='mt-2 w-full' disabled={isLoading}>
+                <Button size='lg' className='mt-1 w-full' disabled={isLoading}>
                   {isLoading ? <Loader2 className='animate-spin' /> : <LogIn size={16} className='mr-2' />}
                   {t('auth.login')}
                 </Button>
@@ -231,7 +294,8 @@ export function UserAuthForm({ className, ...props }: UserAuthFormProps) {
                 {isPro && (
                   <Button
                     variant='outline'
-                    className='mt-2 w-full'
+                    size='lg'
+                    className='w-full'
                     type='button'
                     onClick={() => {
                       if (ssoEnabled) {
@@ -255,7 +319,7 @@ export function UserAuthForm({ className, ...props }: UserAuthFormProps) {
                 {ldapEnabled && (
                   <Button
                     variant='link'
-                    className='mt-2 w-full'
+                    className='w-full'
                     type='button'
                     onClick={() => setLoginMode((m) => (m === 'ldap' ? 'local' : 'ldap'))}
                   >
@@ -268,7 +332,7 @@ export function UserAuthForm({ className, ...props }: UserAuthFormProps) {
             )}
 
             {mfaChallenge && (
-              <Button className='mt-2 w-full' disabled={isLoading}>
+              <Button size='lg' className='mt-1 w-full' disabled={isLoading}>
                 {isLoading ? <Loader2 className='animate-spin' /> : <KeyRound size={16} className='mr-2' />}
                 {t('auth.mfaVerify', 'Verify')}
               </Button>

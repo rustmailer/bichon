@@ -1202,8 +1202,8 @@
     "notFound": "Introuvable",
     "ok": "OK",
     "op_failed": "L'opération a échoué",
-    "project_description": "Bichon est un projet open-source.",
-    "project_description_pro": "Bichon Pro est une plateforme auto-hébergée d’archivage des e-mails.",
+    "project_description": "Un archiveur d’e-mails tout-en-un écrit en Rust, sans dépendances externes.",
+    "project_description_pro": "Un archiveur d’e-mails tout-en-un écrit en Rust, sans dépendances externes et avec une gouvernance d’équipe.",
     "remove": "Retirer",
     "reset": "Réinitialiser",
     "retry": "Réessayer",
@@ -2673,7 +2673,9 @@
       "recoveryTitle": "Codes de récupération",
       "recoveryWarning": "Conservez ces codes à usage unique dans un endroit sûr. Chaque code peut être utilisé une fois pour vous connecter si vous perdez l'accès à votre application d'authentification",
       "ssoNote": "Votre organisation utilise l'authentification unique (SSO). La 2FA ici s'applique uniquement à la connexion par mot de passe",
-      "title": "Authentification à deux facteurs"
+      "title": "Authentification à deux facteurs",
+      "useAuthenticatorCode": "Utiliser un code d’authentification",
+      "useRecoveryCode": "Utiliser plutôt un code de récupération"
     },
     "name": "Nom",
     "noProxies": "Aucun Proxy",

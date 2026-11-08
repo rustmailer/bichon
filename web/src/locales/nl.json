@@ -1202,8 +1202,8 @@
     "notFound": "Niet gevonden",
     "ok": "OK",
     "op_failed": "Bewerking mislukt",
-    "project_description": "Bichon is een open-source project.",
-    "project_description_pro": "Bichon Pro is een zelfgehost platform voor e-mailarchivering.",
+    "project_description": "Een alles-in-één e-mailarchivaris geschreven in Rust, zonder externe afhankelijkheden.",
+    "project_description_pro": "Een alles-in-één e-mailarchivaris geschreven in Rust, zonder externe afhankelijkheden en met teamgovernance.",
     "remove": "Verwijderen",
     "reset": "Resetten",
     "retry": "Opnieuw",
@@ -2673,7 +2673,9 @@
       "recoveryTitle": "Herstelcodes",
       "recoveryWarning": "Bewaar deze eenmalige codes op een veilige plek. Elke code kan een keer worden gebruikt om in te loggen als u geen toegang meer heeft tot uw authenticator-app",
       "ssoNote": "Uw organisatie gebruikt SSO. 2FA hier is alleen van toepassing op wachtwoordlogin; SSO-sessies worden beveiligd door uw identiteitsprovider",
-      "title": "Tweefactorauthenticatie"
+      "title": "Tweefactorauthenticatie",
+      "useAuthenticatorCode": "Gebruik een authenticatiecode",
+      "useRecoveryCode": "Gebruik in plaats daarvan een herstelcode"
     },
     "name": "Naam",
     "noProxies": "Geen Proxy's",
