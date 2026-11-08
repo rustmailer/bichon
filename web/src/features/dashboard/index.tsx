@@ -26,6 +26,7 @@ import LongText from '@/components/long-text';
 import { getToken } from '@/stores/authStore';
 import { useNavigate } from '@tanstack/react-router';
 import useMinimalAccountList from '@/hooks/use-minimal-account-list';
+import { useEdition } from '@/hooks/use-edition';
 import {
   Tooltip as TooltipUI,
   TooltipContent,
@@ -105,6 +106,10 @@ export default function MailArchiveDashboard() {
 
 
   const stats1 = stats ?? INITIAL_DASHBOARD_STATS;
+  const { isPro } = useEdition();
+  const brandName = isPro ? 'Bichon Pro' : 'Bichon';
+  const currentYear = new Date().getFullYear();
+  const copyrightYears = currentYear > 2025 ? `2025-${currentYear}` : '2025';
 
 
   // Filesystem usage cannot be attributed per account. A restricted caller
@@ -625,14 +630,14 @@ export default function MailArchiveDashboard() {
 
       <div className="mt-auto p-6 text-center text-xs text-muted-foreground border-t">
         <p>
-          © 2025-2026{" "}
+          © {copyrightYears}{" "}
           <a
-            href="https://github.com/rustmailer/bichon"
+            href="https://bichon.rustmailer.com"
             target="_blank"
             rel="noopener noreferrer"
             className="hover:underline font-medium"
           >
-            Bichon Email Archiving Project
+            {brandName}
           </a>
           {stats1.system_version && (
             <>

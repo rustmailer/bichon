@@ -22,6 +22,7 @@ import { ProfileDropdown } from "../profile-dropdown";
 import { Header } from "./header";
 import { NotificationPopover } from "./notification";
 import { GithubLinkButton } from "./github";
+import { DocsLinkButton } from "./docs";
 import { LanguageSwitch } from "../language-switch";
 
 export const FixedHeader = () => {
@@ -30,6 +31,7 @@ export const FixedHeader = () => {
             <div className='ml-auto flex items-center space-x-4'>
                 <NotificationPopover />
                 <GithubLinkButton />
+                <DocsLinkButton />
                 <LanguageSwitch />
                 <ThemeSwitch />
                 <ProfileDropdown />
