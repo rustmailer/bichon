@@ -49,15 +49,15 @@ use bichon_core::{
     error::{code::ErrorCode, BichonResult},
     ext::text_extractor,
     message::content::AttachmentInfo,
-    migrate::{is_tantivy_index_dir, read_storage_version},
+    migrate::read_storage_version,
     raise_error,
     settings::dir::{available_space, resolve_dirs, ResolvedDirs},
     store::{
         envelope::Envelope,
         tantivy::{
             format::{
-                check_index_format, write_index_format_version, IndexFormatStatus,
-                CURRENT_INDEX_FORMAT_VERSION,
+                check_index_format, is_index_dir, write_index_format_version,
+                IndexFormatStatus, CURRENT_INDEX_FORMAT_VERSION,
             },
             model::{AttachmentModel, EnvelopeWithAttachments},
             schema::SchemaTools,
@@ -564,9 +564,13 @@ fn execute(
     let start = std::time::Instant::now();
     let writer = resolve_writer_budget(args)?;
 
-    // ── Pre-check 1: are both index directories tantivy indexes? ──
-    let email_ok = is_tantivy_index_dir(&dirs.envelope_dir).unwrap_or(false);
-    let attach_ok = is_tantivy_index_dir(&dirs.attachment_dir).unwrap_or(false);
+    // ── Pre-check 1: are both index directories tantivy indexes? A
+    // zero-message index is only `meta.json` (no segment files), so the check
+    // must open the directory rather than sniff segments — otherwise a legacy
+    // empty index reports "No index found" and the rebuild that should fix it
+    // never runs (issue #400). ──
+    let email_ok = is_index_dir(&dirs.envelope_dir);
+    let attach_ok = is_index_dir(&dirs.attachment_dir);
     if !email_ok && !attach_ok {
         println!(
             "{} No index found under {} — nothing to reindex.",
@@ -2805,6 +2809,102 @@ mod tests {
         // Run again: already current, exits 0, and leaves no temp build dir
         assert_eq!(execute(&root, &dirs, &args, false).unwrap(), 0);
         assert!(!sibling(&dirs.index_root, NEW_SUFFIX).exists());
+    }
+
+    /// Regression for issue #400: a v2.2 install that never archived a message
+    /// leaves nothing but `meta.json` in each index directory. The segment
+    /// sniff reported "No index found" so the rebuild never ran, while the
+    /// startup gate (same sniff) also let the legacy schema through — every
+    /// sync then died on `FieldNotFound("imap_uid")`. Both checks must see the
+    /// directory, and the rebuild must turn it into a current (empty) index.
+    #[test]
+    fn zero_message_legacy_index_is_seen_and_rebuilt() {
+        let root = temp_root("empty-legacy");
+        let dirs = resolve_dirs(&root, None, None);
+        write_storage_version(&root, 2).unwrap();
+        std::fs::create_dir_all(&dirs.blobs_dir).unwrap();
+        std::fs::create_dir_all(&dirs.envelope_dir).unwrap();
+        std::fs::create_dir_all(&dirs.attachment_dir).unwrap();
+        Index::create_in_dir(&dirs.envelope_dir, old_email_schema()).unwrap();
+        Index::create_in_dir(&dirs.attachment_dir, old_attachment_schema()).unwrap();
+
+        let args = ReindexArgs::default();
+        assert_eq!(execute(&root, &dirs, &args, false).unwrap(), 0);
+
+        assert_eq!(
+            check_index_format(&dirs.envelope_dir),
+            IndexFormatStatus::Current,
+            "an empty legacy index must be rebuilt to the current format"
+        );
+        assert_eq!(
+            check_index_format(&dirs.attachment_dir),
+            IndexFormatStatus::Current
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// The counterpart of the #400 regression: a zero-message index built by
+    /// the current binary whose marker write was lost (crash right after
+    /// `Index::create_in_dir`) already has the current schema. It must be left
+    /// alone — the server stamps it on startup — instead of triggering a full
+    /// rebuild. The attachment index is the important half here: its schema has
+    /// no generation-3 fields, so a shared "current" predicate that checks them
+    /// would rebuild a perfectly good index.
+    #[test]
+    fn unmarked_current_empty_indexes_are_left_alone() {
+        let root = temp_root("empty-current");
+        let dirs = resolve_dirs(&root, None, None);
+        write_storage_version(&root, 2).unwrap();
+        std::fs::create_dir_all(&dirs.blobs_dir).unwrap();
+        std::fs::create_dir_all(&dirs.envelope_dir).unwrap();
+        std::fs::create_dir_all(&dirs.attachment_dir).unwrap();
+        Index::create_in_dir(&dirs.envelope_dir, SchemaTools::email_schema()).unwrap();
+        Index::create_in_dir(&dirs.attachment_dir, SchemaTools::attachment_schema()).unwrap();
+
+        let args = ReindexArgs::default();
+        assert_eq!(execute(&root, &dirs, &args, false).unwrap(), 0);
+
+        assert!(
+            backups_under(&dirs.index_root).is_empty(),
+            "a current empty index must not be rebuilt"
+        );
+        assert_eq!(
+            check_index_format(&dirs.envelope_dir),
+            IndexFormatStatus::Current
+        );
+        assert_eq!(
+            check_index_format(&dirs.attachment_dir),
+            IndexFormatStatus::Current
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A 2.2 install that never archived a message can also have no attachment
+    /// index at all. Only the email index must be rebuilt; the attachment
+    /// directory is created fresh by the server on the next start.
+    #[test]
+    fn empty_legacy_email_index_without_an_attachment_index_is_rebuilt() {
+        let root = temp_root("empty-legacy-email-only");
+        let dirs = resolve_dirs(&root, None, None);
+        write_storage_version(&root, 2).unwrap();
+        std::fs::create_dir_all(&dirs.blobs_dir).unwrap();
+        std::fs::create_dir_all(&dirs.envelope_dir).unwrap();
+        Index::create_in_dir(&dirs.envelope_dir, old_email_schema()).unwrap();
+
+        let args = ReindexArgs::default();
+        assert_eq!(execute(&root, &dirs, &args, false).unwrap(), 0);
+
+        assert_eq!(
+            check_index_format(&dirs.envelope_dir),
+            IndexFormatStatus::Current,
+            "the empty legacy email index must be rebuilt"
+        );
+        assert_eq!(
+            check_index_format(&dirs.attachment_dir),
+            IndexFormatStatus::Fresh,
+            "there was no attachment index, so the server creates one fresh"
+        );
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     /// A deployment can put the index tree outside the data root

@@ -23,7 +23,11 @@
 //! index directory carries an `INDEX_FORMAT` file holding a schema-generation
 //! number:
 //! - no marker and the directory is a tantivy index → legacy format (1),
-//!   a reindex is required
+//!   a reindex is required — unless the schema already proves the current
+//!   generation (the marker write was lost right after creation), in which
+//!   case the startup path re-stamps it instead. A zero-message index holds
+//!   only `meta.json` / `.managed.json`, so "is a tantivy index" includes
+//!   opening it, not just sniffing segments
 //! - marker >= [`CURRENT_INDEX_FORMAT_VERSION`] → usable
 //! - directory missing / empty → fresh install
 //!
@@ -35,8 +39,11 @@
 
 use std::path::{Path, PathBuf};
 
+use tantivy::schema::Schema;
+use tantivy::Index;
+
 use crate::migrate::is_tantivy_index_dir;
-use crate::store::tantivy::fields::{F_CLEANUP_MOVED, F_IMAP_UID};
+use crate::store::tantivy::fields::{F_FROM_NAME, F_WIRE_FROM};
 
 /// Current index schema generation.
 ///
@@ -64,7 +71,9 @@ const INDEX_FORMAT_FILE: &str = "INDEX_FORMAT";
 pub enum IndexFormatStatus {
     /// Directory missing or empty: fresh install, an index can be built directly.
     Fresh,
-    /// Marker == current version.
+    /// Marker == current version, or the schema already proves the current
+    /// generation (a marker lost right after creation; the startup path
+    /// re-stamps it).
     Current,
     /// Directory is a tantivy index with no marker (or a stale one): reindex required.
     NeedsUpgrade,
@@ -84,6 +93,32 @@ pub fn read_index_format_version(dir: &Path) -> Option<u32> {
     content.trim().parse().ok()
 }
 
+/// Whether an on-disk schema proves the current index format: it carries both
+/// fields generation 4 introduced.
+///
+/// Shared by the marker heal and the format check, so the two can never
+/// disagree about what "current" means. The predicate has to hold for **both**
+/// index schemas: `from_name` / `wire_from` are the newest generation's fields
+/// and the email and attachment schemas each carry them, while every older
+/// generation carries neither. The generation-3 fields (`imap_uid`,
+/// `cleanup_moved`) exist only in the email schema — requiring them here would
+/// make every attachment index look stale.
+fn schema_is_current(schema: &Schema) -> bool {
+    schema.get_field(F_FROM_NAME).is_ok() && schema.get_field(F_WIRE_FROM).is_ok()
+}
+
+/// Whether `dir` is a tantivy index directory at all — including one with no
+/// segment files yet.
+///
+/// `is_tantivy_index_dir` (migrate) sniffs segment files, so it cannot see a
+/// zero-message index, which holds only `meta.json` / `.managed.json`; opening
+/// the index can. The startup gate and the reindex pre-check must agree on
+/// this, or a legacy empty index is waved through the gate and then invisible
+/// to the rebuild that is supposed to fix it (issue #400).
+pub fn is_index_dir(dir: &Path) -> bool {
+    is_tantivy_index_dir(&PathBuf::from(dir)).unwrap_or(false) || Index::open_in_dir(dir).is_ok()
+}
+
 /// Self-heal an index created by this binary whose marker write was lost — e.g.
 /// a crash between `Index::create_in_dir` and [`write_index_format_version`].
 ///
@@ -93,27 +128,19 @@ pub fn read_index_format_version(dir: &Path) -> Option<u32> {
 /// reindex. Stamping it here fixes that.
 ///
 /// The marker is written **only** when the on-disk schema already proves the
-/// current format (it carries the `imap_uid` field). Older generations never
-/// have that field — note a v2 index *does* carry the trigram siblings, so the
-/// discriminator has to be the newest field, not `subject_tri` — so they are
-/// never stamped and still go through the reindex gate. Returns `true` when a
-/// marker was written.
+/// current format (see [`schema_is_current`]). Older generations never prove
+/// it — note a v2 index *does* carry the trigram siblings and a v3 index
+/// carries `imap_uid`, so the discriminator has to be the newest generation's
+/// fields — so they are never stamped and still go through the reindex gate.
+/// Returns `true` when a marker was written.
 pub fn heal_index_format_marker(dir: &Path) -> bool {
     if read_index_format_version(dir).is_some() {
         return false;
     }
-    let Ok(index) = tantivy::Index::open_in_dir(dir) else {
+    let Ok(index) = Index::open_in_dir(dir) else {
         return false;
     };
-    // Check for a field the *current* generation introduced, not an older one:
-    // a schema-3 index also has `imap_uid`, so testing only that would stamp a
-    // stale index as current and then fail at query time. `from_name` is the
-    // newest discriminator (generation 4).
-    let schema = index.schema();
-    if schema.get_field(F_IMAP_UID).is_err()
-        || schema.get_field(F_CLEANUP_MOVED).is_err()
-        || schema.get_field("from_name").is_err()
-    {
+    if !schema_is_current(&index.schema()) {
         return false;
     }
     write_index_format_version(dir).is_ok()
@@ -139,6 +166,17 @@ pub fn check_index_format(dir: &Path) -> IndexFormatStatus {
         None => {
             if is_tantivy_index_dir(&PathBuf::from(dir)).unwrap_or(false) {
                 IndexFormatStatus::NeedsUpgrade
+            } else if let Ok(index) = Index::open_in_dir(dir) {
+                // A directory that opens as an index but has no segment files
+                // is a zero-message index, invisible to the segment sniff. Its
+                // schema still tells legacy from current: a current schema only
+                // means the marker was lost at creation (the crash
+                // `heal_index_format_marker` covers), which needs no reindex.
+                if schema_is_current(&index.schema()) {
+                    IndexFormatStatus::Current
+                } else {
+                    IndexFormatStatus::NeedsUpgrade
+                }
             } else {
                 IndexFormatStatus::Fresh
             }
@@ -150,6 +188,7 @@ pub fn check_index_format(dir: &Path) -> IndexFormatStatus {
 mod tests {
     use super::*;
     use std::fs;
+    use tantivy::schema::STRING;
 
     fn temp_dir(prefix: &str) -> PathBuf {
         let dir = std::env::temp_dir()
@@ -168,16 +207,24 @@ mod tests {
         }
     }
 
+    /// A real index directory with no documents: `Index::create_in_dir` writes
+    /// nothing but `meta.json`, so there are no segment files to sniff.
+    fn make_empty_index(dir: &Path, schema: Schema) {
+        Index::create_in_dir(dir, schema).unwrap();
+    }
+
     #[test]
     fn missing_dir_is_fresh() {
         let dir = temp_dir("missing").join("does-not-exist");
         assert_eq!(check_index_format(&dir), IndexFormatStatus::Fresh);
+        assert!(!is_index_dir(&dir));
     }
 
     #[test]
     fn empty_dir_is_fresh() {
         let dir = temp_dir("empty");
         assert_eq!(check_index_format(&dir), IndexFormatStatus::Fresh);
+        assert!(!is_index_dir(&dir));
     }
 
     #[test]
@@ -185,6 +232,55 @@ mod tests {
         let dir = temp_dir("untagged");
         make_tantivy_index_fixture(&dir);
         assert_eq!(check_index_format(&dir), IndexFormatStatus::NeedsUpgrade);
+    }
+
+    /// A zero-message index is only `meta.json`, invisible to the segment
+    /// sniff. A pre-2.3 binary that created it and never archived a message is
+    /// exactly the upgrade that used to sail through the gate and then fail
+    /// every sync with `FieldNotFound("imap_uid")` (issue #400).
+    #[test]
+    fn zero_message_legacy_index_needs_upgrade() {
+        let dir = temp_dir("empty-legacy");
+        let mut builder = Schema::builder();
+        builder.add_text_field("id", STRING);
+        let schema = builder.build();
+        make_empty_index(&dir, schema);
+        assert_eq!(check_index_format(&dir), IndexFormatStatus::NeedsUpgrade);
+        assert!(is_index_dir(&dir));
+    }
+
+    /// The crash window between `Index::create_in_dir` and stamping the marker
+    /// leaves a current-schema index with no marker and no segments. It must
+    /// not be sent through a needless reindex.
+    #[test]
+    fn zero_message_current_index_without_marker_is_current() {
+        let dir = temp_dir("empty-current");
+        make_empty_index(&dir, crate::store::tantivy::schema::SchemaTools::email_schema());
+        assert_eq!(check_index_format(&dir), IndexFormatStatus::Current);
+    }
+
+    /// The same must hold for the attachment schema, which is the *other*
+    /// schema `check_index_format` sees. It never has the generation-3 fields
+    /// (`imap_uid`, `cleanup_moved`), so keying "current" off those would
+    /// misclassify every unmarked attachment index as a legacy one — a false
+    /// reindex gate the moment its marker write is lost.
+    #[test]
+    fn zero_message_current_attachment_index_without_marker_is_current() {
+        let dir = temp_dir("empty-current-attachment");
+        make_empty_index(
+            &dir,
+            crate::store::tantivy::schema::SchemaTools::attachment_schema(),
+        );
+        assert_eq!(check_index_format(&dir), IndexFormatStatus::Current);
+        assert!(is_index_dir(&dir));
+        assert!(
+            heal_index_format_marker(&dir),
+            "an unmarked current attachment index must be stamped too"
+        );
+        assert_eq!(
+            read_index_format_version(&dir),
+            Some(CURRENT_INDEX_FORMAT_VERSION)
+        );
     }
 
     #[test]
@@ -208,6 +304,7 @@ mod tests {
         let dir = temp_dir("not-an-index");
         fs::write(dir.join("random.txt"), b"hello").unwrap();
         assert_eq!(check_index_format(&dir), IndexFormatStatus::Fresh);
+        assert!(!is_index_dir(&dir));
     }
 
     /// A crash between creating the index and stamping it leaves an unmarked
@@ -217,10 +314,12 @@ mod tests {
     fn heals_a_missing_marker_only_for_the_current_schema() {
         use crate::store::tantivy::schema::SchemaTools;
 
-        // Current schema, no marker, no segment files yet → the gate sees Fresh.
+        // Current schema, no marker, no segment files yet → the gate recognizes
+        // it as a current index (the schema proves the format), so the server
+        // proceeds and the heal below restamps the lost marker.
         let dir = temp_dir("heal-current");
         let current = tantivy::Index::create_in_dir(&dir, SchemaTools::email_schema()).unwrap();
-        assert_eq!(check_index_format(&dir), IndexFormatStatus::Fresh);
+        assert_eq!(check_index_format(&dir), IndexFormatStatus::Current);
 
         assert!(heal_index_format_marker(&dir), "current-format index is healed");
         assert_eq!(
@@ -265,25 +364,28 @@ mod tests {
         drop(v2);
     }
 
-    /// A schema that carries `imap_uid` but not `cleanup_moved` must not be
-    /// healed. Both fields belong to generation 3; testing only for the older
-    /// one would stamp such an index as current and every cleanup query would
-    /// then fail on the missing field.
+    /// A generation-3 schema carries the fields generation 3 introduced
+    /// (`imap_uid`, `cleanup_moved`) but none of generation 4's. Stamping it
+    /// would let the startup gate through and every later write would miss
+    /// `from_name` / `wire_from`.
     #[test]
-    fn an_index_without_the_cleanup_flag_is_never_healed() {
-        let dir = temp_dir("heal-no-cleanup-flag");
+    fn gen3_schema_is_never_healed() {
+        use crate::store::tantivy::fields::{F_CLEANUP_MOVED, F_IMAP_UID};
+
+        let dir = temp_dir("heal-v3");
         let mut b = tantivy::schema::Schema::builder();
-        b.add_u64_field(
-            crate::store::tantivy::fields::F_IMAP_UID,
+        b.add_u64_field(F_IMAP_UID, tantivy::schema::INDEXED | tantivy::schema::STORED);
+        b.add_bool_field(
+            F_CLEANUP_MOVED,
             tantivy::schema::INDEXED | tantivy::schema::STORED,
         );
-        let partial = tantivy::Index::create_in_dir(&dir, b.build()).unwrap();
+        let v3 = tantivy::Index::create_in_dir(&dir, b.build()).unwrap();
 
         assert!(
             !heal_index_format_marker(&dir),
-            "an index with imap_uid but no cleanup_moved must not be stamped"
+            "a v3 index without the generation-4 fields must not be stamped"
         );
         assert_eq!(read_index_format_version(&dir), None);
-        drop(partial);
+        drop(v3);
     }
 }
