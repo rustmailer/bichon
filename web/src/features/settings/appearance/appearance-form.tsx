@@ -57,6 +57,7 @@ import { SplitThemePreview, ThemePreview } from '@/components/theme-preview'
 
 const languages = [
     { value: 'ar', label: 'العربية' },
+    { value: 'cs', label: 'Čeština' },
     { value: 'da', label: 'Dansk' },
     { value: 'de', label: 'Deutsch' },
     { value: 'en', label: 'English' },

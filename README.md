@@ -620,20 +620,20 @@ Stored credentials (IMAP passwords, OAuth tokens) are encrypted with AES-256-GCM
 > Re-encrypting stored secrets after a password change is not yet supported. If this is a required feature for your use case, please open an issue.
 
 ## Internationalization
-The WebUI is available in **18 languages**:
+The WebUI is available in **19 languages**:
 
 | Code | Language | Code | Language |
 |------|----------|------|----------|
-| `ar` | العربية | `it` | Italiano |
-| `da` | Dansk | `jp` | 日本語 |
-| `de` | Deutsch | `ko` | 한국어 |
-| `en` | English | `nl` | Nederlands |
-| `es` | Español | `no` | Norsk |
-| `fi` | Suomi | `pl` | Polski |
-| `fr` | Français | `pt` | Português |
-| `it` | Italiano | `ru` | Русский |
-| `zh` | 中文 | `sv` | Svenska |
-| `zh-tw` | 繁體中文 | | |
+| `ar` | العربية | `ko` | 한국어 |
+| `cs` | Čeština | `nl` | Nederlands |
+| `da` | Dansk | `no` | Norsk |
+| `de` | Deutsch | `pl` | Polski |
+| `en` | English | `pt` | Português |
+| `es` | Español | `ru` | Русский |
+| `fi` | Suomi | `sv` | Svenska |
+| `fr` | Français | `zh` | 中文 |
+| `it` | Italiano | `zh-tw` | 繁體中文 |
+| `jp` | 日本語 | | |
 
 Language preference and UI theme are saved to your user profile and can be changed anytime from the WebUI settings.
 

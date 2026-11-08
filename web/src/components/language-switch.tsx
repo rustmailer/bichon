@@ -28,6 +28,7 @@ import { Globe } from 'lucide-react'
 
 const LANGUAGES = [
   { code: 'ar', label: 'العربية' },
+  { code: 'cs', label: 'Čeština' },
   { code: 'da', label: 'Dansk' },
   { code: 'de', label: 'Deutsch' },
   { code: 'en', label: 'English' },
