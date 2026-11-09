@@ -48,7 +48,7 @@ use bichon_core::{
     },
     error::{code::ErrorCode, BichonResult},
     ext::text_extractor,
-    message::content::AttachmentInfo,
+    message::{attachment::decoded_attachment_contents, content::AttachmentInfo},
     migrate::read_storage_version,
     raise_error,
     settings::dir::{available_space, resolve_dirs, ResolvedDirs},
@@ -64,9 +64,10 @@ use bichon_core::{
             tokenizers::{tri_analyzer, EuroTokenizer},
         },
     },
-    utils::{html::extract_text, normalize_whitespace},
+    utils::{compute_content_hash, html::extract_text, normalize_whitespace},
 };
 
+use bytes::Bytes;
 use clap::Parser;
 use console::style;
 use dialoguer::{theme::ColorfulTheme, Confirm, Input};
@@ -1719,7 +1720,26 @@ fn parent_attachment_bytes(
         .iter()
         .find(|a| a.content_hash == attachment_content_hash)?;
     let key = hex_to_key(info.storage_hash()).ok()?;
-    blobs.get(&key).ok()?
+    let stored = blobs.get(&key).ok()??;
+    if compute_content_hash(&stored) == attachment_content_hash {
+        return Some(stored);
+    }
+
+    // Pre-#375 v2 records key the *encoded* MIME body by the decoded hash.
+    // Rebuild the original message from the stored stripped EML so the parser
+    // decodes the part; feeding the encoded body straight to the extractor
+    // would index base64 text (or fail to parse the file).
+    let email_hash = opt_str(&doc, of.content_hash)?;
+    let stripped = blobs.get(&hex_to_key(&email_hash).ok()?).ok()??;
+    decoded_attachment_contents(stripped, &infos, attachment_content_hash, |hash| {
+        let key = hex_to_key(hash)?;
+        blobs
+            .get(&key)
+            .map(|bytes| bytes.map(Bytes::from))
+            .map_err(|e| raise_error!(format!("{e:#?}"), ErrorCode::InternalError))
+    })
+    .ok()?
+    .map(|bytes| bytes.to_vec())
 }
 
 fn reset_attachment_flags(model: &mut AttachmentModel) {

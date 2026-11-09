@@ -31,7 +31,7 @@ use crate::{
     dashboard::{Group, LargestAttachment},
     error::{code::ErrorCode, BichonResult},
     message::{
-        attachment::AttachmentMetadata,
+        attachment::{decoded_attachment_contents, AttachmentMetadata},
         search::{AttachmentSearchFilter, SortBy},
         tags::{TagAction, TagCount, TagsRequest},
     },
@@ -55,6 +55,7 @@ use crate::{
             WriterSlot,
         },
     },
+    utils::compute_content_hash,
 };
 
 use serde_json::json;
@@ -145,7 +146,22 @@ fn reextract_attachment_text(
     let infos: Vec<crate::message::content::AttachmentInfo> = serde_json::from_str(json).ok()?;
     let info = infos.iter().find(|a| a.content_hash == content_hash)?;
     let bytes = BLOB_MANAGER.get_attachment(info.storage_hash()).ok()??;
-    text_extractor::extract_text(content_type, ext, &bytes)
+    if compute_content_hash(&bytes) == content_hash {
+        return text_extractor::extract_text(content_type, ext, &bytes);
+    }
+
+    // Pre-#375 records key the *encoded* MIME body by the decoded hash.
+    // Rebuild the message so the parser decodes the part before extraction;
+    // feeding the encoded body straight to the extractor would index base64
+    // text (or fail to parse the file).
+    let email_hash = parent.get_first(ef.f_content_hash).and_then(|v| v.as_str())?;
+    let stripped = BLOB_MANAGER.get_email(email_hash).ok()??;
+    let decoded =
+        decoded_attachment_contents(stripped.to_vec(), &infos, content_hash, |hash| {
+            BLOB_MANAGER.get_attachment(hash)
+        })
+        .ok()??;
+    text_extractor::extract_text(content_type, ext, &decoded)
 }
 
 /// Rebuild an attachment document from an existing one, replacing its tags.

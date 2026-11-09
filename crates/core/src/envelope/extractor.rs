@@ -1169,7 +1169,7 @@ pub fn reattach_eml_content(
     Ok((e.envelope, restored))
 }
 
-fn reattach_parts(
+pub(crate) fn reattach_parts(
     mut restored_eml: Vec<u8>,
     attachments: Vec<AttachmentInfo>,
     load: impl Fn(&str) -> BichonResult<Option<Bytes>>,
