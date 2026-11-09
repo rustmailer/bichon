@@ -288,11 +288,14 @@ export function MailMessageView({
     }
   };
 
-  // Inline attachments are part of the rendered body; only regular ones get a
-  // row. When there are none, the whole section is omitted so the message body
+  // Parts rendered in the body (a cid: reference) get no row; everything else
+  // does. A bare `Content-Disposition: inline` does not make a part body
+  // content — Apple Mail attaches PDFs that way — but older servers still
+  // report it as `inline` with no content_id (#404).
+  // When there are no rows, the whole section is omitted so the message body
   // gets the space instead of an empty "No attachments" line.
   const nonInlineAttachments = (attachments ?? []).filter(
-    (attachment) => !attachment.inline
+    (attachment) => !(attachment.inline && attachment.content_id)
   )
 
   const actionButtons = (

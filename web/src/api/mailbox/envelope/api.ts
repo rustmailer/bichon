@@ -63,7 +63,11 @@ export interface AttachmentInfo {
     file_type: string;
     /** Content-ID, used for inline attachments (referenced in HTML by `cid:` URLs). */
     content_id?: string;
-    /** Whether the attachment is marked as inline (true) or a regular file (false). */
+    /**
+     * Whether the part is rendered inside the body through a `cid:` reference
+     * (true) or is a regular, downloadable file (false). A bare
+     * `Content-Disposition: inline` does not make a part inline.
+     */
     inline: boolean;
     /** Original filename of the attachment, if provided. */
     filename: string;

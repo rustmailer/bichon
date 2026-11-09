@@ -41,7 +41,9 @@ use serde::{Deserialize, Serialize};
 pub struct AttachmentInfo {
     /// MIME content type of the attachment (e.g., `image/png`, `application/pdf`).
     pub file_type: String,
-    /// Whether the attachment is marked as inline (true) or a regular file (false).
+    /// Whether the part is rendered inside the body through a `cid:`
+    /// reference (true) or is a regular, downloadable attachment (false).
+    /// A bare `Content-Disposition: inline` does not make a part inline.
     pub inline: bool,
     /// Original filename of the attachment, if provided.
     pub filename: Option<String>,
@@ -72,6 +74,12 @@ impl AttachmentInfo {
             .unwrap_or(&self.content_hash)
     }
 
+    /// Whether the part is body content rather than a downloadable file.
+    ///
+    /// The `content_id` check keeps records written before `inline` changed
+    /// meaning (it used to mirror `Content-Disposition: inline`) from being
+    /// treated as body content: a part without a Content-ID can never be
+    /// referenced from the HTML.
     pub fn is_inline(&self) -> bool {
         self.inline && self.content_id.is_some()
     }
@@ -240,35 +248,33 @@ fn attachment_file_type(attachment: &MessagePart) -> String {
 
 /// Builds the attachment list for a parsed message, embedding inline parts
 /// referenced by `cid:` into the HTML body as data URIs.
+///
+/// A part is body content only when the HTML body actually references it
+/// through a `cid:` URL. `Content-Disposition: inline` on its own does not
+/// qualify: Apple Mail attaches PDFs as `inline; filename="…"` with no
+/// Content-ID, and those must stay listed as regular, downloadable
+/// attachments (issue #404).
 fn collect_attachments(message: &Message, html: &mut Option<String>) -> Vec<AttachmentInfo> {
     let mut attachments = Vec::new();
     for attachment in attachment_parts(message) {
         let file_type = attachment_file_type(&attachment);
         let filename = attachment.attachment_name().map(|name| name.to_string());
-        let disposition = attachment.content_disposition();
+        let content_id = attachment.content_id();
 
-        let inline = disposition
-            .map(|d| d.is_inline())
-            .unwrap_or_else(|| attachment.content_id().is_some());
-
-        if inline {
-            if let Some(html1) = html.as_deref() {
-                if let Some(cid) = attachment.content_id() {
-                    if html1.contains(cid) {
-                        let data = part_contents(&attachment);
-                        let base64_encoded = base64_encode!(&data);
-                        let html_content = html1.replace(
-                            &format!("cid:{}", cid),
-                            &format!("data:{};base64,{}", file_type, base64_encoded),
-                        );
-                        *html = Some(html_content);
-                    }
+        if let Some(cid) = content_id {
+            if let Some(html_body) = html.as_deref() {
+                if html_body.contains(cid) {
+                    let data = part_contents(&attachment);
+                    let base64_encoded = base64_encode!(&data);
+                    let html_content = html_body.replace(
+                        &format!("cid:{}", cid),
+                        &format!("data:{};base64,{}", file_type, base64_encoded),
+                    );
+                    *html = Some(html_content);
+                    // Rendered inside the body: not an attachment row.
+                    continue;
                 }
             }
-        }
-        //inline attachment will not be displayed in email attachment list
-        if inline && attachment.content_id().is_some() {
-            continue;
         }
         let is_message = attachment.is_message();
         let contents = part_contents(&attachment);
@@ -276,11 +282,11 @@ fn collect_attachments(message: &Message, html: &mut Option<String>) -> Vec<Atta
         attachments.push(AttachmentInfo {
             filename: filename.or(Some(content_hash.clone())),
             size: contents.len(),
-            inline,
+            inline: false,
             file_type,
             is_message,
             content_hash,
-            content_id: attachment.content_id().map(Into::into),
+            content_id: content_id.map(Into::into),
             raw_content_hash: None,
             extracted_text: None,
             extracted_page_count: None,
@@ -332,26 +338,27 @@ pub fn retrieve_nested_eml_content(
 
     for attachment in attachment_parts(&nested_message) {
         let cid = attachment.content_id();
-        let disposition = attachment.content_disposition();
-        let is_inline = disposition
-            .map(|d| d.is_inline())
-            .unwrap_or_else(|| cid.is_some());
 
-        if has_html && is_inline && cid.is_some() {
-            let content_id = cid.unwrap();
-            let html_ref = html.as_mut().unwrap();
+        // Only a `cid:` reference the HTML body actually uses makes a part
+        // body content; a bare `Content-Disposition: inline` (Apple Mail's
+        // PDF attachments) does not. See `collect_attachments`.
+        if has_html {
+            if let Some(content_id) = cid {
+                let cid_pattern = format!("cid:{}", content_id);
+                if let Some(html_body) = html.as_deref() {
+                    if html_body.contains(&cid_pattern) {
+                        let data = part_contents(&attachment);
+                        let ct = attachment
+                            .content_type()
+                            .map(|ct| format!("{}/{}", ct.ctype(), ct.subtype().unwrap_or("")))
+                            .unwrap_or_else(|| "image/png".to_string());
 
-            let cid_pattern = format!("cid:{}", content_id);
-            if html_ref.contains(&cid_pattern) {
-                let data = part_contents(&attachment);
-                let ct = attachment
-                    .content_type()
-                    .map(|ct| format!("{}/{}", ct.ctype(), ct.subtype().unwrap_or("")))
-                    .unwrap_or_else(|| "image/png".to_string());
-
-                let base64_data = format!("data:{};base64,{}", ct, base64_encode!(&data));
-                *html_ref = html_ref.replace(&cid_pattern, &base64_data);
-                continue;
+                        let base64_data =
+                            format!("data:{};base64,{}", ct, base64_encode!(&data));
+                        html = Some(html_body.replace(&cid_pattern, &base64_data));
+                        continue;
+                    }
+                }
             }
         }
 
@@ -364,7 +371,7 @@ pub fn retrieve_nested_eml_content(
                 .map(|n| n.to_string())
                 .or(Some(content_hash.clone())),
             size: contents.len(),
-            inline: is_inline,
+            inline: false,
             file_type,
             content_hash,
             is_message: attachment.is_message(),
@@ -568,5 +575,129 @@ mod tests {
         assert_eq!(attachments.len(), 1);
         assert_eq!(attachments[0].file_type, "image/png");
         assert_eq!(attachments[0].filename.as_deref(), Some("logo.png"));
+    }
+
+    /// `Content-Disposition: inline` alone must not hide a part: Apple Mail
+    /// attaches PDFs this way with no Content-ID, and they are ordinary,
+    /// downloadable attachments (issue #404).
+    #[test]
+    fn inline_disposition_pdf_without_content_id_is_listed() {
+        let eml = concat!(
+            "From: sender@example.com\r\n",
+            "To: recipient@example.com\r\n",
+            "Subject: Invoice\r\n",
+            "MIME-Version: 1.0\r\n",
+            "Content-Type: multipart/mixed; boundary=\"bichon-boundary\"\r\n",
+            "\r\n",
+            "--bichon-boundary\r\n",
+            "Content-Type: text/plain; charset=us-ascii\r\n",
+            "\r\n",
+            "Invoice attached.\r\n",
+            "--bichon-boundary\r\n",
+            "Content-Type: application/pdf; name=\"invoice.pdf\"\r\n",
+            "Content-Disposition: inline; filename=\"invoice.pdf\"\r\n",
+            "Content-Transfer-Encoding: base64\r\n",
+            "\r\n",
+            "JVBERi0xLjQK\r\n",
+            "--bichon-boundary--\r\n",
+        );
+
+        let message = MessageParser::default()
+            .parse(eml)
+            .expect("EML should parse");
+        let mut html = first_body_html(&message);
+        let attachments = collect_attachments(&message, &mut html);
+
+        assert_eq!(
+            attachments.len(),
+            1,
+            "an inline-disposition PDF without a Content-ID is a regular attachment"
+        );
+        assert!(!attachments[0].inline);
+        assert_eq!(attachments[0].file_type, "application/pdf");
+        assert_eq!(attachments[0].filename.as_deref(), Some("invoice.pdf"));
+        assert_eq!(attachments[0].content_id, None);
+    }
+
+    /// A part the HTML body references through `cid:` is rendered in place and
+    /// must not get a second row in the attachment list.
+    #[test]
+    fn cid_referenced_image_is_inlined_and_not_listed() {
+        let eml = concat!(
+            "From: sender@example.com\r\n",
+            "To: recipient@example.com\r\n",
+            "Subject: Newsletter\r\n",
+            "MIME-Version: 1.0\r\n",
+            "Content-Type: multipart/related; boundary=\"bichon-boundary\"\r\n",
+            "\r\n",
+            "--bichon-boundary\r\n",
+            "Content-Type: text/html; charset=us-ascii\r\n",
+            "\r\n",
+            "<html><img src=\"cid:logo@example.test\"></html>\r\n",
+            "--bichon-boundary\r\n",
+            "Content-Type: image/png\r\n",
+            "Content-ID: <logo@example.test>\r\n",
+            "Content-Disposition: inline; filename=\"logo.png\"\r\n",
+            "Content-Transfer-Encoding: base64\r\n",
+            "\r\n",
+            "iVBORw0KGgo=\r\n",
+            "--bichon-boundary--\r\n",
+        );
+
+        let message = MessageParser::default()
+            .parse(eml)
+            .expect("EML should parse");
+        let mut html = first_body_html(&message);
+        let attachments = collect_attachments(&message, &mut html);
+
+        assert!(
+            attachments.is_empty(),
+            "a cid-referenced part is body content, not an attachment"
+        );
+        let html = html.expect("html body");
+        assert!(
+            html.contains("data:image/png;base64,"),
+            "the cid: reference must be replaced by a data URI, got: {html}"
+        );
+    }
+
+    /// A Content-ID the HTML never references does not render anything, so the
+    /// part stays downloadable instead of being silently dropped.
+    #[test]
+    fn cid_image_not_referenced_by_html_is_listed() {
+        let eml = concat!(
+            "From: sender@example.com\r\n",
+            "To: recipient@example.com\r\n",
+            "Subject: Orphan image\r\n",
+            "MIME-Version: 1.0\r\n",
+            "Content-Type: multipart/related; boundary=\"bichon-boundary\"\r\n",
+            "\r\n",
+            "--bichon-boundary\r\n",
+            "Content-Type: text/html; charset=us-ascii\r\n",
+            "\r\n",
+            "<html><p>No image reference here.</p></html>\r\n",
+            "--bichon-boundary\r\n",
+            "Content-Type: image/png\r\n",
+            "Content-ID: <logo@example.test>\r\n",
+            "Content-Disposition: inline; filename=\"logo.png\"\r\n",
+            "Content-Transfer-Encoding: base64\r\n",
+            "\r\n",
+            "iVBORw0KGgo=\r\n",
+            "--bichon-boundary--\r\n",
+        );
+
+        let message = MessageParser::default()
+            .parse(eml)
+            .expect("EML should parse");
+        let mut html = first_body_html(&message);
+        let attachments = collect_attachments(&message, &mut html);
+
+        assert_eq!(attachments.len(), 1);
+        assert!(!attachments[0].inline);
+        assert_eq!(
+            attachments[0].content_id.as_deref(),
+            Some("logo@example.test")
+        );
+        assert!(html.expect("html body").contains("No image reference here."));
     }
 }

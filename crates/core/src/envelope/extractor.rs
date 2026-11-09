@@ -908,6 +908,17 @@ pub fn strip_attachment_bodies(
         .collect();
     ranges.sort_by(|a, b| b.0.cmp(&a.0));
 
+    // A part is body content only when the HTML body references it through a
+    // `cid:` URL. The `Content-Disposition: inline` header alone is not
+    // enough: Apple Mail attaches PDFs that way with no Content-ID, and those
+    // stay regular, downloadable attachments (issue #404). Only convert the
+    // HTML body when some part even has a Content-ID to match against.
+    let html_body = if ranges.iter().any(|(_, _, att)| att.content_id().is_some()) {
+        first_body_html(message)
+    } else {
+        None
+    };
+
     for (raw_start, raw_end, att) in ranges {
         // mail-parser may report attachment offsets past the body end for
         // malformed messages; clamp the range to avoid a slice panic.
@@ -939,10 +950,11 @@ pub fn strip_attachment_bodies(
             Some(raw_hash)
         };
 
-        let inline = att
-            .content_disposition()
-            .map(|d| d.is_inline())
-            .unwrap_or_else(|| att.content_id().is_some());
+        let inline = att.content_id().is_some_and(|cid| {
+            html_body
+                .as_deref()
+                .is_some_and(|html| html.contains(cid))
+        });
         let file_type = att
             .content_type()
             .map(|ct| {
@@ -2529,6 +2541,55 @@ Inner body\r\n\
             parts[0].kind(),
             super::PartKind::InlineBinary
         ));
+    }
+
+    /// The archived `inline` flag means "the HTML body renders this part via a
+    /// `cid:` URL", not "the header says inline": Apple Mail PDFs (#404) are
+    /// regular attachments, and so is an inline image the HTML never uses.
+    #[test]
+    fn archived_inline_flag_tracks_html_references() {
+        let raw = concat!(
+            "From: sender@example.com\r\n",
+            "MIME-Version: 1.0\r\n",
+            "Content-Type: multipart/related; boundary=\"related\"\r\n",
+            "\r\n",
+            "--related\r\n",
+            "Content-Type: text/html\r\n",
+            "\r\n",
+            "<p><img src=\"cid:logo@example.test\"></p>\r\n",
+            "--related\r\n",
+            "Content-Type: image/png\r\n",
+            "Content-ID: <logo@example.test>\r\n",
+            "Content-Disposition: inline; filename=\"logo.png\"\r\n",
+            "Content-Transfer-Encoding: base64\r\n",
+            "\r\n",
+            "aGVsbG8tbG9nbw==\r\n",
+            "--related\r\n",
+            "Content-Type: application/pdf\r\n",
+            "Content-Disposition: inline; filename=\"invoice.pdf\"\r\n",
+            "Content-Transfer-Encoding: base64\r\n",
+            "\r\n",
+            "JVBERi0xLjQK\r\n",
+            "--related--\r\n",
+        )
+        .as_bytes();
+
+        let message = super::MessageParser::new().parse(raw).expect("fixture parses");
+        let detached = super::strip_attachment_bodies(raw, &message, None);
+        let flag = |name: &str| {
+            detached
+                .infos
+                .iter()
+                .find(|info| info.filename.as_deref() == Some(name))
+                .unwrap_or_else(|| panic!("missing attachment {name}"))
+                .inline
+        };
+
+        assert!(flag("logo.png"), "a cid-referenced image is body content");
+        assert!(
+            !flag("invoice.pdf"),
+            "an inline-disposition PDF without a Content-ID is a regular attachment"
+        );
     }
 
     /// Inline media occupies body-list slots in both parser versions, so an

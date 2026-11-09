@@ -322,7 +322,13 @@ export function MailMessageView({
             <span className="text-gray-500 text-xs" />
           ) : attachments && attachments.length > 0 ? (
             (() => {
-              const nonInline = attachments.filter((a) => !a.inline);
+              // Only parts rendered in the body (a cid: reference) are hidden.
+              // A bare `Content-Disposition: inline` does not make a part body
+              // content — Apple Mail attaches PDFs that way — but older servers
+              // still report it as `inline` with no content_id (#404).
+              const nonInline = attachments.filter(
+                (a) => !(a.inline && a.content_id)
+              );
 
               return nonInline.length > 0 ? (
                 <div className="space-y-2">
