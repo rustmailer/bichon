@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -234,6 +234,7 @@ export default function AttachmentPreview({
           if (isPdf) e.preventDefault();
         }}
       >
+        <DialogTitle className='sr-only'>{resolved.fileName}</DialogTitle>
         {/* Toolbar — hidden for PDF (browser's native viewer has its own controls) */}
         {!isPdf && (
           <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-4 py-2 bg-gradient-to-b from-black/70 to-transparent text-white">

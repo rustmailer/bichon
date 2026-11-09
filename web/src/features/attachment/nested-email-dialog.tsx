@@ -19,7 +19,7 @@
 import { EmailEnvelope } from '@/api';
 import { AttachmentInfo, download_nested_attachment, load_nested_message } from '@/api/mailbox/envelope/api';
 import EmailIframe from '@/components/mail-iframe';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { formatBytes, formatTimestamp } from '@/lib/utils';
@@ -157,6 +157,7 @@ export function NestedEmailDialog({ open, onOpenChange }: any) {
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent aria-describedby={undefined} className="max-w-4xl h-[90vh] flex flex-col p-0 overflow-hidden border-none shadow-2xl">
+                <DialogTitle className="sr-only">{currentAttachment?.name}</DialogTitle>
                 <div className="text-white px-4 py-3 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                         <Mail className="h-4 w-4 text-blue-400" />
