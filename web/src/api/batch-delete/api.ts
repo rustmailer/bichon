@@ -30,6 +30,12 @@ export interface BatchDeleteJob {
   job_id: string
   user_id: number
   username: string
+  /** Set when a second person executed an approved request: the job belongs
+   *  to the requester, the executor is recorded here. */
+  executed_by?: string | null
+  /** The approval request this job came from, when it went through dual
+   *  control. */
+  approval_request_id?: string | null
   created_at: number
   started_at?: number | null
   finished_at?: number | null

@@ -241,6 +241,24 @@ function DeletionHistoryPanel({ enabled }: { enabled: boolean }) {
                 defaultValue: '{{count}} failed',
               })}`}
             {` · ${job.username}`}
+            {job.executed_by && (
+              <>
+                {' · '}
+                {t('search.batchDelete.executedBy', {
+                  name: job.executed_by,
+                  defaultValue: 'approved by {{name}}',
+                })}
+              </>
+            )}
+            {job.approval_request_id && (
+              <>
+                {' · '}
+                {t('search.batchDelete.approvalRequest', {
+                  id: job.approval_request_id,
+                  defaultValue: 'request {{id}}',
+                })}
+              </>
+            )}
           </div>
           {job.error && (
             <div className='mt-1 text-xs text-destructive'>{job.error}</div>

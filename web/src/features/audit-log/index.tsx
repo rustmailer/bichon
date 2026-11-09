@@ -12,6 +12,7 @@ import { Main } from '@/components/layout/main'
 import { FixedHeader } from '@/components/layout/fixed-header'
 import { TablePagination } from '@/components/pagination'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import {
   Select,
@@ -31,7 +32,8 @@ import {
 import { TableSkeleton } from '@/components/table-skeleton'
 import { DatePicker } from '@/components/date-picker'
 import { VirtualizedSelect } from '@/components/virtualized-select'
-import { list_audit_log, type AuditRecord } from '@/api/audit/api'
+import { list_audit_log } from '@/api/audit/api'
+import { describeEvent } from './describe-event'
 import { list_minimal_users } from '@/api/users/api'
 import { minimal_account_list } from '@/api/account/api'
 import { useEdition } from '@/hooks/use-edition'
@@ -43,6 +45,7 @@ const PAGE_SIZE = 50
 const EVENT_TYPES = [
   'email.viewed',
   'email.deleted',
+  'email.batch_deleted',
   'email.exported',
   'email.restored',
   'email.repaired',
@@ -100,6 +103,10 @@ function eventTypeLabel(t: (key: string, defaultValue: string) => string, et: st
   const labels: Record<string, string> = {
     'email.viewed': t('audit.eventTypes.emailViewed', 'Email viewed'),
     'email.deleted': t('audit.eventTypes.emailDeleted', 'Email deleted'),
+    'email.batch_deleted': t(
+      'audit.eventTypes.emailBatchDeleted',
+      'Bulk email deletion',
+    ),
     'email.exported': t('audit.eventTypes.emailExported', 'Email exported'),
     'email.restored': t('audit.eventTypes.emailRestored', 'Email restored'),
     'email.repaired': t('audit.eventTypes.emailRepaired', 'Email repaired'),
@@ -200,103 +207,6 @@ function formatTime(ts: number): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 }
 
-function describeEvent(rec: AuditRecord): string {
-  const p = rec.payload ?? {}
-  switch (rec.event_type) {
-    case 'email.viewed': {
-      const subject = typeof p.subject === 'string' ? p.subject : rec.email_id ?? ''
-      // Name the delegation when there was one: "who read this" is only half
-      // the record, the other half is whether they were entitled to it. The
-      // full before/after scope is in the payload below.
-      return typeof p.via_view === 'string' ? `${subject} · via ${p.via_view}` : subject
-    }
-    case 'email.deleted':
-      return typeof p.subject === 'string' ? p.subject : rec.email_id ?? ''
-    case 'email.exported':
-    case 'email.restored':
-      return typeof p.subject === 'string' ? p.subject : rec.email_id ?? ''
-    case 'email.repaired': {
-      // The outcome belongs in the detail, not just the label: a `failed`
-      // repair rewrote nothing and must not read like a successful one.
-      const subject = typeof p.subject === 'string' ? p.subject : rec.email_id ?? ''
-      return typeof p.status === 'string' ? `${subject} · ${p.status}` : subject
-    }
-    case 'email.tagged':
-      return typeof p.count === 'number' ? `${p.count} email(s)` : ''
-    case 'attachment.downloaded':
-    case 'attachment.previewed':
-      return typeof p.filename === 'string' ? p.filename : rec.content_hash ?? ''
-    case 'attachment.tagged':
-      return typeof p.count === 'number' ? `${p.count} attachment(s)` : ''
-    case 'search.performed':
-      return typeof p.query === 'string' ? `"${p.query}"` : ''
-    case 'user.created':
-      return typeof p.new_user === 'string' ? p.new_user : ''
-    case 'user.updated':
-    case 'user.removed':
-      return typeof p.target_user === 'string' ? p.target_user : ''
-    case 'role.created':
-    case 'role.updated':
-    case 'role.removed':
-      return typeof p.role === 'string' ? p.role : ''
-    case 'account.updated': {
-      const email = typeof p.email === 'string' ? p.email : ''
-      // Both sides of the scope are in the payload; the line only has to mark
-      // that a view's visibility moved, so it is not read as a rename.
-      return 'view_after' in p || 'view_before' in p
-        ? `${email} · view scope changed`
-        : email
-    }
-    case 'account.created':
-    case 'account.removed':
-      return typeof p.email === 'string' ? p.email : ''
-    case 'account.download_started':
-      return typeof p.run_gap_fill === 'boolean'
-        ? `gap_fill=${p.run_gap_fill}`
-        : ''
-    case 'account.role_assigned':
-      return typeof p.target_user === 'string' ? p.target_user : ''
-    case 'access_token.created':
-    case 'access_token.removed':
-      return typeof p.name === 'string' && p.name
-        ? p.name
-        : typeof p.target_user === 'string'
-          ? p.target_user
-          : ''
-    case 'oauth2.created':
-    case 'oauth2.updated':
-    case 'oauth2.removed':
-      return typeof p.name === 'string' && p.name ? p.name : ''
-    case 'import.performed':
-      return typeof p.total === 'number'
-        ? `total=${p.total} success=${p.success} failed=${p.failed}`
-        : ''
-    case 'mailbox.removed':
-      return rec.mailbox_id !== null && rec.mailbox_id !== undefined
-        ? `mailbox ${rec.mailbox_id}`
-        : ''
-    case 'proxy.created':
-    case 'proxy.updated':
-    case 'proxy.removed':
-      return typeof p.url === 'string' ? p.url : ''
-    case 'license.uploaded':
-      return typeof p.email === 'string' ? p.email : ''
-    case 'mfa.reset_by_admin':
-      return typeof p.target_user === 'string' ? p.target_user : ''
-    case 'timestamp.anchored':
-      return typeof p.leaf_count === 'number'
-        ? `root=${typeof p.root_hash === 'string' ? p.root_hash.slice(0, 12) : ''}… leaves=${p.leaf_count}`
-        : ''
-    case 'ldap.login_failed':
-      return typeof p.reason === 'string' ? p.reason : ''
-    case 'siem.forward_failed':
-      return typeof p.url === 'string'
-        ? `${p.url} (${p.seq_from}..${p.seq_to})`
-        : `seq ${p.seq_from}..${p.seq_to}`
-    default:
-      return ''
-  }
-}
 
 export default function AuditLog() {
   const { t } = useTranslation()
@@ -310,12 +220,14 @@ export default function AuditLog() {
   const [userFilter, setUserFilter] = useState('all')
   const [eventType, setEventType] = useState('all')
   const [accountFilter, setAccountFilter] = useState('all')
+  const [jobFilter, setJobFilter] = useState('')
   const [startDate, setStartDate] = useState<Date | undefined>()
   const [endDate, setEndDate] = useState<Date | undefined>()
   const [applied, setApplied] = useState({
     user: 'all',
     type: 'all',
     account: 'all',
+    jobId: '',
     start: undefined as Date | undefined,
     end: undefined as Date | undefined,
   })
@@ -357,6 +269,7 @@ export default function AuditLog() {
         user: applied.user === 'all' || !applied.user ? undefined : applied.user,
         event_type: applied.type === 'all' || !applied.type ? undefined : applied.type,
         account_id: applied.account === 'all' || !applied.account ? undefined : Number(applied.account),
+        job_id: applied.jobId.trim() || undefined,
         start_ms: applied.start ? applied.start.getTime() : undefined,
         end_ms: applied.end
           ? new Date(
@@ -375,6 +288,7 @@ export default function AuditLog() {
       user: userFilter,
       type: eventType,
       account: accountFilter,
+      jobId: jobFilter,
       start: startDate,
       end: endDate,
     })
@@ -384,10 +298,18 @@ export default function AuditLog() {
     setUserFilter('all')
     setEventType('all')
     setAccountFilter('all')
+    setJobFilter('')
     setStartDate(undefined)
     setEndDate(undefined)
     setPage(1)
-    setApplied({ user: 'all', type: 'all', account: 'all', start: undefined, end: undefined })
+    setApplied({
+      user: 'all',
+      type: 'all',
+      account: 'all',
+      jobId: '',
+      start: undefined,
+      end: undefined,
+    })
   }
 
   const handlePageSizeChange = (size: number) => {
@@ -485,6 +407,17 @@ export default function AuditLog() {
                 noItemsComponent={
                   <span className='text-xs'>{t('audit.noAccounts', 'No accounts found')}</span>
                 }
+              />
+            </div>
+            <div className='flex flex-col gap-1'>
+              <label className='text-xs text-muted-foreground'>
+                {t('audit.jobId', 'Deletion job')}
+              </label>
+              <Input
+                value={jobFilter}
+                onChange={(e) => setJobFilter(e.target.value)}
+                placeholder={t('audit.jobIdPlaceholder', 'job id')}
+                className='h-9 w-56 text-sm'
               />
             </div>
             <div className='flex flex-col gap-1'>

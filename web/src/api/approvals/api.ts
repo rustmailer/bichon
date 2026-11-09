@@ -73,6 +73,9 @@ export type ApprovalTarget =
       messages: number
       /** Accounts covered, present even when `by_account` is empty. */
       account_ids?: number[]
+      /** Per-account frozen counts; present even when the ids themselves are
+       *  externalized to a detail file. */
+      account_counts?: { account_id: number; count: number }[]
       /** The filter a `batch-delete` request was selected by. */
       filter?: Record<string, unknown>
       /** Detail-file reference; the ids themselves are not in the ledger. */
@@ -150,6 +153,9 @@ export interface ApprovalRequest {
    *  an override means the second signature was waived, and a reader cannot
    *  infer that from the user fields alone. */
   break_glass_pending_hours?: number | null
+  /** The batch-deletion job this request started, once it has run. `null`
+   *  while pending and for operations that never create a job. */
+  job_id?: string | null
 }
 
 /** Per-account outcome of a hold release. Has no `kind` discriminator — it is

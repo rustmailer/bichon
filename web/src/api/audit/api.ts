@@ -37,6 +37,8 @@ export interface AuditQueryParams {
   event_type?: string
   account_id?: number
   email_id?: string
+  /** Restricts to the events a single deletion job produced. */
+  job_id?: string
 }
 
 export async function list_audit_log(

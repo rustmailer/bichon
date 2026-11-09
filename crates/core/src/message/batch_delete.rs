@@ -84,6 +84,16 @@ pub struct BatchDeleteJob {
     pub job_id: String,
     pub user_id: u64,
     pub username: String,
+    /// Set when a second person executed the deletion on behalf of the
+    /// requester (Pro dual control). The job belongs to the requester — it
+    /// appears in their history — while the audit trail names the approver
+    /// who actually ran it.
+    #[serde(default)]
+    pub executed_by: Option<String>,
+    /// The approval request this job was started from, when the deletion went
+    /// through dual control. Lets an auditor go from the decision to the job.
+    #[serde(default)]
+    pub approval_request_id: Option<String>,
     pub created_at: i64,
     pub started_at: Option<i64>,
     pub finished_at: Option<i64>,
@@ -378,6 +388,22 @@ enum JobSource {
     Frozen(BTreeMap<u64, Vec<String>>),
 }
 
+/// Who a job runs for, and who started it.
+///
+/// The two differ under Pro dual control: the requester owns the job (only
+/// they should see it in their history), but the approver is the person whose
+/// action is recorded in the audit trail. A job started directly by the
+/// community path has no second party and leaves both approval fields unset.
+#[derive(Clone, Debug, Default)]
+pub struct JobOrigin {
+    pub user_id: u64,
+    pub username: String,
+    /// Set when someone else executed an approved request.
+    pub executed_by: Option<String>,
+    /// The approval request that was executed, when there was one.
+    pub approval_request_id: Option<String>,
+}
+
 /// Create a job and start its worker.
 pub fn start_job(
     scope: Option<Vec<ViewScopeGroup>>,
@@ -399,8 +425,12 @@ pub fn start_job(
         request.label,
         account_ids,
         JobSource::Search { scope, filter },
-        user_id,
-        username,
+        JobOrigin {
+            user_id,
+            username,
+            executed_by: None,
+            approval_request_id: None,
+        },
     )
 }
 
@@ -414,8 +444,7 @@ pub fn start_job_from_ids(
     by_account: BTreeMap<u64, Vec<String>>,
     filter: EmailSearchFilter,
     label: Option<String>,
-    user_id: u64,
-    username: String,
+    origin: JobOrigin,
 ) -> BichonResult<BatchDeleteJob> {
     let by_account: BTreeMap<u64, Vec<String>> = by_account
         .into_iter()
@@ -434,8 +463,7 @@ pub fn start_job_from_ids(
         label,
         account_ids,
         JobSource::Frozen(by_account),
-        user_id,
-        username,
+        origin,
     )
 }
 
@@ -444,8 +472,7 @@ fn start_job_inner(
     label: Option<String>,
     account_ids: Vec<u64>,
     source: JobSource,
-    user_id: u64,
-    username: String,
+    origin: JobOrigin,
 ) -> BichonResult<BatchDeleteJob> {
     let job_id = Uuid::new_v4().to_string();
     {
@@ -464,8 +491,10 @@ fn start_job_inner(
         let now = utc_now!();
         let job = BatchDeleteJob {
             job_id: job_id.clone(),
-            user_id,
-            username: username.clone(),
+            user_id: origin.user_id,
+            username: origin.username.clone(),
+            executed_by: origin.executed_by,
+            approval_request_id: origin.approval_request_id,
             created_at: now,
             started_at: Some(now),
             finished_at: None,
@@ -612,9 +641,13 @@ async fn run_job_inner(
             let plan = plan_delete_audit(&request);
             match crate::message::delete::delete_messages_impl(request).await {
                 Ok(()) => {
+                    // The deletion is attributed to the person who executed
+                    // it: the approver when a second person ran an approved
+                    // request, otherwise the job's owner.
+                    let audit_user = job.executed_by.as_deref().unwrap_or(&job.username);
                     emit_delete_audit_scoped(
                         plan,
-                        &job.username,
+                        audit_user,
                         Some(&job.job_id),
                         Some(&job.filter),
                     );
@@ -836,6 +869,60 @@ mod tests {
         clear_test_jobs("test-roll-");
     }
 
+    /// A job started from an approved request belongs to the requester, but
+    /// records the approver who executed it and the decision it came from: the
+    /// requester keeps the history entry, and an auditor can walk from the
+    /// approval to the job that carries the per-batch audit events.
+    #[tokio::test]
+    async fn frozen_job_records_requester_and_executor() {
+        init_test_env();
+        let _guard = TEST_LOCK.lock().await;
+
+        let by_account: BTreeMap<u64, Vec<String>> = [(93_901u64, vec!["frozen-1".to_string()])]
+            .into_iter()
+            .collect();
+        let job = start_job_from_ids(
+            by_account,
+            EmailSearchFilter::default(),
+            None,
+            JobOrigin {
+                user_id: 7,
+                username: "requester".into(),
+                executed_by: Some("approver".into()),
+                approval_request_id: Some("request-1".into()),
+            },
+        )
+        .expect("the job starts");
+
+        assert_eq!(job.user_id, 7);
+        assert_eq!(job.username, "requester");
+        assert_eq!(job.executed_by.as_deref(), Some("approver"));
+        assert_eq!(
+            job.approval_request_id.as_deref(),
+            Some("request-1"),
+            "the decision must stay linked to the job it produced"
+        );
+
+        // No account 93_901 exists, so the worker's batches fail; wait for it
+        // to reach a terminal state so the in-process slot cannot leak into a
+        // later test.
+        let _ = request_cancel(&job.job_id);
+        for _ in 0..200 {
+            match get_job(&job.job_id) {
+                Ok(Some(current))
+                    if matches!(
+                        current.status,
+                        BatchDeleteStatus::Running | BatchDeleteStatus::Cancelling
+                    ) =>
+                {
+                    tokio::time::sleep(std::time::Duration::from_millis(10)).await
+                }
+                _ => break,
+            }
+        }
+        let _ = delete_impl::<BatchDeleteJob>(DB_MANAGER.db(), &job.job_id);
+    }
+
     #[tokio::test]
     async fn rolling_window_refuses_to_evict_a_running_job() {
         init_test_env();
@@ -994,8 +1081,12 @@ mod tests {
             )]),
             EmailSearchFilter::default(),
             None,
-            7,
-            "tester".into(),
+            JobOrigin {
+                user_id: 7,
+                username: "tester".into(),
+                executed_by: None,
+                approval_request_id: None,
+            },
         )
         .unwrap();
         let frozen_done = loop {

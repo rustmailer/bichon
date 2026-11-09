@@ -25,6 +25,8 @@
 // sign off on it.
 import { useTranslation } from 'react-i18next'
 import type { ApprovalTarget } from '@/api/approvals/api'
+import { formatBytes } from '@/lib/utils'
+import { accountMessageCounts, filterClauses } from './target-summary'
 
 /** The blast radius, phrased as what will be destroyed.
  *
@@ -86,10 +88,16 @@ export function TargetDescription({ target }: { target: ApprovalTarget }) {
       )
 
     case 'messages': {
+      const counts = accountMessageCounts(target)
       const accounts =
-        Object.keys(target.by_account).length > 0
-          ? Object.keys(target.by_account)
+        counts.length > 0
+          ? counts.map((c) => String(c.account_id))
           : (target.account_ids ?? []).map(String)
+      const clauses = filterClauses(target.filter)
+      const frozenBytes =
+        typeof target.detail_bytes === 'number' && target.detail_bytes > 0
+          ? target.detail_bytes
+          : null
       return (
         <div>
           <div className='font-medium'>
@@ -107,9 +115,34 @@ export function TargetDescription({ target }: { target: ApprovalTarget }) {
               }
             )}
           </div>
-          {typeof target.filter?.text === 'string' && target.filter.text && (
-            <div className='text-xs text-muted-foreground'>
-              “{target.filter.text}”
+          {counts.length > 0 && (
+            <ul className='mt-1 space-y-0.5 text-xs text-muted-foreground'>
+              {counts.map((c) => (
+                <li key={c.account_id}>
+                  {t(
+                    'approvals.targetMessagesAccountLine',
+                    'Account {{account}}: {{count}} message(s)',
+                    { account: c.account_id, count: c.count }
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          {clauses.length > 0 && (
+            <div className='mt-1 text-xs text-muted-foreground'>
+              <span>{t('approvals.targetMessagesFilter', 'Search filter')}: </span>
+              <code className='break-all'>
+                {clauses.map((c) => `${c.field}: ${c.value}`).join('; ')}
+              </code>
+            </div>
+          )}
+          {frozenBytes !== null && (
+            <div className='mt-1 text-xs text-muted-foreground'>
+              {t(
+                'approvals.targetMessagesFrozen',
+                'The exact ids are frozen in a detail file ({{size}}). Mail that arrives after the request was made is NOT included.',
+                { size: formatBytes(frozenBytes) }
+              )}
             </div>
           )}
         </div>
