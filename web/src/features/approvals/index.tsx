@@ -122,6 +122,8 @@ function describe_result_item(item: ApprovalResultItem): string {
         return `${item.subject || `#${item.account_id}`}: ${
           item.error ?? 'unknown'
         }`
+      case 'retention':
+        return `account #${item.account_id}: ${item.error ?? 'unknown'}`
     }
   }
   return `${item.email || `#${item.account_id}`}: ${item.error ?? 'unknown'}`
@@ -139,7 +141,14 @@ export default function ApprovalsPage() {
   // A compliance officer without `approval:decide` may still read the queue:
   // the separation-of-duties permission grants sight of it, never the power to
   // move it.
-  const canView = require_any_permission(['approval:decide', 'compliance:audit'])
+  const canView = require_any_permission([
+    'approval:decide',
+    'compliance:audit',
+    // The built-in administrator holds system:root, and both the sidebar and
+    // the server's read gate accept it. Omitting it here showed the admin the
+    // entry and then rendered the forbidden state on the page.
+    'system:root',
+  ])
   const canDecide = require_any_permission(['approval:decide'])
   // The break-glass override is narrower than deciding: the server requires
   // `system:root` for it, and only a root admin may waive the second

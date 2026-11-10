@@ -40,6 +40,10 @@ function target_keys(target: ApprovalTarget): string[] {
   switch (target.kind) {
     case 'accounts':
       return target.account_ids.map((id) => `account:${id}`)
+    case 'hold_case':
+      // Keyed on the case, not the account: releasing MATTER-1 must not
+      // disable the row for MATTER-2.
+      return [`hold:${target.hold_id}`]
     case 'users':
       return target.user_ids.map((id) => `user:${id}`)
     case 'mailbox':
@@ -76,6 +80,10 @@ function target_keys(target: ApprovalTarget): string[] {
       return Object.entries(target.by_account).flatMap(([account, ids]) =>
         ids.map((id) => `message:${account}:${id}`)
       )
+    case 'retention':
+      // One policy per account: two queued changes to the same account could
+      // otherwise overwrite each other in either order.
+      return [`retention:${target.account_id}`]
   }
 }
 

@@ -138,38 +138,54 @@ async fn record_source_tombstones(request: &HashMap<u64, Vec<String>>) -> Bichon
         for chunk in ids.chunks(500) {
             let refs = ENVELOPE_MANAGER.get_source_refs(*account_id, chunk)?;
             for r in refs {
-                // uid == 0: SMTP journal / imported messages have no remote
-                // counterpart, so there is nothing that could be re-downloaded.
                 if r.uid == 0 || r.mailbox_id == 0 {
                     continue;
                 }
                 by_mailbox.entry(r.mailbox_id).or_default().push(r.uid);
             }
         }
-        for (mailbox_id, uids) in by_mailbox {
-            // A missing mailbox row means there is no remote folder left to
-            // re-download from; skip rather than failing the delete.
-            let Some(mailbox) =
-                crate::archive::imap::mailbox::MailBox::find_mailbox(*account_id, mailbox_id)?
-            else {
-                continue;
-            };
-            let Some(uid_validity) = mailbox.uid_validity else {
-                continue;
-            };
-            crate::archive::imap::tombstones::record_uids(
-                *account_id,
-                mailbox_id,
-                uid_validity,
-                &uids,
-            )
+        record_tombstones_by_mailbox(*account_id, by_mailbox).await?;
+    }
+    Ok(())
+}
+
+/// Record source-UID tombstones from `(mailbox_id, uid)` pairs. Shared by the
+/// manual delete path (which resolves ids through the index) and the retention
+/// sweep (which already captured the pairs before deleting the documents).
+pub async fn record_tombstones_by_mailbox(
+    account_id: u64,
+    by_mailbox: HashMap<u64, Vec<u32>>,
+) -> BichonResult<()> {
+    for (mailbox_id, uids) in by_mailbox {
+        // A missing mailbox row means there is no remote folder left to
+        // re-download from; skip rather than failing the delete.
+        let Some(mailbox) =
+            crate::archive::imap::mailbox::MailBox::find_mailbox(account_id, mailbox_id)?
+        else {
+            continue;
+        };
+        let Some(uid_validity) = mailbox.uid_validity else {
+            continue;
+        };
+        crate::archive::imap::tombstones::record_uids(account_id, mailbox_id, uid_validity, &uids)
             .await?;
-        }
     }
     Ok(())
 }
 
 pub async fn delete_messages_impl(request: HashMap<u64, Vec<String>>) -> BichonResult<()> {
+    delete_messages_impl_with(request, false).await
+}
+
+/// Like [`delete_messages_impl`], but optionally allows messages inside the
+/// minimum-retention window to be deleted. The only caller that passes `true`
+/// is the GDPR Art. 17 erasure path, whose request already records the data
+/// subject, the identification criteria and the legal assessment that justifies
+/// erasing despite a statutory retention duty.
+pub async fn delete_messages_impl_with(
+    request: HashMap<u64, Vec<String>>,
+    allow_min_retention_override: bool,
+) -> BichonResult<()> {
     // Legal hold: an account under a hold is frozen — no message may be
     // deleted from it, including manual single/batch deletes from the web UI
     // (retention and auto-expunge already skip held accounts at their own call
@@ -189,6 +205,43 @@ pub async fn delete_messages_impl(request: HashMap<u64, Vec<String>>) -> BichonR
             ));
         }
     }
+
+    // Minimum retention (Enterprise deletion lock): a message whose effective
+    // date is still inside the window cannot be deleted by any ordinary path.
+    // Check every account before deleting anything so a mixed request never
+    // partially applies. The batch job filters locked ids up front; this is
+    // the second, authoritative check.
+    if !allow_min_retention_override {
+        for (account_id, ids) in &request {
+            let account = AccountModel::get(*account_id)?;
+            let Some(cutoff) = crate::retention::min_retention_cutoff_ms(&account) else {
+                continue;
+            };
+            // Chunk the index lookup: one term per id, so a page-sized REST
+            // batch stays bounded instead of building a query with N clauses.
+            let mut locked = Vec::new();
+            for chunk in ids.chunks(500) {
+                locked.extend(ENVELOPE_MANAGER.min_retention_locked_ids(
+                    *account_id,
+                    chunk,
+                    cutoff,
+                )?);
+            }
+            if !locked.is_empty() {
+                return Err(raise_error!(
+                    format!(
+                        "Account {} ({}) has {} message(s) inside its {}-day minimum retention window; they cannot be deleted",
+                        account.id,
+                        account.email,
+                        locked.len(),
+                        account.min_retention_days_effective()
+                    ),
+                    ErrorCode::Forbidden
+                ));
+            }
+        }
+    }
+
     record_source_tombstones(&request).await?;
     ENVELOPE_MANAGER
         .delete_envelopes_multi_account(request.clone())
@@ -228,6 +281,14 @@ mod tests {
     }
 
     fn insert_account(id: u64, email: &str) -> AccountModel {
+        insert_account_with_min_retention(id, email, None)
+    }
+
+    fn insert_account_with_min_retention(
+        id: u64,
+        email: &str,
+        min_retention_days: Option<u64>,
+    ) -> AccountModel {
         let request = AccountCreateRequest {
             email: email.to_string(),
             login_name: None,
@@ -250,6 +311,7 @@ mod tests {
             extraction_rules: None,
             override_from_headers: None,
             retention_days: None,
+            min_retention_days,
             remote_cleanup: None,
             kind: None,
             view: None,
@@ -263,6 +325,16 @@ mod tests {
     }
 
     async fn write_doc(id: &str, account_id: u64, mailbox_id: u64, uid: u32) {
+        write_doc_dated(id, account_id, mailbox_id, uid, 1).await
+    }
+
+    async fn write_doc_dated(
+        id: &str,
+        account_id: u64,
+        mailbox_id: u64,
+        uid: u32,
+        date: i64,
+    ) {
         let f = SchemaTools::email_fields();
         let mut doc = TantivyDocument::new();
         doc.add_text(f.f_id, id);
@@ -271,8 +343,8 @@ mod tests {
         doc.add_u64(f.f_mailbox_id, mailbox_id);
         doc.add_u64(f.f_uid, uid as u64);
         doc.add_u64(f.f_imap_uid, uid as u64 + 1000);
-        doc.add_i64(f.f_date, 1);
-        doc.add_i64(f.f_internal_date, 1);
+        doc.add_i64(f.f_date, date);
+        doc.add_i64(f.f_internal_date, date);
         doc.add_u64(f.f_size, 10);
         let mut writer = ENVELOPE_MANAGER.index_writer().lock().await;
         writer.add_document(doc).unwrap();
@@ -336,5 +408,43 @@ mod tests {
         request.insert(account_id, vec!["no-validity-env".to_string()]);
         delete_messages_impl(request).await.unwrap();
         assert!(tombstones::load(account_id, mailbox_id).unwrap().is_none());
+    }
+
+    /// A minimum-retention lock refuses a message inside the window and lets
+    /// an older message through; a message with no timestamp is treated as
+    /// locked (conservative — there is no proof it is old enough).
+    #[tokio::test]
+    async fn min_retention_blocks_young_messages_only() {
+        init_test_env();
+        let _index_guard = crate::test_support::GLOBAL_INDEX_LOCK.lock().await;
+        let account_id = 92_021;
+        let mailbox_id = 92_022;
+        insert_account_with_min_retention(
+            account_id,
+            "min-retention@test.example",
+            Some(30),
+        );
+        insert_impl(DB_MANAGER.db(), mailbox(mailbox_id, account_id, Some(11))).unwrap();
+
+        let now = crate::utc_now!();
+        write_doc_dated("locked-recent", account_id, mailbox_id, 1, now).await;
+        write_doc_dated("locked-unknown", account_id, mailbox_id, 2, 0).await;
+        write_doc_dated("unlocked-old", account_id, mailbox_id, 3, 1).await;
+
+        let mut request = HashMap::new();
+        request.insert(account_id, vec!["locked-recent".to_string()]);
+        let err = delete_messages_impl(request).await.unwrap_err();
+        assert!(err.to_string().contains("minimum retention"), "got: {err}");
+
+        let mut request = HashMap::new();
+        request.insert(account_id, vec!["locked-unknown".to_string()]);
+        let err = delete_messages_impl(request).await.unwrap_err();
+        assert!(err.to_string().contains("minimum retention"), "got: {err}");
+
+        let mut request = HashMap::new();
+        request.insert(account_id, vec!["unlocked-old".to_string()]);
+        delete_messages_impl(request).await.unwrap();
+
+        tombstones::remove_account(account_id).await.unwrap();
     }
 }

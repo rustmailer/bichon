@@ -37,6 +37,7 @@ use crate::{
     },
     encrypt,
     error::{code::ErrorCode, BichonResult},
+    ext::event_bus::emit,
     id,
     oauth2::token::OAuth2AccessToken,
     raise_error,
@@ -612,6 +613,15 @@ pub struct Account {
     /// legal hold are always exempt.
     #[serde(default)]
     pub retention_days: Option<u64>,
+    /// Minimum retention in days (Enterprise compliance). While set, messages
+    /// whose effective date is still inside this window cannot be deleted —
+    /// not by a single delete, a batch job, a mailbox deletion or an account
+    /// deletion. `None` or `0` disables the lock.
+    ///
+    /// The retention sweep is capped by this value too: it never purges a
+    /// message younger than the longer of `retention_days` and this window.
+    #[serde(default)]
+    pub min_retention_days: Option<u64>,
     /// Source-mailbox cleanup (community feature). `None` = not configured.
     /// Moving archived mail to [`REMOTE_CLEANUP_FOLDER`] may be scheduled;
     /// permanently emptying that folder never is.
@@ -738,6 +748,7 @@ impl Account {
             extraction_rules: request.extraction_rules,
             override_from_headers: request.override_from_headers,
             retention_days: request.retention_days,
+            min_retention_days: request.min_retention_days,
             remote_cleanup: request.remote_cleanup,
             legal_hold: false,
             hold_reason: None,
@@ -765,6 +776,12 @@ impl Account {
     /// Effective retention period in days. `0` / `None` means disabled.
     pub fn retention_days_effective(&self) -> u64 {
         self.retention_days.unwrap_or(0)
+    }
+
+    /// Effective minimum-retention (deletion lock) window. `0` / `None`
+    /// means no lock.
+    pub fn min_retention_days_effective(&self) -> u64 {
+        self.min_retention_days.unwrap_or(0)
     }
 
     pub fn get(account_id: u64) -> BichonResult<AccountModel> {
@@ -927,6 +944,21 @@ impl Account {
                 format!(
                     "Account {} ({}) is under a legal hold; deleting the account is disabled while the hold is active",
                     account.id, account.email
+                ),
+                ErrorCode::Forbidden
+            ));
+        }
+
+        // Minimum retention: deleting the account would cascade-purge mail
+        // the customer is legally required to keep. Disable the lock first
+        // (a root-only, audited change), then delete.
+        if account.min_retention_days_effective() > 0 {
+            return Err(raise_error!(
+                format!(
+                    "Account {} ({}) has a {}-day minimum retention lock; clear it before deleting the account",
+                    account.id,
+                    account.email,
+                    account.min_retention_days_effective()
                 ),
                 ErrorCode::Forbidden
             ));
@@ -1150,6 +1182,54 @@ impl Account {
         )
     }
 
+    /// Apply a retention-policy change and record it in the audit trail.
+    ///
+    /// Both the direct path (dual control off) and the approval executor use
+    /// this one function, so the values written and the event emitted cannot
+    /// diverge between the two. `0` is normalized to `None` ("disabled"), the
+    /// meaning the retention sweep and the UI already use.
+    pub fn apply_retention_policy(
+        account_id: u64,
+        retention_days: Option<u64>,
+        min_retention_days: Option<u64>,
+        user: &str,
+    ) -> BichonResult<AccountModel> {
+        fn normalize(value: Option<u64>) -> Option<u64> {
+            value.filter(|days| *days > 0)
+        }
+
+        let before = Self::get(account_id)?;
+        let after_retention = normalize(retention_days);
+        let after_min = normalize(min_retention_days);
+        if normalize(before.retention_days) == after_retention
+            && normalize(before.min_retention_days) == after_min
+        {
+            return Ok(before);
+        }
+
+        let updated = update_impl(
+            DB_MANAGER.db(),
+            &account_id.to_string(),
+            move |current: Account| {
+                let mut updated = current.clone();
+                updated.retention_days = after_retention;
+                updated.min_retention_days = after_min;
+                updated.updated_at = utc_now!();
+                Ok(updated)
+            },
+        )?;
+
+        emit(crate::ext::event_bus::Event::RetentionPolicyChanged {
+            user: user.to_string(),
+            account_id,
+            retention_days_before: normalize(before.retention_days),
+            retention_days_after: after_retention,
+            min_retention_days_before: normalize(before.min_retention_days),
+            min_retention_days_after: after_min,
+        });
+        Ok(updated)
+    }
+
     /// Accounts currently under a legal hold (Enterprise feature). `None` = no
     /// accounts are held.
     pub fn list_legal_hold_accounts() -> BichonResult<Vec<AccountModel>> {
@@ -1348,6 +1428,12 @@ impl Account {
         }
         if request.clear_retention_days == Some(true) {
             new.retention_days = None;
+        }
+        if request.min_retention_days.is_some() {
+            new.min_retention_days = request.min_retention_days;
+        }
+        if request.clear_min_retention_days == Some(true) {
+            new.min_retention_days = None;
         }
         if request.remote_cleanup.is_some() {
             new.remote_cleanup = request.remote_cleanup;
@@ -1921,6 +2007,7 @@ mod tests {
             extraction_rules: None,
             override_from_headers: None,
             retention_days: None,
+            min_retention_days: None,
             remote_cleanup: None,
             kind: None,
             view: None,
@@ -2079,6 +2166,7 @@ mod tests {
             enabled: true,
             account_type: AccountType::NoSync,
             retention_days: Some(90),
+            min_retention_days: None,
             ..Default::default()
         };
         let account = AccountModel::new(1, request).unwrap();

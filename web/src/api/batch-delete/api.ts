@@ -47,6 +47,8 @@ export interface BatchDeleteJob {
   processed: number
   deleted: number
   failed: number
+  /** Skipped because they are still inside the minimum-retention window. */
+  skipped_locked?: number
   error?: string | null
   cancel_requested: boolean
 }
@@ -63,6 +65,8 @@ export interface BatchDeletePreview {
   /** Source accounts whose messages are skipped. */
   skipped_account_ids: number[]
   held_account_ids: number[]
+  /** Accounts whose minimum-retention lock will skip young messages. */
+  retention_locked_account_ids: number[]
 }
 
 export interface BatchDeleteRequest {

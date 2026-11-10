@@ -56,4 +56,8 @@ export const OP_LABELS: Record<string, { key: string; fallback: string }> = {
     key: 'settings.approvals.opGdprErasure',
     fallback: 'Execute a GDPR erasure request',
   },
+  'retention.update': {
+    key: 'settings.approvals.opRetentionUpdate',
+    fallback: 'Weaken a retention policy',
+  },
 }

@@ -42,6 +42,30 @@ const MAX_SINGLE_EML_BYTES: usize = 100 * 1024 * 1024;
 pub const MAX_WEB_EML_BYTES: usize = 100 * 1024 * 1024; // 100 MB
 pub const MAX_WEB_MBOX_BYTES: usize = 1024 * 1024 * 1024; // 1 GB
 
+/// Decode one EML payload from the import API.
+///
+/// The API documents "base64", not "URL-safe base64". Decode the URL-safe
+/// alphabet first (that is what the bundled UI and the PST importer send),
+/// then fall back to standard base64. Without the fallback a standard encoder
+/// fails intermittently: `+` and `/` only appear in some payloads, so short
+/// messages often work while a message whose bytes happen to need those
+/// symbols fails.
+fn decode_eml_base64(input: &str) -> Result<Vec<u8>, base64::DecodeError> {
+    match base64_decode_url_safe!(input.as_bytes()) {
+        Ok(bytes) => Ok(bytes),
+        Err(url_safe_error) => {
+            use base64::{engine::general_purpose::STANDARD, Engine as _};
+            STANDARD
+                .decode(input.as_bytes())
+                .or_else(|_| {
+                    use base64::engine::general_purpose::STANDARD_NO_PAD;
+                    STANDARD_NO_PAD.decode(input.as_bytes())
+                })
+                .map_err(|_| url_safe_error)
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[cfg_attr(feature = "web-api", derive(poem_openapi::Object))]
 pub struct BatchEmlRequest {
@@ -141,7 +165,7 @@ impl ImportEmls {
         let total = request.emls.len();
         let mut index: usize = 0;
         while let Some(eml_base64) = request.emls.pop() {
-            let decoded = match base64_decode_url_safe!(eml_base64.as_bytes()) {
+            let decoded = match decode_eml_base64(&eml_base64) {
                 Ok(bytes) => bytes,
                 Err(e) => {
                     let error_msg =
@@ -963,4 +987,27 @@ fn fail_progress(
     };
     update_progress(import_id, progress.clone());
     history::save_import_history(user_id, account_id, folder, &progress);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::decode_eml_base64;
+    use base64::{
+        engine::general_purpose::{STANDARD, URL_SAFE},
+        Engine as _,
+    };
+
+    #[test]
+    fn accepts_both_the_standard_and_url_safe_base64_alphabets() {
+        // These bytes force the two alphabet-specific symbols: standard
+        // base64 is "+//+", URL-safe is "-__-".
+        let raw = [0xfb_u8, 0xff, 0xfe];
+        let standard = STANDARD.encode(raw);
+        assert!(standard.contains('+') || standard.contains('/'), "{standard}");
+        assert_eq!(decode_eml_base64(&standard).unwrap(), raw.to_vec());
+        assert_eq!(
+            decode_eml_base64(&URL_SAFE.encode(raw)).unwrap(),
+            raw.to_vec()
+        );
+    }
 }

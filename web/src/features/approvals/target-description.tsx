@@ -39,6 +39,18 @@ export function TargetDescription({ target }: { target: ApprovalTarget }) {
   const { t } = useTranslation()
 
   switch (target.kind) {
+    case 'hold_case':
+      return (
+        <div>
+          <div className='font-medium'>
+            {target.case_ref || target.hold_id}
+          </div>
+          <div className='text-muted-foreground'>
+            {t('legalHold.account', 'Account')} {target.account_id}
+          </div>
+        </div>
+      )
+
     case 'accounts':
       return (
         <div>
@@ -160,6 +172,34 @@ export function TargetDescription({ target }: { target: ApprovalTarget }) {
           </div>
         </div>
       )
+
+    case 'retention': {
+      const days = (value: number | null) =>
+        value === null
+          ? t('approvals.retentionOff', 'off')
+          : t('approvals.retentionDays', '{{count}} days', { count: value })
+      return (
+        <div>
+          <div className='font-medium'>
+            {t('approvals.targetRetention', 'Retention policy — account {{account}}', {
+              account: target.account_id,
+            })}
+          </div>
+          <div className='text-muted-foreground'>
+            {t('approvals.retentionMax', 'Maximum retention: {{before}} → {{after}}', {
+              before: days(target.retention_days_before),
+              after: days(target.retention_days_after),
+            })}
+          </div>
+          <div className='text-muted-foreground'>
+            {t('approvals.retentionLock', 'Deletion lock: {{before}} → {{after}}', {
+              before: days(target.min_retention_days_before),
+              after: days(target.min_retention_days_after),
+            })}
+          </div>
+        </div>
+      )
+    }
 
     case 'erasure': {
       const accounts = Object.keys(target.by_account)

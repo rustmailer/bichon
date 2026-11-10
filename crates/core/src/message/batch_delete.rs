@@ -111,6 +111,10 @@ pub struct BatchDeleteJob {
     pub deleted: u64,
     #[serde(default)]
     pub failed: u64,
+    /// Messages skipped because they were still inside the account's
+    /// minimum-retention window (Enterprise deletion lock).
+    #[serde(default)]
+    pub skipped_locked: u64,
     #[serde(default)]
     pub error: Option<String>,
     /// Persisted mirror of the in-process cancel flag, so a restarted server
@@ -167,6 +171,11 @@ pub struct BatchDeletePreviewView {
     /// whole request fail; the UI shows them before the operator confirms.
     #[serde(default)]
     pub held_account_ids: Vec<u64>,
+    /// Accounts whose minimum-retention lock is active. Matching messages
+    /// younger than the lock window will be skipped by the job; the UI warns
+    /// before the operator confirms.
+    #[serde(default)]
+    pub retention_locked_account_ids: Vec<u64>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -506,6 +515,7 @@ fn start_job_inner(
             processed: 0,
             deleted: 0,
             failed: 0,
+            skipped_locked: 0,
             error: None,
             cancel_requested: false,
             account_progress: Vec::new(),
@@ -626,6 +636,33 @@ async fn run_job_inner(
         // The frozen set is the approval itself: no search, no widening.
         JobSource::Frozen(by_account) => by_account,
     };
+    // Minimum retention: remove locked messages before they are counted or
+    // chunked. The enforcing delete path is still the authority (a race with
+    // a policy change fails the batch), but filtering here keeps the job's
+    // counters and the user's expectation aligned.
+    let mut by_account = by_account;
+    for (account_id, envelope_ids) in by_account.iter_mut() {
+        let Ok(account) = AccountModel::get(*account_id) else {
+            continue;
+        };
+        let Some(cutoff) = crate::retention::min_retention_cutoff_ms(&account) else {
+            continue;
+        };
+        let mut locked = Vec::new();
+        for chunk in envelope_ids.chunks(BATCH_SIZE) {
+            locked.extend(ENVELOPE_MANAGER.min_retention_locked_ids(
+                *account_id,
+                chunk,
+                cutoff,
+            )?);
+        }
+        if locked.is_empty() {
+            continue;
+        }
+        let locked: std::collections::HashSet<&String> = locked.iter().collect();
+        job.skipped_locked += locked.len() as u64;
+        envelope_ids.retain(|id| !locked.contains(id));
+    }
     job.total = by_account.values().map(|ids| ids.len() as u64).sum();
     upsert_job(job)?;
 
@@ -998,6 +1035,7 @@ mod tests {
             extraction_rules: None,
             override_from_headers: None,
             retention_days: None,
+            min_retention_days: None,
             remote_cleanup: None,
             kind: None,
             view: None,

@@ -116,6 +116,28 @@ pub struct SourceRef {
     pub envelope_id: String,
     pub mailbox_id: u64,
     pub uid: u32,
+    /// RFC 5322 Date header, epoch millis (0 = unknown).
+    pub date: i64,
+    /// IMAP INTERNALDATE / import time, epoch millis (0 = unknown).
+    pub internal_date: i64,
+}
+
+/// One message removed by the retention sweep, captured before the index
+/// document disappears so the purge can be audited and tombstoned.
+#[derive(Clone, Debug, Default)]
+pub struct RetentionDeletedRow {
+    pub envelope_id: String,
+    pub mailbox_id: u64,
+    pub uid: u32,
+    pub date: i64,
+    pub internal_date: i64,
+}
+
+/// What one retention purge removed.
+#[derive(Clone, Debug, Default)]
+pub struct RetentionPurge {
+    pub purged: u64,
+    pub rows: Vec<RetentionDeletedRow>,
 }
 
 /// The local proof a cleanup candidate is built from: both the Message-ID and
@@ -663,9 +685,37 @@ impl IndexManager {
                     .get_first(fields.f_uid)
                     .and_then(|v| v.as_u64())
                     .unwrap_or(0) as u32,
+                date: doc
+                    .get_first(fields.f_date)
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0),
+                internal_date: doc
+                    .get_first(fields.f_internal_date)
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0),
             });
         }
         Ok(out)
+    }
+
+    /// Messages among `ids` whose effective date is still inside the
+    /// minimum-retention window. A message with no usable timestamp at all is
+    /// treated as locked: without a date there is no proof it is old enough.
+    pub fn min_retention_locked_ids(
+        &self,
+        account_id: u64,
+        ids: &[String],
+        cutoff_ms: i64,
+    ) -> BichonResult<Vec<String>> {
+        let refs = self.get_source_refs(account_id, ids)?;
+        Ok(refs
+            .into_iter()
+            .filter(|r| {
+                crate::retention::effective_date_ms(r.date, r.internal_date)
+                    .is_none_or(|date| date >= cutoff_ms)
+            })
+            .map(|r| r.envelope_id)
+            .collect())
     }
 
 /// Everything the source-mailbox cleanup needs about one archived message.
@@ -1707,16 +1757,29 @@ impl IndexManager {
         &self,
         account_id: u64,
         cutoff_ms: i64,
-    ) -> BichonResult<u64> {
-        let count = {
-            let searcher = self.create_searcher()?;
-            searcher
-                .search(&self.retention_purge_query(account_id, cutoff_ms), &Count)
-                .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?
-        };
-        if count == 0 {
-            return Ok(0);
+    ) -> BichonResult<RetentionPurge> {
+        // Capture the rows before they disappear: the purge must be auditable
+        // and every IMAP-sourced message needs a tombstone so gap-fill does
+        // not treat it as a failed download.
+        let rows = self.retention_rows(account_id, cutoff_ms)?;
+        if rows.is_empty() {
+            return Ok(RetentionPurge::default());
         }
+
+        // Tombstones must exist before the index documents are gone, or
+        // gap-fill would treat the purged messages as failed downloads. The
+        // writes take the backup gate themselves, so they happen before we
+        // acquire it for the index delete.
+        let mut by_mailbox: std::collections::HashMap<u64, Vec<u32>> =
+            std::collections::HashMap::new();
+        for row in &rows {
+            // uid == 0: imported / SMTP-journal messages have no remote copy.
+            if row.uid != 0 && row.mailbox_id != 0 {
+                by_mailbox.entry(row.mailbox_id).or_default().push(row.uid);
+            }
+        }
+        crate::message::delete::record_tombstones_by_mailbox(account_id, by_mailbox).await?;
+
         let _write_guard = WRITE_GATE.acquire(BACKUP_ACQUIRE_TIMEOUT).await?;
 
         let (eml_hashes_with_mailbox, attachments_content_hashes, leafs) = self
@@ -1749,7 +1812,62 @@ impl IndexManager {
         }
 
         crate::ext::timestamp::record_deletions(leafs, crate::utc_now!());
-        Ok(count as u64)
+        Ok(RetentionPurge {
+            purged: rows.len() as u64,
+            rows,
+        })
+    }
+
+    /// The messages a retention purge would remove, with the metadata needed
+    /// for tombstones and the purge audit record.
+    fn retention_rows(
+        &self,
+        account_id: u64,
+        cutoff_ms: i64,
+    ) -> BichonResult<Vec<RetentionDeletedRow>> {
+        let fields = SchemaTools::email_fields();
+        let searcher = self.create_searcher()?;
+        let docs = searcher
+            .search(
+                &self.retention_purge_query(account_id, cutoff_ms),
+                &DocSetCollector,
+            )
+            .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;
+
+        let mut out = Vec::with_capacity(docs.len());
+        for doc_address in docs {
+            let doc = searcher
+                .doc::<TantivyDocument>(doc_address)
+                .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;
+            let envelope_id = doc
+                .get_first(fields.f_id)
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            if envelope_id.is_empty() {
+                continue;
+            }
+            out.push(RetentionDeletedRow {
+                envelope_id,
+                mailbox_id: doc
+                    .get_first(fields.f_mailbox_id)
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0),
+                uid: doc
+                    .get_first(fields.f_uid)
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0) as u32,
+                date: doc
+                    .get_first(fields.f_date)
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0),
+                internal_date: doc
+                    .get_first(fields.f_internal_date)
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0),
+            });
+        }
+        Ok(out)
     }
 
     /// Boolean query matching envelopes of `account_id` whose effective date is
@@ -4304,6 +4422,7 @@ mod tests {
             extraction_rules: None,
             override_from_headers: None,
             retention_days: None,
+            min_retention_days: None,
             remote_cleanup: None,
             kind: None,
             view: None,

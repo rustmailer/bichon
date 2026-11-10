@@ -61,6 +61,20 @@ pub async fn delete_mailbox_impl(account_id: u64, mailbox_id: u64) -> BichonResu
         ));
     }
 
+    // Minimum retention: a mailbox deletion cascades to its messages, so the
+    // same protection as a message delete applies. Clear the lock first.
+    if account.min_retention_days_effective() > 0 {
+        return Err(raise_error!(
+            format!(
+                "Account {} ({}) has a {}-day minimum retention lock; clear it before deleting mailboxes",
+                account.id,
+                account.email,
+                account.min_retention_days_effective()
+            ),
+            ErrorCode::Forbidden
+        ));
+    }
+
     let ids_to_delete = mailbox_subtree_ids(account_id, mailbox_id)?;
 
     if ids_to_delete.is_empty() {
@@ -135,6 +149,7 @@ mod tests {
             extraction_rules: None,
             override_from_headers: None,
             retention_days: None,
+            min_retention_days: None,
             remote_cleanup: None,
             kind: None,
             view: None,

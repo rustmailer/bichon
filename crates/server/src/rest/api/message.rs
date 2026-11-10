@@ -149,6 +149,15 @@ impl MessageApi {
             })
             .copied()
             .collect();
+        let retention_locked_account_ids = account_ids
+            .iter()
+            .filter(|id| {
+                AccountModel::get(**id)
+                    .map(|account| account.min_retention_days_effective() > 0)
+                    .unwrap_or(false)
+            })
+            .copied()
+            .collect();
         Ok(Json(BatchDeletePreviewView {
             total,
             matched,
@@ -156,6 +165,7 @@ impl MessageApi {
             account_ids,
             skipped_account_ids,
             held_account_ids,
+            retention_locked_account_ids,
         }))
     }
 

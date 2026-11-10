@@ -33,6 +33,8 @@ use crate::account::migration::AccountModel;
 use crate::backup::gate::WRITE_GATE;
 use crate::common::periodic::PeriodicTask;
 use crate::error::BichonResult;
+use crate::ext::audit_detail;
+use crate::ext::event_bus::{emit, Event};
 use crate::store::tantivy::envelope::ENVELOPE_MANAGER;
 use crate::utc_now;
 use std::time::Duration;
@@ -50,6 +52,28 @@ pub const DAY_MS: i64 = 24 * 60 * 60 * 1000;
 pub fn retention_cutoff_ms(days: u64) -> i64 {
     let days_i64 = days.min(i64::MAX as u64) as i64;
     utc_now!().saturating_sub(days_i64.saturating_mul(DAY_MS))
+}
+
+/// The cutoff before which a retention sweep may purge. When a minimum
+/// retention (deletion lock) is configured, the sweep must keep messages for
+/// the *longer* of the two windows, so the effective window is the maximum of
+/// `retention_days` and `min_retention_days`. `0` means retention is disabled.
+pub fn effective_purge_days(account: &AccountModel) -> u64 {
+    let max_age = account.retention_days_effective();
+    if max_age == 0 {
+        // No maximum-retention policy: nothing is ever purged, regardless of
+        // the minimum-retention lock.
+        return 0;
+    }
+    max_age.max(account.min_retention_days_effective())
+}
+
+/// Deletion cutoff for the minimum-retention lock. Messages whose effective
+/// date is at or after this instant are protected. `None` when the lock is
+/// disabled.
+pub fn min_retention_cutoff_ms(account: &AccountModel) -> Option<i64> {
+    let days = account.min_retention_days_effective();
+    (days > 0).then(|| retention_cutoff_ms(days))
 }
 
 /// The effective (single) date of a message, mirroring the sweep's semantics:
@@ -76,10 +100,11 @@ pub fn effective_date_ms(date: i64, internal_date: i64) -> Option<i64> {
 /// still reports as recent are fetched and then re-checked against the exact
 /// window at ingest time.
 pub fn retention_floor_date(account: &AccountModel) -> Option<String> {
-    if account.retention_days_effective() == 0 || account.is_on_hold() {
+    let days = effective_purge_days(account);
+    if days == 0 || account.is_on_hold() {
         return None;
     }
-    let cutoff_ms = retention_cutoff_ms(account.retention_days_effective());
+    let cutoff_ms = retention_cutoff_ms(days);
     let dt = chrono::DateTime::from_timestamp_millis(cutoff_ms)?;
     Some(dt.format("%d-%b-%Y").to_string())
 }
@@ -126,7 +151,7 @@ pub async fn retention_sweep() -> BichonResult<()> {
     let mut held_accounts: usize = 0;
 
     for account in &accounts {
-        let days = account.retention_days_effective();
+        let days = effective_purge_days(account);
         if days == 0 {
             continue;
         }
@@ -145,13 +170,41 @@ pub async fn retention_sweep() -> BichonResult<()> {
             .delete_envelopes_before(account.id, cutoff_ms)
             .await
         {
-            Ok(0) => {}
-            Ok(purged) => {
+            Ok(purge) if purge.purged == 0 => {}
+            Ok(purge) => {
+                // The detail file keeps the purge auditable per message
+                // without writing one audit row per message. When audit
+                // detail is not configured (community) the event still names
+                // the account, count and cutoff; only the id list is absent.
+                let detail = audit_detail::write_retention_detail(
+                    account.id,
+                    &purge
+                        .rows
+                        .iter()
+                        .map(|r| audit_detail::PurgedMessageRow {
+                            email_id: r.envelope_id.clone(),
+                            mailbox_id: r.mailbox_id,
+                            uid: r.uid,
+                            date: r.date,
+                            internal_date: r.internal_date,
+                        })
+                        .collect::<Vec<_>>(),
+                )
+                .ok();
+                emit(Event::RetentionPurged {
+                    account_id: account.id,
+                    count: purge.purged,
+                    cutoff_ms,
+                    window_days: days,
+                    detail_file: detail.as_ref().map(|d| d.rel_path.clone()),
+                    detail_size: detail.as_ref().map(|d| d.size),
+                    detail_sha256: detail.as_ref().map(|d| d.sha256.clone()),
+                });
                 info!(
-                    "retention: purged {purged} envelope(s) from account {} ({}) (window {days}d)",
-                    account.id, account.email
+                    "retention: purged {} envelope(s) from account {} ({}) (window {days}d)",
+                    purge.purged, account.id, account.email
                 );
-                purged_total += purged;
+                purged_total += purge.purged;
             }
             Err(e) => {
                 warn!(
@@ -200,6 +253,7 @@ mod tests {
             extraction_rules: None,
             override_from_headers: None,
             retention_days: None,
+            min_retention_days: None,
             remote_cleanup: None,
             kind: None,
             view: None,
@@ -246,6 +300,20 @@ mod tests {
     }
 
     #[test]
+    fn effective_purge_window_is_capped_by_min_retention() {
+        let mut account = test_account(Some(30), false);
+        assert_eq!(effective_purge_days(&account), 30);
+        account.min_retention_days = Some(365);
+        assert_eq!(effective_purge_days(&account), 365);
+        // A longer max-age still wins.
+        account.retention_days = Some(3650);
+        assert_eq!(effective_purge_days(&account), 3650);
+        // With max-age disabled nothing is purged, lock or no lock.
+        account.retention_days = None;
+        assert_eq!(effective_purge_days(&account), 0);
+    }
+
+    #[test]
     fn cutoff_huge_window_does_not_overflow() {
         // u64::MAX days would overflow naive arithmetic; must saturate cleanly.
         let _ = retention_cutoff_ms(u64::MAX);
@@ -288,8 +356,10 @@ mod tests {
     // envelopes in the real Tantivy index, so the hold exemption and the
     // purge path are verified against the actual storage stack.
 
+    use crate::archive::imap::mailbox::MailBox;
+    use crate::archive::imap::tombstones;
     use crate::database::manager::DB_MANAGER;
-    use crate::database::insert_impl;
+    use crate::database::{insert_impl, upsert_impl};
     use crate::settings::cli::SETTINGS;
     use crate::settings::dir::DATA_DIR_MANAGER;
     use crate::store::tantivy::envelope::ENVELOPE_MANAGER;
@@ -412,6 +482,60 @@ mod tests {
             "old envelope must be purged and the recent one kept (the sweep was skipped by a \
              backup window on every attempt)"
         );
+    }
+
+    #[tokio::test]
+    async fn sweep_respects_min_retention_window() {
+        let _serial = SWEEP_TESTS.lock().await;
+        init_sweep_env();
+        let mut account =
+            insert_account_with_retention(9104, "sweep-lock@test.example", Some(30));
+        account.min_retention_days = Some(365);
+        upsert_impl::<AccountModel>(DB_MANAGER.db(), account.clone()).unwrap();
+
+        let now = utc_now!();
+        let old_but_locked = now - 40 * DAY_MS; // past max-age, inside the lock
+        write_envelope("sweep-locked", account.id, old_but_locked, old_but_locked).await;
+
+        retention_sweep().await.unwrap();
+
+        assert_eq!(
+            envelope_count(account.id).await,
+            1,
+            "minimum retention must cap the sweep"
+        );
+    }
+
+    /// A retention purge records source-UID tombstones before deleting, so a
+    /// later gap-fill does not treat the purged mail as a failed download.
+    #[tokio::test]
+    async fn sweep_records_tombstones_for_purged_messages() {
+        let _serial = SWEEP_TESTS.lock().await;
+        init_sweep_env();
+        let account = insert_account_with_retention(9105, "sweep-tombstone@test.example", Some(30));
+        insert_impl(
+            DB_MANAGER.db(),
+            MailBox {
+                id: 10,
+                account_id: account.id,
+                name: "INBOX".into(),
+                uid_validity: Some(77),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let now = utc_now!();
+        let old = now - 40 * DAY_MS;
+        write_envelope("sweep-tombstone-old", account.id, old, old).await;
+
+        retention_sweep().await.unwrap();
+
+        let recorded = tombstones::load(account.id, 10)
+            .unwrap()
+            .expect("retention purge must write a tombstone");
+        assert!(recorded.bitmap.contains(1));
+        tombstones::remove_account(account.id).await.unwrap();
     }
 
     #[tokio::test]

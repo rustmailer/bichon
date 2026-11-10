@@ -23,6 +23,7 @@ use bichon_core::account::grant::BatchAccountRoleRequest;
 use bichon_core::account::migration::{AccountModel, AccountType};
 use bichon_core::account::payload::{
     filter_accessible_accounts, AccountCreateRequest, AccountUpdateRequest, MinimalAccount,
+    RetentionPolicyRequest,
 };
 use bichon_core::account::state::{DownloadState, GapFillState, RemoteCleanupState};
 use bichon_core::archive::imap::cleanup::{
@@ -34,14 +35,19 @@ use bichon_core::archive::imap::task::SYNC_TASKS;
 use bichon_core::common::paginated::{paginate_vec, DataPage};
 use bichon_core::error::code::ErrorCode;
 use bichon_core::ext::event_bus::{emit, Event};
+use bichon_core::ext::retention_policy::{
+    gate_weakening_change, min_retention_allowed, RetentionChange, RetentionGateDecision,
+    RetentionValues,
+};
 use bichon_core::raise_error;
 use bichon_core::store::tantivy::envelope::ENVELOPE_MANAGER;
 use bichon_core::users::permissions::Permission;
 use bichon_core::users::UserModel;
 use poem_openapi::param::{Path, Query};
-use poem_openapi::payload::Json;
+use poem_openapi::payload::{Json, Response as OaiResponse};
 use poem_openapi::OpenApi;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 
 pub struct AccountApi;
@@ -122,6 +128,20 @@ impl AccountApi {
         context: WrappedContext,
     ) -> ApiResult<Json<AccountModel>> {
         context.require_permission(None, Permission::ACCOUNT_CREATE)?;
+        // Retention is a compliance control, not an ordinary account setting:
+        // only a system root may create an account with a non-zero window or
+        // lock. The minimum lock is additionally Enterprise-only.
+        let min_days = payload.0.min_retention_days.unwrap_or(0);
+        if payload.0.retention_days.unwrap_or(0) > 0 || min_days > 0 {
+            context.require_permission(None, Permission::ROOT)?;
+        }
+        if min_days > 0 && !min_retention_allowed() {
+            return Err(raise_error!(
+                "The minimum-retention lock requires an Enterprise license".to_string(),
+                ErrorCode::Forbidden
+            )
+            .into());
+        }
         // The view rule (a view delegates read access, so every source needs
         // `account:manage`) is enforced inside `create_account`, where a second
         // caller cannot skip it.
@@ -131,6 +151,16 @@ impl AccountApi {
             account_id: account.id,
             email: account.email.clone(),
         });
+        if account.retention_days.is_some() || account.min_retention_days.is_some() {
+            emit(Event::RetentionPolicyChanged {
+                user: context.user.username.clone(),
+                account_id: account.id,
+                retention_days_before: None,
+                retention_days_after: account.retention_days,
+                min_retention_days_before: None,
+                min_retention_days_after: account.min_retention_days,
+            });
+        }
         Ok(Json(account))
     }
 
@@ -150,11 +180,28 @@ impl AccountApi {
     ) -> ApiResult<()> {
         let account_id = account_id.0;
         context.require_permission(Some(account_id), Permission::ACCOUNT_MANAGE)?;
+        // Retention is changed through the dedicated endpoint: a weakening
+        // change may need a second signature, and this handler has no way to
+        // freeze only the two retention fields out of an arbitrary account
+        // update.
+        if payload.0.retention_days.is_some()
+            || payload.0.clear_retention_days == Some(true)
+            || payload.0.min_retention_days.is_some()
+            || payload.0.clear_min_retention_days == Some(true)
+        {
+            return Err(raise_error!(
+                "Retention fields are changed via POST /api/v1/account/:account_id/retention"
+                    .to_string(),
+                ErrorCode::InvalidParameter
+            )
+            .into());
+        }
         // Read the scope *before* the write: the audit record has to say what
         // the view looked like beforehand, and after the update that value is
         // gone. `AccountModel::update` enforces the source-management rule
         // (editing a view can widen it), so a second caller cannot skip it.
-        let before_view = AccountModel::get(account_id)?.view;
+        let before = AccountModel::get(account_id)?;
+        let before_view = before.view.clone();
         AccountModel::update(account_id, payload.0, &context)?;
         let updated = AccountModel::find(account_id)?;
         let email = updated
@@ -170,7 +217,111 @@ impl AccountApi {
                 updated.as_ref().and_then(|a| a.view.as_ref()),
             ),
         });
+        if let Some(after) = updated.as_ref() {
+            if before.retention_days != after.retention_days
+                || before.min_retention_days != after.min_retention_days
+            {
+                emit(Event::RetentionPolicyChanged {
+                    user: context.user.username.clone(),
+                    account_id,
+                    retention_days_before: before.retention_days,
+                    retention_days_after: after.retention_days,
+                    min_retention_days_before: before.min_retention_days,
+                    min_retention_days_after: after.min_retention_days,
+                });
+            }
+        }
         Ok(())
+    }
+
+    /// Change an account's retention policy.
+    ///
+    /// Root-only. A change that weakens protection (shorter maximum retention,
+    /// or a shorter/removed minimum-retention lock) may be queued as a
+    /// dual-control request; a strengthening change always applies directly.
+    /// The retention fields are rejected by the general account-update
+    /// endpoint so this is the only path that can alter them.
+    #[oai(
+        path = "/account/:account_id/retention",
+        method = "post",
+        operation_id = "update_account_retention"
+    )]
+    async fn update_account_retention(
+        &self,
+        account_id: Path<u64>,
+        payload: Json<RetentionPolicyRequest>,
+        context: WrappedContext,
+    ) -> ApiResult<OaiResponse<Json<Value>>> {
+        let account_id = account_id.0;
+        context.require_permission(None, Permission::ROOT)?;
+        let before = AccountModel::get(account_id)?;
+        let before_values = RetentionValues {
+            retention_days: before.retention_days.filter(|days| *days > 0),
+            min_retention_days: before.min_retention_days.filter(|days| *days > 0),
+        };
+        let (retention_days, min_retention_days) = payload
+            .0
+            .resolve(before_values.retention_days, before_values.min_retention_days)?;
+
+        // The lock is Enterprise-only. Unchanged values are allowed on a
+        // lapsed licence so operators can still edit other settings.
+        if min_retention_days != before_values.min_retention_days
+            && !min_retention_allowed()
+        {
+            return Err(raise_error!(
+                "The minimum-retention lock requires an Enterprise license".to_string(),
+                ErrorCode::Forbidden
+            )
+            .into());
+        }
+
+        let change = RetentionChange {
+            account_id,
+            before: before_values,
+            after: RetentionValues {
+                retention_days,
+                min_retention_days,
+            },
+        };
+        let decision = if change.is_weakening() {
+            gate_weakening_change(
+                &change,
+                context.user.id,
+                &context.user.username,
+                context.user.is_admin(),
+            )?
+        } else {
+            RetentionGateDecision::Execute
+        };
+
+        match decision {
+            RetentionGateDecision::Queued {
+                request_id,
+                expires_at,
+            } => Ok(OaiResponse::new(Json(serde_json::json!({
+                "ok": false,
+                "pending": true,
+                "account_id": account_id,
+                "request_id": request_id,
+                "expires_at": expires_at,
+            })))
+            .status(http::StatusCode::ACCEPTED)),
+            RetentionGateDecision::Execute => {
+                let updated = AccountModel::apply_retention_policy(
+                    account_id,
+                    retention_days,
+                    min_retention_days,
+                    &context.user.username,
+                )?;
+                Ok(OaiResponse::new(Json(serde_json::json!({
+                    "ok": true,
+                    "pending": false,
+                    "account_id": account_id,
+                    "retention_days": updated.retention_days,
+                    "min_retention_days": updated.min_retention_days,
+                }))))
+            }
+        }
     }
 
     /// List accounts with optional pagination parameters

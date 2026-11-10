@@ -22,9 +22,13 @@ import axiosInstance from '@/api/axiosInstance'
 
 /** Account summary as returned by the legal-hold console endpoints. */
 export interface HoldAccount {
+  /** Case id. A legacy account-level hold also has one. */
+  hold_id?: string
   id: number
   email: string
   name?: string | null
+  /** Operator case/matter reference, e.g. "2026-014". */
+  case_ref?: string | null
   reason?: string | null
   placed_by?: number | null
   placed_by_name?: string | null
@@ -38,11 +42,12 @@ export async function list_legal_holds(): Promise<HoldAccount[]> {
 
 export async function place_legal_hold(
   account_id: number,
-  reason: string
+  reason: string,
+  case_ref?: string
 ): Promise<HoldAccount> {
   const { data } = await axiosInstance.post<HoldAccount>(
     `api/v1/legal-hold/${account_id}`,
-    { reason }
+    { reason, case_ref: case_ref || null }
   )
   return data
 }
@@ -58,6 +63,8 @@ export async function place_legal_hold(
 export interface ReleaseHoldResult {
   ok: boolean
   account_id: number
+  /** Present on a case-level release. */
+  hold_id?: string
   status?: 'released' | 'pending'
   pending?: boolean
   request_id?: string
@@ -73,6 +80,26 @@ export async function release_legal_hold(
   // Unsupported Media Type without a readable message.
   const { data } = await axiosInstance.delete<ReleaseHoldResult>(
     `api/v1/legal-hold/${account_id}`,
+    {
+      data: { reason: reason ?? null },
+    }
+  )
+  return data
+}
+
+/**
+ * Release exactly one hold case, leaving any other active case on the same
+ * account in place.
+ *
+ * The per-row Release action uses this; the batch action stays account-level
+ * and closes every active case for the selected accounts.
+ */
+export async function release_legal_hold_case(
+  hold_id: string,
+  reason?: string
+): Promise<ReleaseHoldResult> {
+  const { data } = await axiosInstance.delete<ReleaseHoldResult>(
+    `api/v1/legal-hold/cases/${encodeURIComponent(hold_id)}`,
     {
       data: { reason: reason ?? null },
     }
@@ -98,11 +125,12 @@ export interface BatchHoldResult {
 /** Place a hold on multiple accounts at once with a shared reason. */
 export async function place_legal_holds_batch(
   account_ids: number[],
-  reason: string
+  reason: string,
+  case_ref?: string
 ): Promise<BatchHoldResult[]> {
   const { data } = await axiosInstance.post<BatchHoldResult[]>(
     'api/v1/legal-hold/batch',
-    { account_ids, reason }
+    { account_ids, reason, case_ref: case_ref || null }
   )
   return data
 }

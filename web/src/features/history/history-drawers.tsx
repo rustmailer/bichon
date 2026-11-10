@@ -240,6 +240,11 @@ function DeletionHistoryPanel({ enabled }: { enabled: boolean }) {
                 count: job.failed,
                 defaultValue: '{{count}} failed',
               })}`}
+            {(job.skipped_locked ?? 0) > 0 &&
+              ` · ${t('search.batchDelete.skippedLocked', {
+                count: job.skipped_locked,
+                defaultValue: '{{count}} skipped (retention lock)',
+              })}`}
             {` · ${job.username}`}
             {job.executed_by && (
               <>

@@ -268,6 +268,86 @@ fn stream_detail(
     })
 }
 
+/// One message removed by the retention sweep, as written to the detail file.
+pub struct PurgedMessageRow {
+    pub email_id: String,
+    pub mailbox_id: u64,
+    pub uid: u32,
+    pub date: i64,
+    pub internal_date: i64,
+}
+
+/// Write the detail file for one account's retention purge. The rows carry no
+/// content snapshot (the messages are already gone), only identity and dates —
+/// enough to resolve and audit every removed envelope.
+pub fn write_retention_detail(
+    account_id: u64,
+    rows: &[PurgedMessageRow],
+) -> Result<DetailRef, String> {
+    let cfg = CONFIG.get().ok_or("audit detail is not configured")?;
+    std::fs::create_dir_all(&cfg.dir).map_err(|e| format!("create detail dir: {e}"))?;
+    let mut last_err = String::new();
+    for _ in 0..3 {
+        let batch_id = uuid::Uuid::new_v4().to_string();
+        let file_name = format!("{batch_id}.jsonl");
+        let full_path = cfg.dir.join(&file_name);
+        let file = match OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&full_path)
+        {
+            Ok(f) => f,
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
+                last_err = format!("name collision on {file_name}");
+                continue;
+            }
+            Err(e) => return Err(format!("open detail file {file_name}: {e}")),
+        };
+
+        use ring::digest::{Context, SHA256};
+        let mut ctx = Context::new(&SHA256);
+        let mut writer = BufWriter::new(file);
+        for row in rows {
+            let line = serde_json::json!({
+                "email_id": row.email_id,
+                "account_id": account_id,
+                "mailbox_id": row.mailbox_id,
+                "uid": row.uid,
+                "date": row.date,
+                "internal_date": row.internal_date,
+            });
+            let bytes = serde_json::to_vec(&line)
+                .map_err(|e| format!("serialize detail line: {e}"))?;
+            writer
+                .write_all(&bytes)
+                .map_err(|e| format!("write detail line: {e}"))?;
+            writer
+                .write_all(b"\n")
+                .map_err(|e| format!("write detail line: {e}"))?;
+            ctx.update(&bytes);
+            ctx.update(b"\n");
+        }
+        let file = writer
+            .into_inner()
+            .map_err(|e| format!("flush detail file: {e}"))?;
+        file.sync_all().map_err(|e| format!("fsync detail file: {e}"))?;
+        let size = file.metadata().map(|m| m.len()).unwrap_or(0);
+        let sha256 = hex::encode(ctx.finish());
+        let rel_path = format!("detail/{batch_id}.jsonl");
+        return Ok(DetailRef {
+            batch_id,
+            rel_path,
+            size,
+            sha256,
+            count: rows.len() as u64,
+            account_ids: vec![account_id],
+        });
+    }
+    Err(format!(
+        "detail file name collisions on every attempt: {last_err}"
+    ))
+}
+
 /// Resolve a stored `detail/<name>.jsonl` reference to its absolute path, or
 /// `None` if the reference is malformed (path traversal is refused) or the
 /// file is gone.

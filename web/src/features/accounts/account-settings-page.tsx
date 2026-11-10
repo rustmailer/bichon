@@ -35,7 +35,12 @@ import { TabServer } from "./components/tab-server";
 import { TabDownload } from "./components/tab-download";
 import { TabFilters } from "./components/tab-filters";
 import { TabRetention } from "./components/tab-retention";
-import { update_account, list_accounts, type AccountModel } from "@/api/account/api";
+import {
+  update_account,
+  update_retention_policy,
+  list_accounts,
+  type AccountModel,
+} from "@/api/account/api";
 import { getAccountSchema, type AccountFormValues } from "./components/schema";
 import type { AxiosError } from "axios";
 import { useQuery } from "@tanstack/react-query";
@@ -69,6 +74,7 @@ function mapAccountToFormValues(account: AccountModel): AccountFormValues {
     extraction_rules: account.extraction_rules ?? undefined,
     override_from_headers: account.override_from_headers ?? undefined,
     retention_days: account.retention_days ?? undefined,
+    min_retention_days: account.min_retention_days ?? undefined,
   };
 }
 
@@ -112,13 +118,41 @@ export function AccountSettingsPage({ accountId }: AccountSettingsPageProps) {
   }, [account?.id]);
 
   const updateMutation = useMutation({
-    mutationFn: (data: Record<string, any>) => update_account(accountId, data),
-    onSuccess: () => {
-      toast({
-        title: t('accounts.settings.saved'),
-        description: t('accounts.settings.savedDesc'),
-        action: <ToastAction altText={t('common.close')}>{t('common.close')}</ToastAction>,
-      });
+    mutationFn: async (vars: {
+      data: Record<string, any>;
+      retention?: {
+        retention_days?: number;
+        clear_retention_days?: boolean;
+        min_retention_days?: number;
+        clear_min_retention_days?: boolean;
+      };
+    }) => {
+      await update_account(accountId, vars.data);
+      if (vars.retention) {
+        return update_retention_policy(accountId, vars.retention);
+      }
+      return null;
+    },
+    onSuccess: (result) => {
+      if (result?.pending) {
+        toast({
+          title: t(
+            'accounts.retentionChangeQueued',
+            'Retention change submitted for approval'
+          ),
+          description: t(
+            'accounts.retentionChangeQueuedDesc',
+            'The retention policy has NOT changed yet. A second person must approve the request first.'
+          ),
+          action: <ToastAction altText={t('common.close')}>{t('common.close')}</ToastAction>,
+        });
+      } else {
+        toast({
+          title: t('accounts.settings.saved'),
+          description: t('accounts.settings.savedDesc'),
+          action: <ToastAction altText={t('common.close')}>{t('common.close')}</ToastAction>,
+        });
+      }
       queryClient.invalidateQueries({ queryKey: ['account-list'] });
     },
     onError: (error: AxiosError) => {
@@ -167,11 +201,15 @@ export function AccountSettingsPage({ accountId }: AccountSettingsPageProps) {
         extraction_rules: data.extraction_rules || null,
       };
 
-      if (data.retention_days !== undefined) {
-        payload.retention_days = data.retention_days || 0;
-      } else if (account?.retention_days) {
-        payload.clear_retention_days = true;
-      }
+      // Retention has its own endpoint. Only call it when a value actually
+      // changed: a non-root operator editing an unrelated field on a locked
+      // account must not trip the root-only check, and a no-op call would
+      // produce a pointless approval request when dual control is on.
+      const nextMax = data.retention_days || null;
+      const nextMin = data.min_retention_days || null;
+      const retentionChanged =
+        nextMax !== (account?.retention_days || null) ||
+        nextMin !== (account?.min_retention_days || null);
 
       if (!data.date_since && !data.date_before) {
         payload.clear_date_range = true;
@@ -191,7 +229,19 @@ export function AccountSettingsPage({ accountId }: AccountSettingsPageProps) {
         payload.clear_override_from_headers = true;
       }
 
-      updateMutation.mutate(payload);
+      updateMutation.mutate({
+        data: payload,
+        retention: retentionChanged
+          ? {
+              ...(nextMax === null
+                ? { clear_retention_days: true }
+                : { retention_days: nextMax }),
+              ...(nextMin === null
+                ? { clear_min_retention_days: true }
+                : { min_retention_days: nextMin }),
+            }
+          : undefined,
+      });
     },
     [updateMutation, account]
   );

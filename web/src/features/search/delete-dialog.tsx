@@ -151,6 +151,8 @@ export function EnvelopeDeleteDialog({ open, onOpenChange }: Props) {
     : Array.from(toDelete.values()).reduce((sum, set) => sum + set.size, 0)
   const heldAccounts = preview.data?.held_account_ids ?? []
   const skippedNoPermission = preview.data?.skipped_no_permission ?? 0
+  const retentionLockedAccounts =
+    preview.data?.retention_locked_account_ids?.length ?? 0
   // The preview is authoritative for the scope mode: only messages on
   // accounts the caller may delete from are part of the job.
   const nothingDeletable =
@@ -234,6 +236,24 @@ export function EnvelopeDeleteDialog({ open, onOpenChange }: Props) {
                   'search.batchDelete.noneDeletable',
                   'You do not have delete permission on any matching message.'
                 )}
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {scopeMode && retentionLockedAccounts > 0 && (
+            <Alert className='text-xs'>
+              <AlertTitle>
+                {t(
+                  'search.batchDelete.retentionLockTitle',
+                  'Minimum retention is active'
+                )}
+              </AlertTitle>
+              <AlertDescription className='text-xs'>
+                {t('search.batchDelete.retentionLockDesc', {
+                  count: retentionLockedAccounts,
+                  defaultValue:
+                    '{{count}} account(s) in scope have a minimum-retention lock. Messages younger than the lock window will be skipped, not deleted.',
+                })}
               </AlertDescription>
             </Alert>
           )}

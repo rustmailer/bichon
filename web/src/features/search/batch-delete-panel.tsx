@@ -106,7 +106,14 @@ export function BatchDeletePanel() {
               ),
               total: new Intl.NumberFormat(i18n.language).format(finished.total),
               defaultValue: '{{processed}} of {{total}} deleted',
-            }) + (finished.error ? ` · ${finished.error}` : ''),
+            }) +
+              ((finished.skipped_locked ?? 0) > 0
+                ? ` · ${t('search.batchDelete.skippedLocked', {
+                    count: finished.skipped_locked,
+                    defaultValue: '{{count}} skipped (retention lock)',
+                  })}`
+                : '') +
+              (finished.error ? ` · ${finished.error}` : ''),
           variant: finished.status === 'success' ? 'default' : 'destructive',
         })
       }

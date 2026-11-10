@@ -215,6 +215,8 @@ export interface AccountModel {
     deleting?: boolean;
     /** Retention window in days (0 / undefined = keep everything). */
     retention_days?: number;
+    /** Minimum retention in days (0 / undefined = no deletion lock). */
+    min_retention_days?: number;
     /** Source-mailbox cleanup configuration (community). */
     remote_cleanup?: RemoteCleanupConfig | null;
     /** Legal hold flag (Enterprise). When true the retention sweep skips this account. */
@@ -464,6 +466,40 @@ export const cancel_remote_cleanup_job = async (account_id: number, job_id: stri
 
 export const create_account = async (data: Record<string, any>) => {
     const response = await axiosInstance.post("api/v1/account", data);
+    return response.data;
+};
+
+export interface RetentionPolicyResult {
+    ok: boolean;
+    pending?: boolean;
+    account_id: number;
+    request_id?: string;
+    expires_at?: number | null;
+    retention_days?: number | null;
+    min_retention_days?: number | null;
+}
+
+/**
+ * Change an account's retention policy.
+ *
+ * Retention is deliberately not part of `update_account`: a weakening change
+ * may be queued as a dual-control request instead of applied, so the server
+ * gives it a dedicated endpoint with a small, freezeable body.
+ */
+export const update_retention_policy = async (
+    account_id: number,
+    payload: {
+        retention_days?: number;
+        clear_retention_days?: boolean;
+        min_retention_days?: number;
+        clear_min_retention_days?: boolean;
+        reason?: string;
+    }
+) => {
+    const response = await axiosInstance.post<RetentionPolicyResult>(
+        `api/v1/account/${account_id}/retention`,
+        payload
+    );
     return response.data;
 };
 

@@ -91,6 +91,10 @@ const OP_LABELS: Record<string, { key: string; fallback: string }> = {
     key: 'settings.approvals.opGdprErasure',
     fallback: 'Execute a GDPR erasure request',
   },
+  'retention.update': {
+    key: 'settings.approvals.opRetentionUpdate',
+    fallback: 'Weaken a retention policy',
+  },
 }
 
 /** The operations that delete data, as opposed to releasing protection. Shown
@@ -101,6 +105,9 @@ const DESTRUCTIVE_OPS = new Set([
   'account.delete',
   'mailbox.delete',
   'message.delete',
+  // Not an immediate deletion, but it is the one way to shorten the window
+  // that protects data, so it belongs on the warning path.
+  'retention.update',
 ])
 
 /** Operations whose blast radius is not obvious from the label.

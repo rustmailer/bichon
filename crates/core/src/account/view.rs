@@ -65,6 +65,10 @@ pub struct AccountResp {
     pub override_from_headers: Option<Vec<String>>,
     /// Account-level retention window in days (free/community). `None`/`0` = keep everything.
     pub retention_days: Option<u64>,
+    /// Minimum retention in days (Enterprise). Messages inside the window
+    /// cannot be deleted. `None`/`0` = no lock.
+    #[serde(default)]
+    pub min_retention_days: Option<u64>,
     /// Source-mailbox cleanup configuration (community); `None` = not configured.
     #[serde(default)]
     pub remote_cleanup: Option<crate::account::migration::RemoteCleanupConfig>,
@@ -124,6 +128,7 @@ impl AccountResp {
             extraction_rules: account.extraction_rules,
             override_from_headers: account.override_from_headers,
             retention_days: account.retention_days,
+            min_retention_days: account.min_retention_days,
             remote_cleanup: account.remote_cleanup,
             legal_hold: account.legal_hold,
             hold_reason: account.hold_reason,

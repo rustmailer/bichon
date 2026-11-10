@@ -25,19 +25,34 @@
 // Strictly read-only: nothing here changes state. Every operation it reports
 // on is performed on the page that owns it, which keeps this page safe to show
 // to a compliance officer whose entire permission set is `compliance:audit`.
-import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import {
   Activity,
   CheckCircle2,
   Clock,
+  Download,
   FileCheck2,
   Fingerprint,
   Lock,
   ShieldAlert,
   Users,
 } from 'lucide-react'
+import { download_evidence_pack } from '@/api/compliance-evidence/api'
+import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { toast } from '@/hooks/use-toast'
 import {
   get_compliance_overview,
   type ComplianceOverview,
@@ -451,6 +466,43 @@ export default function ComplianceDashboardPage() {
     enabled: canView,
   })
 
+  // ---- evidence pack ---------------------------------------------------
+  const today = new Date()
+  const isoDate = (d: Date) => d.toISOString().slice(0, 10)
+  const [evidenceOpen, setEvidenceOpen] = useState(false)
+  const [fromDate, setFromDate] = useState(() => {
+    const d = new Date(today)
+    d.setDate(d.getDate() - 30)
+    return isoDate(d)
+  })
+  const [toDate, setToDate] = useState(() => isoDate(today))
+  const evidenceMutation = useMutation({
+    mutationFn: () =>
+      download_evidence_pack(
+        new Date(`${fromDate}T00:00:00`).getTime(),
+        new Date(`${toDate}T23:59:59.999`).getTime()
+      ),
+    onSuccess: () => {
+      setEvidenceOpen(false)
+      toast({
+        title: t(
+          'complianceDashboard.evidencePackReady',
+          'Evidence pack downloaded'
+        ),
+      })
+    },
+    onError: (e: Error) => {
+      toast({
+        title: t(
+          'complianceDashboard.evidencePackFailed',
+          'Could not build the evidence pack'
+        ),
+        description: e.message,
+        variant: 'destructive',
+      })
+    },
+  })
+
   if (!canView) {
     return (
       <>
@@ -472,16 +524,29 @@ export default function ComplianceDashboardPage() {
       <FixedHeader />
       <Main>
         <div className='mx-auto w-full max-w-7xl space-y-6 px-4'>
-          <div>
-            <h1 className='text-lg font-semibold'>
-              {t('complianceDashboard.title', 'Compliance dashboard')}
-            </h1>
-            <p className='text-xs text-muted-foreground'>
+          <div className='flex flex-wrap items-start justify-between gap-3'>
+            <div>
+              <h1 className='text-lg font-semibold'>
+                {t('complianceDashboard.title', 'Compliance dashboard')}
+              </h1>
+              <p className='text-xs text-muted-foreground'>
+                {t(
+                  'complianceDashboard.subtitle',
+                  'The current state of every compliance control in one place. Read-only — each control is configured on its own page.'
+                )}
+              </p>
+            </div>
+            <Button
+              variant='outline'
+              size='sm'
+              onClick={() => setEvidenceOpen(true)}
+            >
+              <Download className='mr-1 h-4 w-4' />
               {t(
-                'complianceDashboard.subtitle',
-                'The current state of every compliance control in one place. Read-only — each control is configured on its own page.'
+                'complianceDashboard.evidencePack',
+                'Export evidence pack'
               )}
-            </p>
+            </Button>
           </div>
 
           {isLoading || !data ? (
@@ -544,6 +609,59 @@ export default function ComplianceDashboardPage() {
             </>
           )}
         </div>
+
+        <Dialog open={evidenceOpen} onOpenChange={setEvidenceOpen}>
+          <DialogContent className='sm:max-w-md'>
+            <DialogHeader>
+              <DialogTitle>
+                {t(
+                  'complianceDashboard.evidencePackTitle',
+                  'Export an evidence pack'
+                )}
+              </DialogTitle>
+              <DialogDescription>
+                {t(
+                  'complianceDashboard.evidencePackDesc',
+                  'Download a ZIP with the audit records in this range, the chain-verification result, legal-hold cases, retention policy, the latest integrity run and the timestamp anchors.'
+                )}
+              </DialogDescription>
+            </DialogHeader>
+            <div className='grid grid-cols-2 gap-3'>
+              <div className='space-y-2'>
+                <Label>{t('complianceDashboard.from', 'From')}</Label>
+                <Input
+                  type='date'
+                  value={fromDate}
+                  max={toDate}
+                  onChange={(e) => setFromDate(e.target.value)}
+                />
+              </div>
+              <div className='space-y-2'>
+                <Label>{t('complianceDashboard.to', 'To')}</Label>
+                <Input
+                  type='date'
+                  value={toDate}
+                  min={fromDate}
+                  onChange={(e) => setToDate(e.target.value)}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant='outline' onClick={() => setEvidenceOpen(false)}>
+                {t('common.cancel')}
+              </Button>
+              <Button
+                disabled={!fromDate || !toDate || evidenceMutation.isPending}
+                onClick={() => evidenceMutation.mutate()}
+              >
+                <Download className='mr-1 h-4 w-4' />
+                {evidenceMutation.isPending
+                  ? t('complianceDashboard.building', 'Building…')
+                  : t('complianceDashboard.download', 'Download')}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </Main>
     </>
   )

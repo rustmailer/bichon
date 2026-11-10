@@ -71,6 +71,11 @@ pub struct AccountCreateRequest {
     /// Account-level retention period in days (free/community feature).
     /// `None` or `0` = disabled (archive everything, never auto-purge).
     pub retention_days: Option<u64>,
+    /// Minimum retention in days (Enterprise compliance). Messages younger
+    /// than this window cannot be deleted by any path. `None` or `0` =
+    /// disabled. Only `system:root` may set this.
+    #[serde(default)]
+    pub min_retention_days: Option<u64>,
     /// Source-mailbox cleanup (community feature). `None` = not configured.
     #[serde(default)]
     pub remote_cleanup: Option<RemoteCleanupConfig>,
@@ -290,6 +295,15 @@ pub struct AccountUpdateRequest {
     /// Clear retention back to `None` (disabled). Cannot be combined with
     /// `retention_days`.
     pub clear_retention_days: Option<bool>,
+    /// Minimum retention in days (Enterprise compliance). `Some(0)` disables
+    /// the deletion lock; `None` means no change. Only `system:root` may
+    /// change it.
+    #[serde(default)]
+    pub min_retention_days: Option<u64>,
+    /// Clear the minimum-retention lock. Cannot be combined with
+    /// `min_retention_days`.
+    #[serde(default)]
+    pub clear_min_retention_days: Option<bool>,
     /// Source-mailbox cleanup (community feature). `None` = no change.
     #[serde(default)]
     pub remote_cleanup: Option<RemoteCleanupConfig>,
@@ -301,6 +315,75 @@ pub struct AccountUpdateRequest {
     /// Only meaningful on an `AccountType::View` account.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub view: Option<ViewConfig>,
+}
+
+/// Dedicated retention-policy change request.
+///
+/// Retention fields are no longer accepted on the general account-update
+/// endpoint: a weakening change may need a second signature, and a dedicated
+/// endpoint lets the approval freeze exactly those two values instead of an
+/// arbitrary account payload.
+#[derive(Clone, Debug, Default, Eq, PartialEq, Deserialize, Serialize)]
+#[cfg_attr(feature = "web-api", derive(poem_openapi::Object))]
+pub struct RetentionPolicyRequest {
+    /// New maximum-retention window. `None` = no change; `0` = disabled.
+    #[serde(default)]
+    pub retention_days: Option<u64>,
+    /// Clear the maximum-retention window. Cannot be combined with
+    /// `retention_days`.
+    #[serde(default)]
+    pub clear_retention_days: Option<bool>,
+    /// New minimum-retention lock. `None` = no change; `0` = disabled.
+    #[serde(default)]
+    pub min_retention_days: Option<u64>,
+    /// Clear the minimum-retention lock. Cannot be combined with
+    /// `min_retention_days`.
+    #[serde(default)]
+    pub clear_min_retention_days: Option<bool>,
+    /// Optional reason, shown to the approver under dual control.
+    #[serde(default)]
+    pub reason: Option<String>,
+}
+
+impl RetentionPolicyRequest {
+    /// Resolve the requested values against the account's current policy.
+    /// `Err` when a field and its `clear_*` flag are both set.
+    pub fn resolve(
+        &self,
+        before_retention: Option<u64>,
+        before_min: Option<u64>,
+    ) -> BichonResult<(Option<u64>, Option<u64>)> {
+        fn normalize(value: Option<u64>) -> Option<u64> {
+            value.filter(|days| *days > 0)
+        }
+        if self.clear_retention_days == Some(true) && self.retention_days.is_some() {
+            return Err(raise_error!(
+                "clear_retention_days cannot be combined with retention_days".into(),
+                ErrorCode::InvalidParameter
+            ));
+        }
+        if self.clear_min_retention_days == Some(true) && self.min_retention_days.is_some() {
+            return Err(raise_error!(
+                "clear_min_retention_days cannot be combined with min_retention_days".into(),
+                ErrorCode::InvalidParameter
+            ));
+        }
+        let retention = if self.clear_retention_days == Some(true) {
+            None
+        } else if self.retention_days.is_some() {
+            normalize(self.retention_days)
+        } else {
+            normalize(before_retention)
+        };
+        let min = if self.clear_min_retention_days == Some(true) {
+            None
+        } else if self.min_retention_days.is_some() {
+            normalize(self.min_retention_days)
+        } else {
+            normalize(before_min)
+        };
+        Ok((retention, min))
+    }
 }
 
 impl AccountUpdateRequest {
@@ -373,6 +456,13 @@ impl AccountUpdateRequest {
         if self.clear_retention_days == Some(true) && self.retention_days.is_some() {
             return Err(raise_error!(
                 "clear_retention_days cannot be combined with retention_days".into(),
+                ErrorCode::InvalidParameter
+            ));
+        }
+
+        if self.clear_min_retention_days == Some(true) && self.min_retention_days.is_some() {
+            return Err(raise_error!(
+                "clear_min_retention_days cannot be combined with min_retention_days".into(),
                 ErrorCode::InvalidParameter
             ));
         }

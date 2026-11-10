@@ -97,6 +97,34 @@ pub enum Event {
         /// *what* was deleted; this records *why that set existed*.
         filter: Option<crate::message::search::EmailSearchFilter>,
     },
+    /// The scheduled retention sweep permanently purged messages. Emitted
+    /// once per account per sweep (never per message): a GoBD auditor needs
+    /// the policy value and the cutoff, plus a way to resolve the exact ids.
+    RetentionPurged {
+        account_id: u64,
+        /// Messages removed in this sweep.
+        count: u64,
+        /// Effective cutoff: messages older than this were eligible.
+        cutoff_ms: i64,
+        /// The maximum-retention window that produced the cutoff.
+        window_days: u64,
+        /// Optional JSONL detail file listing the purged envelope ids. Absent
+        /// when audit detail is not configured (community) or the write failed.
+        detail_file: Option<String>,
+        detail_size: Option<u64>,
+        detail_sha256: Option<String>,
+    },
+    /// An account's retention policy changed. Recorded separately from the
+    /// generic `account.updated` row because the before/after values are the
+    /// evidence: "who shortened the retention window, and from what".
+    RetentionPolicyChanged {
+        user: String,
+        account_id: u64,
+        retention_days_before: Option<u64>,
+        retention_days_after: Option<u64>,
+        min_retention_days_before: Option<u64>,
+        min_retention_days_after: Option<u64>,
+    },
     /// Raw EML file downloaded (export).
     EmailExported {
         email_id: String,

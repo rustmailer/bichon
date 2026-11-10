@@ -268,6 +268,7 @@ impl From<AccountV3> for AccountModel {
             // Newer fields default to the safe values: migrated accounts never
             // start auto-purging (retention disabled) and are never on hold.
             retention_days: None,
+            min_retention_days: None,
             remote_cleanup: None,
             legal_hold: false,
             hold_reason: None,

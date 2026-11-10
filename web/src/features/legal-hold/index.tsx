@@ -25,12 +25,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Clock, Lock, LockOpen, Plus, Scale, Unlock } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { minimal_account_list } from '@/api/account/api'
-import { list_pending_account_ids } from '@/api/approvals/api'
+import { list_pending_release_targets } from '@/api/approvals/api'
 import {
   list_legal_holds,
   place_legal_holds_batch,
   release_legal_holds_batch,
   release_legal_hold,
+  release_legal_hold_case,
   type BatchHoldResult,
   type HoldAccount,
 } from '@/api/legal-hold/api'
@@ -75,6 +76,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { FixedHeader } from '@/components/layout/fixed-header'
 import { Main } from '@/components/layout/main'
@@ -138,12 +140,24 @@ export default function LegalHoldPage() {
 
   // Accounts with a release already in the queue. Without this the operator
   // would queue the same release again every time they looked at the page.
-  const { data: pendingAccountIds } = useQuery({
+  const { data: pendingReleaseTargets } = useQuery({
     queryKey: ['approvals', 'pending-accounts'],
-    queryFn: list_pending_account_ids,
+    queryFn: list_pending_release_targets,
     enabled: canView && approvalEnabled,
   })
-  const queuedIds = new Set(pendingAccountIds ?? [])
+  const queuedAccounts = new Set(pendingReleaseTargets?.account_ids ?? [])
+  const accountReleaseQueued = new Set(
+    pendingReleaseTargets?.account_release_ids ?? []
+  )
+  const caseReleaseQueued = new Set(pendingReleaseTargets?.hold_ids ?? [])
+  /** Whether *this case* is already spoken for. An account-level release
+   *  blocks every case on the account; a case-level release blocks only the
+   *  case it names, so another matter stays actionable. */
+  const isQueued = (hold: HoldAccount): boolean =>
+    accountReleaseQueued.has(hold.id) ||
+    (hold.hold_id
+      ? caseReleaseQueued.has(hold.hold_id)
+      : queuedAccounts.has(hold.id))
 
   const { data: accounts } = useQuery({
     queryKey: ['legal-hold-accounts'],
@@ -159,6 +173,7 @@ export default function LegalHoldPage() {
   const [placeOpen, setPlaceOpen] = useState(false)
   const [selectedIds, setSelectedIds] = useState<number[]>([])
   const [placeReason, setPlaceReason] = useState('')
+  const [placeCaseRef, setPlaceCaseRef] = useState('')
   const [releasing, setReleasing] = useState<HoldAccount | null>(null)
   const [releaseReason, setReleaseReason] = useState('')
 
@@ -271,8 +286,12 @@ export default function LegalHoldPage() {
   }
 
   const placeMutation = useMutation({
-    mutationFn: (vars: { account_ids: number[]; reason: string }) =>
-      place_legal_holds_batch(vars.account_ids, vars.reason),
+    mutationFn: (vars: {
+      account_ids: number[]
+      reason: string
+      case_ref?: string
+    }) =>
+      place_legal_holds_batch(vars.account_ids, vars.reason, vars.case_ref),
     onSuccess: (results) => {
       batchToast(
         'legalHold.batchPlaced',
@@ -286,6 +305,7 @@ export default function LegalHoldPage() {
       setPlaceOpen(false)
       setSelectedIds([])
       setPlaceReason('')
+      setPlaceCaseRef('')
     },
     onError: (e) => {
       toast({
@@ -297,8 +317,13 @@ export default function LegalHoldPage() {
   })
 
   const releaseMutation = useMutation({
-    mutationFn: (vars: { account_id: number; reason?: string }) =>
-      release_legal_hold(vars.account_id, vars.reason),
+    // The per-row action releases the case that row shows. Accounts with two
+    // matters keep the other one active. Older rows without a case id fall
+    // back to the account-level release.
+    mutationFn: (vars: { hold_id?: string; account_id: number; reason?: string }) =>
+      vars.hold_id
+        ? release_legal_hold_case(vars.hold_id, vars.reason)
+        : release_legal_hold(vars.account_id, vars.reason),
     onSuccess: (result) => {
       if (result.pending || result.status === 'pending') {
         // Queued, not released. The account is still on hold and the operator
@@ -452,6 +477,7 @@ export default function LegalHoldPage() {
                         </TableHead>
                       )}
                       <TableHead>{t('legalHold.account', 'Account')}</TableHead>
+                      <TableHead>{t('legalHold.caseRef', 'Case')}</TableHead>
                       <TableHead>{t('legalHold.reason', 'Reason')}</TableHead>
                       <TableHead>
                         {t('legalHold.placedBy', 'Placed by')}
@@ -468,7 +494,7 @@ export default function LegalHoldPage() {
                   </TableHeader>
                   <TableBody>
                     {(holds ?? []).map((hold) => (
-                      <TableRow key={hold.id}>
+                      <TableRow key={hold.hold_id ?? hold.id}>
                         {canManage && (
                           <TableCell className='w-8'>
                             <Checkbox
@@ -489,7 +515,7 @@ export default function LegalHoldPage() {
                               <Lock className='mr-1 h-3 w-3' />
                               {t('legalHold.badge', 'Held')}
                             </Badge>
-                            {queuedIds.has(hold.id) && (
+                            {queuedAccounts.has(hold.id) && (
                               <Badge
                                 variant='outline'
                                 className='border-sky-500/40 bg-sky-500/10 text-sky-600'
@@ -503,6 +529,9 @@ export default function LegalHoldPage() {
                             )}
                             <span>{hold.email}</span>
                           </div>
+                        </TableCell>
+                        <TableCell className='font-mono text-xs'>
+                          {hold.case_ref || '—'}
                         </TableCell>
                         <TableCell className='max-w-md'>
                           <span className='line-clamp-2 text-muted-foreground'>
@@ -521,9 +550,9 @@ export default function LegalHoldPage() {
                             <Button
                               variant='outline'
                               size='sm'
-                              disabled={queuedIds.has(hold.id)}
+                              disabled={isQueued(hold)}
                               title={
-                                queuedIds.has(hold.id)
+                                isQueued(hold)
                                   ? t(
                                       'legalHold.alreadyQueued',
                                       'A release request for this account is already awaiting approval.'
@@ -603,6 +632,23 @@ export default function LegalHoldPage() {
                 </div>
               </div>
               <div className='space-y-2'>
+                <Label>{t('legalHold.caseRef', 'Case')}</Label>
+                <Input
+                  value={placeCaseRef}
+                  onChange={(e) => setPlaceCaseRef(e.target.value)}
+                  placeholder={t(
+                    'legalHold.caseRefPlaceholder',
+                    'e.g. 2026-0417'
+                  )}
+                />
+                <p className='text-xs text-muted-foreground'>
+                  {t(
+                    'legalHold.caseRefDesc',
+                    'Optional matter reference. An account can carry more than one active hold.'
+                  )}
+                </p>
+              </div>
+              <div className='space-y-2'>
                 <Label>
                   {t('legalHold.reason', 'Reason')}
                   <span className='text-red-500 align-super text-xs'>*</span>
@@ -632,6 +678,7 @@ export default function LegalHoldPage() {
                   placeMutation.mutate({
                     account_ids: selectedIds,
                     reason: placeReason.trim(),
+                    case_ref: placeCaseRef.trim() || undefined,
                   })
                 }
               >
@@ -675,6 +722,11 @@ export default function LegalHoldPage() {
                     )}
               </AlertDialogDescription>
             </AlertDialogHeader>
+            {releasing?.case_ref && (
+              <div className='text-xs text-muted-foreground'>
+                {t('legalHold.caseRef', 'Case')}: {releasing.case_ref}
+              </div>
+            )}
             <div className='space-y-2'>
               <Label className='text-xs'>
                 {t('legalHold.releaseReason', 'Reason (optional)')}
@@ -697,6 +749,7 @@ export default function LegalHoldPage() {
                 onClick={() =>
                   releasing &&
                   releaseMutation.mutate({
+                    hold_id: releasing.hold_id,
                     account_id: releasing.id,
                     reason: releaseReason.trim() || undefined,
                   })

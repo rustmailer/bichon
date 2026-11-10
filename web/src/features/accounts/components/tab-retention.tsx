@@ -19,6 +19,7 @@ import { useFormContext } from 'react-hook-form'
 import { Lock } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { AccountModel } from '@/api/account/api'
+import { useCurrentUser } from '@/hooks/use-current-user'
 import {
   FormField,
   FormItem,
@@ -56,6 +57,9 @@ const PRESETS: { days: number; key: string; fallback: string }[] = [
 export function TabRetention({ account }: TabRetentionProps) {
   const { t } = useTranslation()
   const { control } = useFormContext<AccountFormValues>()
+  const { require_any_permission } = useCurrentUser()
+  // Minimum retention is a compliance control: only system:root may set it.
+  const canManageLock = require_any_permission(['system:root'])
 
   const held = !!account?.legal_hold
 
@@ -86,6 +90,7 @@ export function TabRetention({ account }: TabRetentionProps) {
                 type='number'
                 min={0}
                 max={3650}
+                disabled={!canManageLock}
                 value={field.value ?? ''}
                 onChange={(e) => {
                   const raw = e.target.value
@@ -102,6 +107,7 @@ export function TabRetention({ account }: TabRetentionProps) {
                 <Button
                   key={preset.days}
                   type='button'
+                  disabled={!canManageLock}
                   variant={field.value === preset.days ? 'default' : 'outline'}
                   size='sm'
                   className='h-7 px-2.5 text-xs'
@@ -114,6 +120,7 @@ export function TabRetention({ account }: TabRetentionProps) {
                 type='button'
                 variant='ghost'
                 size='sm'
+                disabled={!canManageLock}
                 className='h-7 px-2.5 text-xs text-muted-foreground'
                 onClick={() => field.onChange(undefined)}
               >
@@ -124,6 +131,70 @@ export function TabRetention({ account }: TabRetentionProps) {
               {t(
                 'accounts.retentionDaysDesc',
                 'Messages older than this many days are automatically purged. Leave empty (or 0) to keep everything. Age is measured from the older of the message Date header and the server receive time.'
+              )}
+            </FormDescription>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+
+      <FormField
+        control={control}
+        name='min_retention_days'
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>
+              {t(
+                'accounts.minRetentionDays',
+                'Minimum retention / deletion lock (days)'
+              )}
+            </FormLabel>
+            <FormControl>
+              <Input
+                type='number'
+                min={0}
+                max={3650}
+                disabled={!canManageLock}
+                value={field.value ?? ''}
+                onChange={(e) => {
+                  const raw = e.target.value
+                  field.onChange(raw === '' ? undefined : Number(raw))
+                }}
+                placeholder={t(
+                  'accounts.minRetentionDaysPlaceholder',
+                  'No deletion lock'
+                )}
+              />
+            </FormControl>
+            <div className='flex flex-wrap items-center gap-2'>
+              {PRESETS.map((preset) => (
+                <Button
+                  key={preset.days}
+                  type='button'
+                  disabled={!canManageLock}
+                  variant={field.value === preset.days ? 'default' : 'outline'}
+                  size='sm'
+                  className='h-7 px-2.5 text-xs'
+                  onClick={() => field.onChange(preset.days)}
+                >
+                  {t(preset.key, preset.fallback)}
+                </Button>
+              ))}
+              <Button
+                type='button'
+                variant='ghost'
+                size='sm'
+                disabled={!canManageLock}
+                className='h-7 px-2.5 text-xs text-muted-foreground'
+                onClick={() => field.onChange(undefined)}
+              >
+                {t('accounts.minRetentionDaysPlaceholder', 'No deletion lock')}
+              </Button>
+            </div>
+            <FormDescription>
+              {t(
+                'accounts.minRetentionDaysDesc',
+                'Messages younger than this window cannot be deleted by any path, including batch deletion and mailbox or account deletion. The retention sweep also keeps them. Only a system administrator can change this.'
               )}
             </FormDescription>
             <FormMessage />
