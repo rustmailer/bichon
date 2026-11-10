@@ -61,7 +61,7 @@ pub struct MessageApi;
 
 #[OpenApi(prefix_path = "/api/v1", tag = "ApiTags::Message")]
 impl MessageApi {
-    /// Deletes messages from a mailbox or moves them to the trash for the specified account.
+    /// Deletes the given messages from the specified accounts.
     #[oai(
         path = "/delete-messages",
         method = "post",
@@ -69,7 +69,9 @@ impl MessageApi {
     )]
     async fn delete_messages(
         &self,
-        /// specifying the mailbox and messages to delete.
+        /// Map of account ID to message IDs. The key is the account ID, not
+        /// the mailbox ID; each value is an envelope `id` — the UUID returned
+        /// by `search-messages`.
         payload: Json<HashMap<u64, Vec<String>>>,
         context: WrappedContext,
     ) -> ApiResult<()> {

@@ -521,7 +521,7 @@ export function BackupConfigForm({ onSaved }: { onSaved?: () => void }) {
   return (
     <Card>
       <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-3'>
-        <CardTitle className='text-sm font-medium'>
+        <CardTitle className='text-xs font-medium'>
           {t('backup.target.title', 'Backup target & schedule')}
         </CardTitle>
         {saveStatus}
@@ -530,7 +530,9 @@ export function BackupConfigForm({ onSaved }: { onSaved?: () => void }) {
         {/* ── Enable ─────────────────────────────────────────────── */}
         <div className='flex items-center justify-between rounded-md border px-4 py-3'>
           <div className='space-y-0.5'>
-            <Label>{t('backup.target.enabled', 'Backups enabled')}</Label>
+            <Label className='text-xs'>
+              {t('backup.target.enabled', 'Backups enabled')}
+            </Label>
             <p className='text-xs text-muted-foreground'>
               {t(
                 'backup.target.enabledHint',
@@ -544,21 +546,24 @@ export function BackupConfigForm({ onSaved }: { onSaved?: () => void }) {
         {/* ── Target ─────────────────────────────────────────────── */}
         <div className='space-y-4'>
           <div className='space-y-2'>
-            <Label htmlFor='backup-target-type'>
+            <Label htmlFor='backup-target-type' className='text-xs'>
               {t('backup.target.targetType', 'Backup target')}
             </Label>
             <Select
               value={targetType}
               onValueChange={(v) => setTargetType(v as BackupTargetType)}
             >
-              <SelectTrigger id='backup-target-type' className='w-[240px]'>
+              <SelectTrigger
+                id='backup-target-type'
+                className='w-[240px] text-xs'
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value='s3'>
+                <SelectItem value='s3' className='text-xs'>
                   {t('backup.target.targetTypeS3', 'S3-compatible object store')}
                 </SelectItem>
-                <SelectItem value='local'>
+                <SelectItem value='local' className='text-xs'>
                   {t('backup.target.targetTypeLocal', 'Local directory')}
                 </SelectItem>
               </SelectContent>
@@ -569,7 +574,7 @@ export function BackupConfigForm({ onSaved }: { onSaved?: () => void }) {
             <>
           <div className='grid gap-4 sm:grid-cols-2'>
             <div className='space-y-2'>
-              <Label htmlFor='backup-s3-endpoint'>
+              <Label htmlFor='backup-s3-endpoint' className='text-xs'>
                 {t('backup.target.s3Endpoint', 'Endpoint')}
               </Label>
               <Input
@@ -577,10 +582,11 @@ export function BackupConfigForm({ onSaved }: { onSaved?: () => void }) {
                 value={s3Endpoint}
                 placeholder='s3.amazonaws.com'
                 onChange={(e) => setS3Endpoint(e.target.value)}
+                className='text-xs md:text-xs'
               />
             </div>
             <div className='space-y-2'>
-              <Label htmlFor='backup-s3-region'>
+              <Label htmlFor='backup-s3-region' className='text-xs'>
                 {t('backup.target.s3Region', 'Region')}
               </Label>
               <Input
@@ -588,6 +594,7 @@ export function BackupConfigForm({ onSaved }: { onSaved?: () => void }) {
                 value={s3Region}
                 placeholder='us-east-1'
                 onChange={(e) => setS3Region(e.target.value)}
+                className='text-xs md:text-xs'
               />
               <p className='text-xs text-muted-foreground'>
                 {t(
@@ -599,7 +606,7 @@ export function BackupConfigForm({ onSaved }: { onSaved?: () => void }) {
           </div>
           <div className='grid gap-4 sm:grid-cols-2'>
             <div className='space-y-2'>
-              <Label htmlFor='backup-s3-bucket'>
+              <Label htmlFor='backup-s3-bucket' className='text-xs'>
                 {t('backup.target.s3Bucket', 'Bucket')}
               </Label>
               <Input
@@ -607,6 +614,7 @@ export function BackupConfigForm({ onSaved }: { onSaved?: () => void }) {
                 value={s3Bucket}
                 placeholder='bichon-backups'
                 onChange={(e) => setS3Bucket(e.target.value)}
+                className='text-xs md:text-xs'
                 aria-invalid={bucketMissing}
               />
             </div>
@@ -619,7 +627,7 @@ export function BackupConfigForm({ onSaved }: { onSaved?: () => void }) {
           </p>
           <div className='grid gap-4 sm:grid-cols-2'>
             <div className='space-y-2'>
-              <Label htmlFor='backup-s3-access-key'>
+              <Label htmlFor='backup-s3-access-key' className='text-xs'>
                 {t('backup.target.s3AccessKey', 'Access key')}
               </Label>
               <PasswordInput
@@ -628,6 +636,7 @@ export function BackupConfigForm({ onSaved }: { onSaved?: () => void }) {
                 placeholder={
                   current?.s3_access_key_set ? secretPlaceholder : undefined
                 }
+                className='[&_input]:text-xs'
                 onChange={(e) => {
                   // Typing after Clear cancels the clear: otherwise the input
                   // would stay locked empty and the retyped key silently
@@ -650,7 +659,7 @@ export function BackupConfigForm({ onSaved }: { onSaved?: () => void }) {
               )}
             </div>
             <div className='space-y-2'>
-              <Label htmlFor='backup-s3-secret-key'>
+              <Label htmlFor='backup-s3-secret-key' className='text-xs'>
                 {t('backup.target.s3SecretKey', 'Secret key')}
               </Label>
               <PasswordInput
@@ -659,6 +668,7 @@ export function BackupConfigForm({ onSaved }: { onSaved?: () => void }) {
                 placeholder={
                   current?.s3_secret_key_set ? secretPlaceholder : undefined
                 }
+                className='[&_input]:text-xs'
                 onChange={(e) => {
                   setClearSecretKey(false)
                   setS3SecretKey(e.target.value)
@@ -683,7 +693,7 @@ export function BackupConfigForm({ onSaved }: { onSaved?: () => void }) {
 
           {targetType === 'local' && (
             <div className='space-y-2'>
-              <Label htmlFor='backup-local-dir'>
+              <Label htmlFor='backup-local-dir' className='text-xs'>
                 {t('backup.target.localDir', 'Directory')}
               </Label>
               <Input
@@ -691,7 +701,7 @@ export function BackupConfigForm({ onSaved }: { onSaved?: () => void }) {
                 value={localDir}
                 placeholder='/mnt/bichon-backup'
                 onChange={(e) => setLocalDir(e.target.value)}
-                className='font-mono'
+                className='font-mono text-xs md:text-xs'
                 aria-invalid={localDirMissing}
               />
               <p className='text-xs text-muted-foreground'>
@@ -712,7 +722,7 @@ export function BackupConfigForm({ onSaved }: { onSaved?: () => void }) {
           {/* Prefix applies to both targets: the key prefix under the bucket,
               or the subdirectory of the local directory. */}
           <div className='space-y-2'>
-            <Label htmlFor='backup-prefix'>
+            <Label htmlFor='backup-prefix' className='text-xs'>
               {t('backup.target.prefix', 'Prefix')}
             </Label>
             <Input
@@ -720,7 +730,7 @@ export function BackupConfigForm({ onSaved }: { onSaved?: () => void }) {
               value={prefix}
               placeholder='bichon-backup'
               onChange={(e) => setPrefix(e.target.value)}
-              className='font-mono'
+              className='font-mono text-xs md:text-xs'
             />
             <p className='text-xs text-muted-foreground'>
               {t(
@@ -733,7 +743,9 @@ export function BackupConfigForm({ onSaved }: { onSaved?: () => void }) {
 
         {/* ── Schedule ───────────────────────────────────────────── */}
         <div className='space-y-2'>
-          <Label>{t('backup.target.freqLabel', 'Backup frequency')}</Label>
+          <Label className='text-xs'>
+            {t('backup.target.freqLabel', 'Backup frequency')}
+          </Label>
           <div className='flex flex-wrap items-center gap-2'>
             <Select
               value={preset}
@@ -742,29 +754,29 @@ export function BackupConfigForm({ onSaved }: { onSaved?: () => void }) {
                 setScheduleTouched(true)
               }}
             >
-              <SelectTrigger className='w-[200px]'>
+              <SelectTrigger className='w-[200px] text-xs'>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value='manual'>
+                <SelectItem value='manual' className='text-xs'>
                   {t('backup.target.freqManual', 'Manual only')}
                 </SelectItem>
-                <SelectItem value='hourly'>
+                <SelectItem value='hourly' className='text-xs'>
                   {t('backup.target.freqHourly', 'Hourly')}
                 </SelectItem>
-                <SelectItem value='sixHours'>
+                <SelectItem value='sixHours' className='text-xs'>
                   {t('backup.target.freqSixHours', 'Every 6 hours')}
                 </SelectItem>
-                <SelectItem value='daily'>
+                <SelectItem value='daily' className='text-xs'>
                   {t('backup.target.freqDaily', 'Daily')}
                 </SelectItem>
-                <SelectItem value='weekly'>
+                <SelectItem value='weekly' className='text-xs'>
                   {t('backup.target.freqWeekly', 'Weekly')}
                 </SelectItem>
               </SelectContent>
             </Select>
             {preset === 'daily' && (
-              <span className='flex items-center gap-2 text-sm text-muted-foreground'>
+              <span className='flex items-center gap-2 text-xs text-muted-foreground'>
                 {t('backup.target.execAt', 'at')}
                 <Select
                   value={String(dailyHour)}
@@ -773,12 +785,12 @@ export function BackupConfigForm({ onSaved }: { onSaved?: () => void }) {
                     setScheduleTouched(true)
                   }}
                 >
-                  <SelectTrigger className='w-[88px]'>
+                  <SelectTrigger className='w-[88px] text-xs'>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className='max-h-64'>
                     {HOUR_OPTIONS.map((h) => (
-                      <SelectItem key={h} value={String(h)}>
+                      <SelectItem key={h} value={String(h)} className='text-xs'>
                         {String(h).padStart(2, '0')}:00
                       </SelectItem>
                     ))}
@@ -787,7 +799,7 @@ export function BackupConfigForm({ onSaved }: { onSaved?: () => void }) {
               </span>
             )}
             {preset === 'weekly' && (
-              <span className='flex items-center gap-2 text-sm text-muted-foreground'>
+              <span className='flex items-center gap-2 text-xs text-muted-foreground'>
                 {t('backup.target.execOn', 'on')}
                 <Select
                   value={weeklyDay}
@@ -796,12 +808,12 @@ export function BackupConfigForm({ onSaved }: { onSaved?: () => void }) {
                     setScheduleTouched(true)
                   }}
                 >
-                  <SelectTrigger className='w-[110px]'>
+                  <SelectTrigger className='w-[110px] text-xs'>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     {WEEKDAYS.map((d) => (
-                      <SelectItem key={d} value={d}>
+                      <SelectItem key={d} value={d} className='text-xs'>
                         {t(`backup.weekday.${d}`, d)}
                       </SelectItem>
                     ))}
@@ -815,12 +827,12 @@ export function BackupConfigForm({ onSaved }: { onSaved?: () => void }) {
                     setScheduleTouched(true)
                   }}
                 >
-                  <SelectTrigger className='w-[88px]'>
+                  <SelectTrigger className='w-[88px] text-xs'>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className='max-h-64'>
                     {HOUR_OPTIONS.map((h) => (
-                      <SelectItem key={h} value={String(h)}>
+                      <SelectItem key={h} value={String(h)} className='text-xs'>
                         {String(h).padStart(2, '0')}:00
                       </SelectItem>
                     ))}
@@ -852,8 +864,10 @@ export function BackupConfigForm({ onSaved }: { onSaved?: () => void }) {
 
         {/* ── Retention ──────────────────────────────────────────── */}
         <div className='space-y-2'>
-          <Label>{t('backup.target.retention', 'Retention')}</Label>
-          <div className='flex flex-wrap items-center gap-2 text-sm'>
+          <Label className='text-xs'>
+            {t('backup.target.retention', 'Retention')}
+          </Label>
+          <div className='flex flex-wrap items-center gap-2 text-xs'>
             <span className='text-muted-foreground'>
               {t('backup.target.keepLastPrefix', 'Keep the most recent')}
             </span>
@@ -865,7 +879,7 @@ export function BackupConfigForm({ onSaved }: { onSaved?: () => void }) {
               onChange={(e) =>
                 setKeepLast(Math.max(1, Number(e.target.value) || 1))
               }
-              className='w-20 font-mono'
+              className='w-20 font-mono text-xs md:text-xs'
             />
             <span className='text-muted-foreground'>
               {t('backup.target.keepLastSuffix', 'restore points')}

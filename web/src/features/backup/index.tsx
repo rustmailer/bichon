@@ -149,7 +149,7 @@ function TransferBreakdown({ byKind }: { byKind: ArtifactStat[] }) {
   if (parts.length === 0) return null
   const text = parts.join(' · ')
   return (
-    <div className='truncate text-[11px] text-muted-foreground' title={text}>
+    <div className='truncate text-xs text-muted-foreground' title={text}>
       {text}
     </div>
   )
@@ -347,6 +347,7 @@ export default function BackupPage() {
               <Button
                 onClick={handleTrigger}
                 disabled={triggering || status?.running || !status?.enabled}
+                className='text-xs'
               >
                 {triggering || status?.running ? (
                   <Loader2 className='mr-2 h-4 w-4 animate-spin' />
@@ -362,6 +363,7 @@ export default function BackupPage() {
                   setHistoryOpen(true)
                 }}
                 disabled={loading}
+                className='text-xs'
               >
                 <History className='mr-2 h-4 w-4' />
                 {t('backup.history', 'Backup history')}
@@ -412,7 +414,7 @@ export default function BackupPage() {
                       {t('backup.statusCard')}
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className='space-y-1.5 text-sm'>
+                  <CardContent className='space-y-1.5 text-xs'>
                     <div className='flex items-center gap-2'>
                       <Badge
                         variant={status?.enabled ? 'secondary' : 'destructive'}
@@ -466,7 +468,7 @@ export default function BackupPage() {
                       {t('backup.nextRun')}
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className='space-y-1.5 text-sm'>
+                  <CardContent className='space-y-1.5 text-xs'>
                     <div className='truncate'>
                       {status?.next_run_at
                         ? formatTime(Date.parse(status.next_run_at))
@@ -513,7 +515,7 @@ export default function BackupPage() {
                       )}
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className='space-y-1.5 text-sm'>
+                  <CardContent className='space-y-1.5 text-xs'>
                     <div className='truncate'>
                       {status?.last_manifest_id ? (
                         <code
@@ -560,7 +562,7 @@ export default function BackupPage() {
                         {t('backup.drillCard', 'Restore drills')}
                       </CardTitle>
                     </CardHeader>
-                    <CardContent className='space-y-1.5 text-sm'>
+                    <CardContent className='space-y-1.5 text-xs'>
                       <div className='flex items-center gap-2'>
                         <ShieldCheck
                           className={`h-4 w-4 ${
@@ -608,7 +610,7 @@ export default function BackupPage() {
                 {status?.enabled && (
                   <Card className='lg:col-span-2'>
                     <CardHeader className='pb-2'>
-                      <CardTitle className='text-sm font-medium'>
+                      <CardTitle className='text-xs font-medium'>
                         {t('backup.manifestBrowser', 'Restore points')}
                       </CardTitle>
                     </CardHeader>
@@ -635,13 +637,13 @@ export default function BackupPage() {
         >
           <SheetHeader className='pb-2'>
             <SheetTitle>{t('backup.records')}</SheetTitle>
-            <SheetDescription>
+            <SheetDescription className='text-xs'>
               {t('backup.recordsHint', 'The most recent 200 backup runs.')}
             </SheetDescription>
           </SheetHeader>
           <div className='flex-1 overflow-y-auto px-4 pb-6'>
             <div className='overflow-x-auto rounded-md border'>
-              <Table>
+              <Table className='text-xs'>
                 <TableHeader>
                   <TableRow>
                     <TableHead className='text-xs'>
@@ -698,7 +700,7 @@ export default function BackupPage() {
                               {record.target && (
                                 <div className='mt-0.5 flex items-center gap-1'>
                                   <span
-                                    className={`max-w-[150px] truncate text-[11px] ${
+                                    className={`max-w-[150px] truncate text-xs ${
                                       offTarget
                                         ? 'text-amber-600 dark:text-amber-500'
                                         : 'text-muted-foreground'
@@ -708,7 +710,7 @@ export default function BackupPage() {
                                     {record.target}
                                   </span>
                                   {offTarget && (
-                                    <span className='shrink-0 text-[11px] text-amber-600 dark:text-amber-500'>
+                                    <span className='shrink-0 text-xs text-amber-600 dark:text-amber-500'>
                                       {t(
                                         'backup.otherTarget',
                                         'different target'
@@ -727,7 +729,7 @@ export default function BackupPage() {
                                   <code className='rounded bg-muted px-1.5 py-0.5 text-xs'>
                                     {record.summary.manifest_id}
                                   </code>
-                                  <div className='mt-0.5 text-[11px] text-muted-foreground'>
+                                  <div className='mt-0.5 text-xs text-muted-foreground'>
                                     {formatTime(
                                       record.finished_at ?? record.started_at
                                     )}

@@ -341,14 +341,14 @@ export default function ManifestBrowser({
       <div className='flex flex-wrap items-center justify-between gap-2'>
         <div className='flex min-w-0 flex-1 items-center gap-2'>
           {!stacked && (
-            <span className='text-sm font-medium'>
+            <span className='text-xs font-medium'>
               {t('backup.manifestBrowser', 'Restore points')}
             </span>
           )}
           {stale && (
             <Badge
               variant='outline'
-              className='border-amber-500/50 text-[11px] text-amber-600 dark:text-amber-500'
+              className='border-amber-500/50 text-xs text-amber-600 dark:text-amber-500'
             >
               {t('backup.staleRestorePoints', 'New backup available')}
             </Badge>
@@ -375,13 +375,13 @@ export default function ManifestBrowser({
       </div>
       <Separator />
       {error ? (
-        <div className='py-8 text-center text-sm text-destructive'>{error}</div>
+        <div className='py-8 text-center text-xs text-destructive'>{error}</div>
       ) : loading ? (
         <div className='flex items-center justify-center py-10'>
           <Loader2 className='h-5 w-5 animate-spin text-muted-foreground' />
         </div>
       ) : manifests.length === 0 ? (
-        <div className='py-8 text-center text-sm text-muted-foreground'>
+        <div className='py-8 text-center text-xs text-muted-foreground'>
           {t('backup.manifestsEmpty')}
         </div>
       ) : (
@@ -403,7 +403,7 @@ export default function ManifestBrowser({
               {manifests.map((m) => (
                 <div
                   key={m.id}
-                  className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm ${
+                  className={`flex w-full items-center gap-2 px-3 py-2 text-left text-xs ${
                     m.id === selectedId ? 'bg-accent' : ''
                   }`}
                 >
@@ -447,7 +447,7 @@ export default function ManifestBrowser({
             }`}
           >
             <div className='flex items-center justify-between border-b px-3 py-2'>
-              <span className='min-w-0 flex-1 truncate text-sm text-muted-foreground'>
+              <span className='min-w-0 flex-1 truncate text-xs text-muted-foreground'>
                 {detail
                   ? `${detail.id} · ${detail.trigger}`
                   : t(
@@ -479,7 +479,7 @@ export default function ManifestBrowser({
                 </div>
               )}
               {!detail ? (
-                <div className='flex h-full items-center justify-center px-4 text-center text-sm text-muted-foreground'>
+                <div className='flex h-full items-center justify-center px-4 text-center text-xs text-muted-foreground'>
                   {t('backup.manifestHint')}
                 </div>
               ) : (
