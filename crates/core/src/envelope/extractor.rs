@@ -576,7 +576,7 @@ async fn extract_envelope_core(
         mailbox_id,
         journal_report,
     )
-    .await;
+    .await?;
 
     let envelope_id = Uuid::new_v4().to_string();
     let now = utc_now!();
@@ -1026,6 +1026,15 @@ pub fn strip_attachment_bodies(
     }
 }
 
+/// Archives the detected attachments of `message` and stores the detached EML
+/// (plus its attachment blobs) in the blob store.
+///
+/// The stripped EML is verified to parse before anything is queued: a splice
+/// that damaged the message would otherwise be persisted as a body that every
+/// later read (`retrieve_email_content`, reindex) must fail on, with no
+/// indication at ingest time. A message that cannot survive its own detach is
+/// refused as [`ErrorCode::EmailParseError`], the same per-message failure the
+/// streaming ingest path already knows how to skip.
 pub async fn detach_and_store_attachments(
     original_body: &[u8],
     message: &Message<'_>,
@@ -1033,7 +1042,50 @@ pub async fn detach_and_store_attachments(
     account_id: u64,
     mailbox_id: u64,
     journal_report: Option<&[u8]>,
-) -> Vec<AttachmentInfo> {
+) -> BichonResult<Vec<AttachmentInfo>> {
+    detach_and_store_attachments_impl(
+        original_body,
+        message,
+        eml_content_hash,
+        account_id,
+        mailbox_id,
+        journal_report,
+        false,
+    )
+    .await
+}
+
+/// Re-fetch path: archives the attachment blobs *and* replaces the stored
+/// email/attachment bytes, so a record whose blob is present but unreadable can
+/// be healed. Otherwise identical to [`detach_and_store_attachments`].
+async fn replace_and_store_attachments(
+    original_body: &[u8],
+    message: &Message<'_>,
+    eml_content_hash: &str,
+    account_id: u64,
+    mailbox_id: u64,
+) -> BichonResult<Vec<AttachmentInfo>> {
+    detach_and_store_attachments_impl(
+        original_body,
+        message,
+        eml_content_hash,
+        account_id,
+        mailbox_id,
+        None,
+        true,
+    )
+    .await
+}
+
+async fn detach_and_store_attachments_impl(
+    original_body: &[u8],
+    message: &Message<'_>,
+    eml_content_hash: &str,
+    account_id: u64,
+    mailbox_id: u64,
+    journal_report: Option<&[u8]>,
+    replace: bool,
+) -> BichonResult<Vec<AttachmentInfo>> {
     let rules = if account_id > 0 {
         AccountModel::get(account_id)
             .ok()
@@ -1055,6 +1107,8 @@ pub async fn detach_and_store_attachments(
         sender: sender.as_deref(),
     };
     let mut detached = strip_attachment_bodies(original_body, message, Some(&filter));
+
+    ensure_stripped_eml_parses(&detached.stripped_eml, eml_content_hash)?;
 
     // A journal delivery keeps the tenant's report beside the message it
     // carried. Stored as an ordinary attachment so it survives export, the
@@ -1105,18 +1159,49 @@ pub async fn detach_and_store_attachments(
             }
         }
     }
-    // Step 4: Store the final stripped EML content
-    BLOB_MANAGER
-        .queue(DetachedEmail {
-            email: (
-                eml_content_hash.to_string(),
-                Bytes::from(detached.stripped_eml),
-            ),
-            attachments: Some(detached.blobs),
-        })
-        .await;
+    // Step 4: Store the final stripped EML content. The normal path only
+    // inserts keys that are absent (content-addressed dedup); the repair path
+    // must overwrite, or an unreadable blob could never be healed.
+    let email = DetachedEmail {
+        email: (
+            eml_content_hash.to_string(),
+            Bytes::from(detached.stripped_eml),
+        ),
+        attachments: Some(detached.blobs),
+    };
+    if replace {
+        tokio::task::spawn_blocking(move || BLOB_MANAGER.replace(email))
+            .await
+            .map_err(|e| {
+                raise_error!(
+                    format!("blob replace task failed: {e:#?}"),
+                    ErrorCode::InternalError
+                )
+            })??;
+    } else {
+        BLOB_MANAGER.queue(email).await;
+    }
 
-    attachment_infos
+    Ok(attachment_infos)
+}
+
+/// Rejects a stripped EML that no longer parses.
+///
+/// Kept separate from the store step so the check is testable without a
+/// runtime: the ingest path must not archive a body that every read path will
+/// then have to fail on.
+fn ensure_stripped_eml_parses(stripped_eml: &[u8], content_hash: &str) -> BichonResult<()> {
+    if MessageParser::new().parse(stripped_eml).is_some() {
+        Ok(())
+    } else {
+        Err(raise_error!(
+            format!(
+                "Detached EML is not parseable (content_hash {content_hash}, {} bytes): message not archived",
+                stripped_eml.len()
+            ),
+            ErrorCode::EmailParseError
+        ))
+    }
 }
 
 pub fn reattach_eml_content(
@@ -1147,6 +1232,16 @@ pub fn reattach_eml_content(
             )
         })?;
 
+    reattach_from_stored(e, restored_eml)
+}
+
+/// Rebuilds the EML from an already-read stored blob. Split out so a caller
+/// that has just read the blob (the self-healing read path checks that it
+/// parses before deciding to serve it) does not decompress it twice.
+fn reattach_from_stored(
+    e: EnvelopeWithAttachments,
+    restored_eml: Bytes,
+) -> BichonResult<(Envelope, Bytes)> {
     if !e.envelope.has_any_attachments() {
         return Ok((e.envelope, restored_eml));
     }
@@ -1255,20 +1350,22 @@ fn schedule_placeholder(
     found
 }
 
-/// Returns the raw EML for an indexed message, self-healing a missing content
+/// Returns the raw EML for an indexed message, self-healing an unusable content
 /// blob.
 ///
 /// Behaves like [`reattach_eml_content`], but when the message's content blob
-/// is absent from the blob store it fetches that single message on demand from
-/// the IMAP server (`UID FETCH <uid> (BODY.PEEK[])`), persists it for future
-/// requests, and returns it. If the on-demand fetch itself fails, the original
-/// "content not found" error from [`reattach_eml_content`] is surfaced
-/// unchanged so the caller still produces its 404.
+/// is absent from the blob store — or is present but not a parseable message —
+/// it fetches that single message on demand from the IMAP server
+/// (`UID FETCH <uid> (BODY.PEEK[])`), **replaces** the stored blob for future
+/// requests, and returns the fetched content. If the on-demand fetch itself
+/// fails, the original "content not found" error from
+/// [`reattach_eml_content`] is surfaced unchanged so the caller still produces
+/// its 404.
 pub async fn reattach_eml_content_self_healing(
     account_id: u64,
     envelope_id: String,
 ) -> BichonResult<(Envelope, Bytes)> {
-    let envelope = ENVELOPE_MANAGER
+    let e = ENVELOPE_MANAGER
         .get_envelope_by_id(account_id, &envelope_id)?
         .ok_or_else(|| {
             raise_error!(
@@ -1278,22 +1375,35 @@ pub async fn reattach_eml_content_self_healing(
                 ),
                 ErrorCode::ResourceNotFound
             )
-        })?
-        .envelope;
+        })?;
 
-    // Fast path: the content blob is present, reuse the regular reattach logic.
-    if BLOB_MANAGER.get_email(&envelope.content_hash)?.is_some() {
-        return reattach_eml_content(account_id, envelope_id);
+    // Fast path: the content blob is present and parses. The blob is reused
+    // here rather than re-read through `reattach_eml_content`, which would
+    // decompress it a second time on every message open.
+    if let Some(eml) = BLOB_MANAGER.get_email(&e.envelope.content_hash)? {
+        if content_is_readable(&eml) {
+            return reattach_from_stored(e, eml);
+        }
+        tracing::warn!(
+            account_id,
+            envelope_id = %envelope_id,
+            uid = e.envelope.uid,
+            content_hash = %e.envelope.content_hash,
+            blob_len = eml.len(),
+            "Stored email content blob is not a parseable message; attempting IMAP recovery"
+        );
     }
 
-    // The blob is missing. Try to recover it directly from the IMAP server.
+    // The blob is missing or unusable. Try to recover it directly from the
+    // IMAP server; the recovered detach replaces the stored bytes.
+    let envelope = e.envelope;
     match recover_message_blob(&envelope).await {
         Ok((raw_body, _persisted)) => {
             tracing::info!(
                 account_id,
                 envelope_id = %envelope_id,
                 uid = envelope.uid,
-                "Self-healed missing email content blob via on-demand IMAP fetch"
+                "Self-healed unusable email content blob via on-demand IMAP fetch"
             );
             Ok((envelope, raw_body))
         }
@@ -1303,21 +1413,30 @@ pub async fn reattach_eml_content_self_healing(
                 envelope_id = %envelope_id,
                 uid = envelope.uid,
                 error = %e,
-                "On-demand IMAP fetch for missing content blob failed; returning not-found"
+                "On-demand IMAP fetch for an unusable content blob failed; returning not-found"
             );
             Err(e)
         }
     }
 }
 
+/// Whether stored bytes are a message the parser can read.
+///
+/// A blob can exist yet hold bytes that are not an EML at all (written by an
+/// older, more lenient parser from a truncated or malformed fetch). Treating
+/// that like a missing blob is what lets the self-healing path replace it.
+fn content_is_readable(eml: &[u8]) -> bool {
+    MessageParser::new().parse(eml).is_some()
+}
+
 /// Fetches one message from IMAP and re-stores its detached blob.
 ///
-/// On success the freshly fetched raw RFC822 body is returned; it is also
-/// queued (in detached form) into the blob store so subsequent requests hit the
-/// cache. Fails if the message cannot be fetched, or if the fetched bytes do
-/// not match the archived `content_hash` (the server-side message no longer
-/// matches what Bichon archived, so it cannot be treated as a recovery of that
-/// blob).
+/// On success the freshly fetched raw RFC822 body is returned; its detached
+/// form **replaces** whatever the blob store held under the archived key, so a
+/// present-but-unreadable record is healed rather than masked. Fails if the
+/// message cannot be fetched, or if the fetched bytes do not match the archived
+/// `content_hash` (the server-side message no longer matches what Bichon
+/// archived, so it cannot be treated as a recovery of that blob).
 /// Returns the fetched body together with whether the detached blob was
 /// actually persisted. `false` means the write was skipped because a backup
 /// window was open — the caller still gets the content, but the blob store was
@@ -1356,7 +1475,7 @@ async fn recover_message_blob(envelope: &Envelope) -> BichonResult<(Bytes, bool)
     // is open, in which case we still return the content to the caller but skip
     // the write so the blob store stays byte-stable for the running snapshot.
     // Reads remain available during a backup. If the gate is open, hold the
-    // admission guard through queueing so the backup cannot race the write.
+    // admission guard through the write so the backup cannot race it.
     let persisted = persist_recovered_blob_if_allowed(
         &raw_body,
         &message,
@@ -1365,7 +1484,7 @@ async fn recover_message_blob(envelope: &Envelope) -> BichonResult<(Bytes, bool)
         envelope.mailbox_id,
         &WRITE_GATE,
     )
-    .await;
+    .await?;
 
     Ok((Bytes::from(raw_body), persisted))
 }
@@ -1377,13 +1496,14 @@ async fn persist_recovered_blob_if_allowed(
     account_id: u64,
     mailbox_id: u64,
     gate: &WriteGate,
-) -> bool {
+) -> BichonResult<bool> {
     let Ok(_write_guard) = gate.check() else {
-        return false;
+        return Ok(false);
     };
-    detach_and_store_attachments(raw_body, message, fetched_hash, account_id, mailbox_id, None)
-        .await;
-    true
+    // `replace`: the recovery path runs precisely when the stored bytes are
+    // missing or unreadable, so the fresh detach must overwrite them.
+    replace_and_store_attachments(raw_body, message, fetched_hash, account_id, mailbox_id).await?;
+    Ok(true)
 }
 
 
@@ -1632,12 +1752,12 @@ fn known_placeholder_hashes(detached_eml: &[u8], attachments: &[AttachmentInfo])
 /// are kept, so no duplicate is created. Nothing is written unless the
 /// fetched message hashes to the archived `content_hash`.
 ///
-/// Only *missing* blobs are healable. A blob that is present but corrupt is
-/// reported — `status: "partial"` on every attempt, however often it is
-/// retried — and deliberately left alone: the blob store keeps the first write
-/// for a key, so this path could only overwrite by deleting first, and nothing
-/// has needed that yet. A permanently `partial` record is therefore not
-/// necessarily a bad IMAP fetch; read the diagnosis before assuming so.
+/// Both *missing* and *present-but-unreadable* blobs are healable: the
+/// recovered detach deletes and rewrites each key (`BlobManager::replace`),
+/// because the normal write path keeps the first bytes stored for a key and
+/// could never overwrite a corrupt record. A record that stays `partial` after
+/// a repair therefore points at the IMAP side (fetch failure, or the message
+/// no longer hashing to the archived `content_hash`), not at the blob store.
 pub async fn repair_envelope_blobs(
     account_id: u64,
     envelope_id: &str,
@@ -1781,7 +1901,8 @@ mod test {
                 0,
                 None,
             )
-            .await;
+            .await
+            .expect("the fixture strips into a parseable EML");
             assert_ne!(infos[0].storage_hash(), infos[0].content_hash);
         });
     }
@@ -2062,6 +2183,34 @@ Inner body\r\n\
         );
     }
 
+    /// A stripped EML that lost its header block must be refused at ingest: the
+    /// stored blob would otherwise be unreadable forever (reindex reports it as
+    /// a missing body; opening it returns "Failed to parse EML data").
+    #[test]
+    fn stripped_eml_that_does_not_parse_is_refused() {
+        let err = super::ensure_stripped_eml_parses(b"body only, no headers at all", "hash")
+            .expect_err("a headerless stripped body must be refused");
+        assert_eq!(
+            err.code(),
+            crate::error::code::ErrorCode::EmailParseError,
+            "a damaged detach is a per-message parse failure, got {err:?}"
+        );
+
+        super::ensure_stripped_eml_parses(b"From: a@example.com\r\n\r\nbody\r\n", "hash")
+            .expect("a normal stripped EML parses");
+    }
+
+    /// The self-healing read path must not treat a present-but-unreadable blob
+    /// as content: it has to fall through to the IMAP recovery that replaces it.
+    #[test]
+    fn unreadable_stored_blob_is_not_served_as_content() {
+        assert!(!super::content_is_readable(b""));
+        assert!(!super::content_is_readable(b"body only, no headers"));
+        assert!(super::content_is_readable(
+            b"From: a@example.com\r\nSubject: x\r\n\r\nbody\r\n"
+        ));
+    }
+
     /// The premise of an integrity check that compares the reattached EML's
     /// content hash against `envelope.content_hash`: splicing every stored blob
     /// back must reproduce the original body *byte for byte*. Covers an inline
@@ -2297,7 +2446,8 @@ Inner body\r\n\
                 0,
                 &gate,
             )
-            .await);
+            .await
+            .expect("a paused gate is not an error"));
             assert_eq!(gate.in_flight(), 0);
 
             gate.resume();
@@ -2309,9 +2459,140 @@ Inner body\r\n\
                 0,
                 &gate,
             )
-            .await);
+            .await
+            .expect("the admitted branch replaces the blob"));
             assert_eq!(gate.in_flight(), 0);
             super::BLOB_MANAGER.drain().await;
+        });
+    }
+
+    /// End-to-end reproduction of issue #407's shape: the archive holds an
+    /// envelope whose content blob **exists but is not a parseable message**.
+    ///
+    /// Before the fix the blob store kept the first write, so no read or repair
+    /// path could ever replace those bytes. This drives the real recovery path
+    /// against a mock IMAP server: it re-fetches the message, hash-verifies it,
+    /// replaces the stored bytes, and leaves the record byte-identical on
+    /// reattach.
+    ///
+    /// Deliberately does not go through `repair_envelope_blobs` / the global
+    /// envelope index: that index's writer task belongs to whichever test's
+    /// runtime initialized it first, so a test that flushes it is order
+    /// dependent (see the note above `detach_attachments_bounds_check`). The
+    /// verdict/report half is covered by `diagnose_blobs` assertions here and
+    /// by the `post_state_*` tests.
+    #[test]
+    fn recovery_replaces_a_present_but_unparseable_blob() {
+        use crate::account::entity::{AuthConfig, AuthType, Encryption, ImapConfig};
+        use crate::account::migration::{Account, AccountType};
+        use crate::database::{manager::DB_MANAGER, upsert_impl};
+        use crate::imap::mock_server::{
+            examine_response, uid_fetch_rfc822_response, MockImapServer,
+        };
+        use bytes::Bytes;
+
+        STORAGE_RUNTIME.block_on(async {
+            let _run_guard = crate::backup::BACKUP_STATE_TESTS.lock().await;
+            init_test_env();
+
+            let raw: &[u8] = b"From: repair@example.test\r\n\
+                               To: archive@example.test\r\n\
+                               Subject: repair me\r\n\
+                               Message-ID: <repair-e2e@example.test>\r\n\
+                               \r\n\
+                               the body that must come back\r\n";
+            let uid = 7u32;
+            let handle = MockImapServer::new()
+                .respond("LOGIN", "{TAG} OK LOGIN done\r\n")
+                .respond("CAPABILITY", "* CAPABILITY IMAP4rev1\r\n{TAG} OK CAPABILITY\r\n")
+                .respond("EXAMINE", examine_response("INBOX", 1, 42, uid + 1))
+                .respond("UID FETCH", uid_fetch_rfc822_response(uid, raw))
+                .respond("LOGOUT", "* BYE\r\n{TAG} OK\r\n")
+                .start()
+                .await;
+
+            let account_id = 9_300_777u64;
+            let mailbox_id = super::MailBox::ensure_local_inbox(account_id).expect("inbox row");
+            upsert_impl(
+                DB_MANAGER.db(),
+                Account {
+                    id: account_id,
+                    account_type: AccountType::IMAP,
+                    enabled: true,
+                    email: "repair@example.test".into(),
+                    imap: Some(ImapConfig {
+                        host: handle.host(),
+                        port: handle.port(),
+                        encryption: Encryption::None,
+                        auth: AuthConfig {
+                            auth_type: AuthType::Password,
+                            password: Some("pass".into()),
+                        }
+                        .encrypt()
+                        .expect("encrypt fixture password"),
+                        use_proxy: None,
+                    }),
+                    ..Default::default()
+                },
+            )
+            .expect("account row");
+
+            let content_hash = super::compute_content_hash(raw);
+            let envelope = super::Envelope {
+                id: uuid::Uuid::new_v4().to_string(),
+                message_id: "<repair-e2e@example.test>".into(),
+                account_id,
+                mailbox_id,
+                uid,
+                imap_uid: uid,
+                content_hash: content_hash.clone(),
+                ..Default::default()
+            };
+
+            // The archived blob is present but holds bytes that are not an EML
+            // — exactly what the reindex report calls `unparseable_body`.
+            super::BLOB_MANAGER
+                .replace(super::DetachedEmail {
+                    email: (
+                        content_hash.clone(),
+                        Bytes::from_static(b"retained body text without headers"),
+                    ),
+                    attachments: None,
+                })
+                .expect("seed the corrupt blob");
+            let before = super::diagnose_blobs(&envelope, None).expect("diagnose");
+            assert!(before.broken, "a present-but-unparseable blob is broken");
+            assert!(!before.email_missing, "the blob exists, it is just unusable");
+
+            // The recovery path used by repair-message and the self-healing
+            // read path: re-fetch from IMAP, hash-verify, replace the bytes.
+            let (fetched, persisted) = super::recover_message_blob(&envelope)
+                .await
+                .expect("recover from IMAP");
+            assert!(persisted, "the fresh detach must be written");
+            assert_eq!(fetched.as_ref(), raw);
+
+            let stored = super::BLOB_MANAGER
+                .get_email(&content_hash)
+                .expect("read repaired blob")
+                .expect("blob exists");
+            assert!(
+                super::content_is_readable(&stored),
+                "the stored bytes must now be a parseable EML"
+            );
+            let after = super::diagnose_blobs(&envelope, None).expect("diagnose after repair");
+            assert!(!after.broken, "the repaired record must be intact");
+
+            // And the repaired record reads back byte-for-byte.
+            let (_, restored) = super::reattach_from_stored(
+                super::EnvelopeWithAttachments {
+                    envelope: envelope.clone(),
+                    attachments: None,
+                },
+                stored,
+            )
+            .expect("reattach the repaired record");
+            assert_eq!(restored.as_ref(), raw);
         });
     }
 
@@ -2463,10 +2744,12 @@ Inner body\r\n\
         let truncated = &raw[..raw.len() - 20];
         assert!(truncated.len() < raw.len());
 
-        // Must not panic.
+        // Must not panic, and the clamped splice must still yield a parsable
+        // body (the new ingest-time guard rejects anything that does not).
         let infos =
             super::detach_and_store_attachments(truncated, &message, "test_content_hash", 0, 0, None)
-                .await;
+                .await
+                .expect("clamped attachment offsets must produce a parseable stripped EML");
 
         // The attachment count must still match so the consistency check
         // in reattach_eml_content doesn't fail later.

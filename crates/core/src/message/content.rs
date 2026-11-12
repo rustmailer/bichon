@@ -20,7 +20,7 @@ use crate::account::migration::AccountModel;
 use crate::base64_encode;
 use crate::envelope::extractor::{
     attachment_parts, extract_envelope_from_nested_message, first_body_html, first_body_text,
-    part_contents, reattach_eml_content,
+    part_contents, reattach_eml_content_self_healing,
 };
 use crate::error::code::ErrorCode;
 use crate::store::envelope::Envelope;
@@ -194,13 +194,18 @@ pub struct FullNestedMessageContent {
     pub has_remote_content: bool,
 }
 
-pub fn retrieve_email_content(
+/// Fetches a message body for display.
+///
+/// Uses the self-healing read path: a content blob that is missing *or* present
+/// but not a parseable message is re-fetched from IMAP and replaced, so a
+/// damaged archive record does not surface as a permanent 500 on open.
+pub async fn retrieve_email_content(
     account_id: u64,
     envelope_id: String,
     block_remote: bool,
 ) -> BichonResult<FullMessageContent> {
     AccountModel::check_account_exists(account_id)?;
-    let (_, eml) = reattach_eml_content(account_id, envelope_id)?;
+    let (_, eml) = reattach_eml_content_self_healing(account_id, envelope_id).await?;
     let message = MessageParser::default().parse(&eml).ok_or_else(|| {
         raise_error!(
             "Failed to parse EML data — the message may be corrupted.".into(),
@@ -296,13 +301,13 @@ fn collect_attachments(message: &Message, html: &mut Option<String>) -> Vec<Atta
     attachments
 }
 
-pub fn retrieve_nested_eml_content(
+pub async fn retrieve_nested_eml_content(
     account_id: u64,
     envelope_id: String,
     content_hash: &str,
     block_remote: bool,
 ) -> BichonResult<FullNestedMessageContent> {
-    let (_, eml) = reattach_eml_content(account_id, envelope_id)?;
+    let (_, eml) = reattach_eml_content_self_healing(account_id, envelope_id).await?;
     let parent_message = MessageParser::default().parse(&eml).ok_or_else(|| {
         raise_error!(
             "Failed to parse parent EML".into(),

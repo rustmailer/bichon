@@ -83,48 +83,66 @@ impl BlobManager {
     }
 
     fn process_detached_email(eml: DetachedEmail, engine: &Engine) {
-        let (email_hash, email_data) = eml.email;
-        let email_key = match hex_to_key(&email_hash) {
-            Ok(k) => k,
-            Err(e) => {
-                tracing::error!("{:#?}", e);
-                return;
-            }
-        };
-        match engine.exists(&email_key) {
-            Ok(false) => {
-                if let Err(e) = engine.put(email_key, &email_data, Codec::Lz4) {
-                    tracing::error!("CRITICAL: Failed to insert email blob: {:?}", e);
-                }
-            }
-            Err(e) => tracing::error!("blob engine error: {:?}", e),
-            Ok(true) => {
-                tracing::debug!("Email blob already exists (dedup): {}", &email_hash);
-            }
+        if let Err(e) = Self::write_detached_email(eml, engine, false) {
+            tracing::error!("CRITICAL: Failed to insert blob: {:#?}", e);
         }
+    }
+
+    /// Persists every blob of `eml`, either write-once (`replace == false`, the
+    /// normal content-addressed dedup) or overwriting whatever is stored under
+    /// each key.
+    ///
+    /// The overwriting mode exists for repair: a blob can be present yet
+    /// unreadable, and the first-write-wins rule would then make that record
+    /// permanently unhealable. Deleting the key first records the old bytes as
+    /// deleted for GC accounting; the tombstone is then replaced by the new
+    /// record, so a later `exists` sees the fresh data.
+    fn write_detached_email(
+        eml: DetachedEmail,
+        engine: &Engine,
+        replace: bool,
+    ) -> BichonResult<()> {
+        let (email_hash, email_data) = eml.email;
+        Self::write_detached_blob(engine, &email_hash, &email_data, replace)?;
 
         if let Some(attachments) = eml.attachments {
             for (a_hash, a_data) in attachments {
-                let a_key = match hex_to_key(&a_hash) {
-                    Ok(k) => k,
-                    Err(e) => {
-                        tracing::error!("{:#?}", e);
-                        continue;
+                if let Err(e) = Self::write_detached_blob(engine, &a_hash, &a_data, replace) {
+                    // One corrupt attachment hash must not take the record's
+                    // other blobs with it on the normal path. A repair reports
+                    // the failure instead: the caller re-diagnoses and the
+                    // report shows what is still broken.
+                    if replace {
+                        return Err(e);
                     }
-                };
-                match engine.exists(&a_key) {
-                    Ok(false) => {
-                        if let Err(e) = engine.put(a_key, &a_data, Codec::Lz4) {
-                            tracing::error!("CRITICAL: Failed to insert attachment blob: {:?}", e);
-                        }
-                    }
-                    Err(e) => tracing::error!("blob engine error: {:?}", e),
-                    Ok(true) => {
-                        tracing::debug!("Attachment blob already exists (dedup): {}", &a_hash);
-                    }
+                    tracing::error!("{:#?}", e);
                 }
             }
         }
+        Ok(())
+    }
+
+    fn write_detached_blob(
+        engine: &Engine,
+        hash: &str,
+        data: &Bytes,
+        replace: bool,
+    ) -> BichonResult<()> {
+        let key = hex_to_key(hash)?;
+        if replace {
+            engine
+                .delete(&key)
+                .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;
+        } else if engine
+            .exists(&key)
+            .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?
+        {
+            tracing::debug!("Blob already exists (dedup): {}", hash);
+            return Ok(());
+        }
+        engine
+            .put(key, data, Codec::Lz4)
+            .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))
     }
 
     pub fn new() -> Self {
@@ -249,6 +267,17 @@ impl BlobManager {
             self.pending.fetch_sub(1, Ordering::AcqRel);
             tracing::error!("BlobManager channel closed, email lost: {:#?}", e);
         }
+    }
+
+    /// Write `email` and its attachments, overwriting any bytes already stored
+    /// under the same keys.
+    ///
+    /// This is the write path for repairing an unreadable blob: the queued path
+    /// is write-once, so it can never replace a present-but-corrupt record. The
+    /// write is synchronous (compression + append), so callers on an async
+    /// runtime should run it in `spawn_blocking`.
+    pub fn replace(&self, email: DetachedEmail) -> BichonResult<()> {
+        Self::write_detached_email(email, &self.engine, true)
     }
 
     /// Number of emails queued but not yet persisted to the blob store.
@@ -425,6 +454,64 @@ mod tests {
             assert_eq!(
                 manager.get_attachment(&attachment_hash).unwrap(),
                 Some(Bytes::from_static(b"original attachment"))
+            );
+
+            close(manager, dir).await
+        });
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The repair path must be able to replace a blob whose archived bytes are
+    /// unreadable; the queued path deliberately cannot (see the test above).
+    #[test]
+    fn replace_overwrites_archived_bytes_and_creates_missing_keys() {
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let dir = runtime.block_on(async {
+            let (manager, dir) = temp_manager("replace");
+
+            let email_hash = crate::utils::compute_content_hash(b"corrupt email");
+            let attachment_hash = crate::utils::compute_content_hash(b"corrupt attachment");
+            manager
+                .queue(DetachedEmail {
+                    email: (email_hash.clone(), Bytes::from_static(b"corrupt email")),
+                    attachments: Some(vec![(
+                        attachment_hash.clone(),
+                        Bytes::from_static(b"corrupt attachment"),
+                    )]),
+                })
+                .await;
+            manager.drain().await;
+
+            manager
+                .replace(DetachedEmail {
+                    email: (email_hash.clone(), Bytes::from_static(b"good email")),
+                    attachments: Some(vec![(
+                        attachment_hash.clone(),
+                        Bytes::from_static(b"good attachment"),
+                    )]),
+                })
+                .expect("replace present blobs");
+            assert_eq!(
+                manager.get_email(&email_hash).unwrap(),
+                Some(Bytes::from_static(b"good email"))
+            );
+            assert_eq!(
+                manager.get_attachment(&attachment_hash).unwrap(),
+                Some(Bytes::from_static(b"good attachment"))
+            );
+
+            // Replace must also create a key that was never stored (a repair
+            // may run after the blob was garbage-collected).
+            let fresh_hash = crate::utils::compute_content_hash(b"fresh email");
+            manager
+                .replace(DetachedEmail {
+                    email: (fresh_hash.clone(), Bytes::from_static(b"fresh email")),
+                    attachments: None,
+                })
+                .expect("replace absent blob");
+            assert_eq!(
+                manager.get_email(&fresh_hash).unwrap(),
+                Some(Bytes::from_static(b"fresh email"))
             );
 
             close(manager, dir).await

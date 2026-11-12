@@ -1309,10 +1309,10 @@ fn rebuild_email(
 
     let mut stats = PhaseStats::default();
     let mut processed = 0u64;
-    // Memoize the last content_hash → body (`None` = blob missing). Deduplicated
-    // messages share a hash, so this avoids re-fetching; a memo hit still reports
-    // a missing body per document, so the report stays complete.
-    let mut last_body: Option<((u64, String), Option<(String, ResolvedSender)>)> = None;
+    // Memoize the last content_hash → extraction outcome. Deduplicated messages
+    // share a hash, so this avoids re-fetching; a memo hit still reports an
+    // unusable body per document, so the report stays complete.
+    let mut last_body: Option<((u64, String), ExtractedContent)> = None;
 
     for seg in old_searcher.segment_readers() {
         let seg_id = seg.segment_id().uuid_string();
@@ -1401,7 +1401,7 @@ fn rebuild_email(
                 }
             };
             let body = match content {
-                Some((body, sender)) => {
+                ExtractedContent::Ready(body, sender) => {
                     envelope.from = sender
                         .address
                         .unwrap_or_else(|| "unknown".to_string());
@@ -1409,19 +1409,23 @@ fn rebuild_email(
                     envelope.wire_from = sender.wire_from;
                     body
                 }
-                None => {
-                    // Keep the old sender fields: without the blob there is
-                    // nothing to re-derive them from.
+                unavailable => {
+                    // Keep the old sender fields: without a usable blob there
+                    // is nothing to re-derive them from.
                     stats.empty_bodies += 1;
-                    warn!(hash = %envelope.content_hash, "blob missing, leaving body empty");
-                    skip.record(skip_record(
-                        "missing_body",
-                        "email",
+                    warn!(
+                        hash = %envelope.content_hash,
+                        reason = unavailable.label(),
+                        "body unavailable, leaving body empty"
+                    );
+                    if let Some(record) = content_skip_record(
+                        &unavailable,
                         &seg_id,
                         doc_id,
-                        None,
-                        Some(doc_fields_json(&doc, old_schema)),
-                    ));
+                        doc_fields_json(&doc, old_schema),
+                    ) {
+                        skip.record(record);
+                    }
                     String::new()
                 }
             };
@@ -1582,7 +1586,7 @@ fn rebuild_attachments(
                     Some((k, v)) if k == &key => v.clone(),
                     _ => {
                         let headers = account_headers.get(&account_id).and_then(|h| h.as_deref());
-                        let v = extract_content(blobs, &key.1, headers).map(|(_, s)| s);
+                        let v = extract_content(blobs, &key.1, headers).sender().cloned();
                         last_sender = Some((key, v.clone()));
                         v
                     }
@@ -1908,8 +1912,14 @@ fn facets(doc: &TantivyDocument, f: Field) -> Vec<String> {
 ///   (no field data is available).
 /// - `skipped_document`: the document could not be reconstructed or written, so
 ///   it is absent from the new index.
-/// - `missing_body`: the document WAS indexed, but its body blob was absent, so
+/// - `blob_missing`: the document WAS indexed, but its body blob was absent, so
 ///   its body text is empty (it is still findable by metadata).
+/// - `unparseable_body`: the body blob exists but is not a message the parser
+///   can read (typically bytes archived by an older, more lenient parser). The
+///   document is indexed with an empty body; `blob_len` and `head_hex` describe
+///   what was found. Re-fetching the message from IMAP is the only repair.
+/// - `blob_read_error`: the blob store rejected the read (storage error); the
+///   document is indexed with an empty body.
 /// - `attachment_text_unavailable`: the attachment was indexed with text
 ///   extraction reset (orphan parent / missing blob / unsupported type).
 ///
@@ -2038,6 +2048,48 @@ fn hex_to_key(hex: &str) -> BichonResult<[u8; 32]> {
     Ok(key)
 }
 
+/// How many leading blob bytes the skip report keeps, as hex.
+///
+/// Enough to tell a real EML (it starts with header fields) from a body
+/// fragment or binary garbage, without copying a meaningful part of a private
+/// message into the report.
+const SKIP_HEAD_BYTES: usize = 32;
+
+/// Outcome of re-deriving a document's body and sender from its blob.
+///
+/// The variants are the report's skip kinds: a missing blob, an unreadable one
+/// (storage error), and a blob that exists but is not a parseable message. The
+/// last one is the case a plain `missing_body` label used to hide — the blob is
+/// present, so the message can be re-fetched from IMAP, but no local read path
+/// can serve it.
+#[derive(Clone, Debug)]
+enum ExtractedContent {
+    Ready(String, ResolvedSender),
+    BlobMissing,
+    BlobReadError(String),
+    Unparseable { blob_len: u64, head_hex: String },
+}
+
+impl ExtractedContent {
+    fn sender(&self) -> Option<&ResolvedSender> {
+        match self {
+            Self::Ready(_, sender) => Some(sender),
+            _ => None,
+        }
+    }
+
+    /// Short name for logs. The blob's leading bytes stay in the report only:
+    /// logs are not guaranteed to be protected like the 0600 report file.
+    fn label(&self) -> &'static str {
+        match self {
+            Self::Ready(..) => "ready",
+            Self::BlobMissing => "blob_missing",
+            Self::BlobReadError(_) => "blob_read_error",
+            Self::Unparseable { .. } => "unparseable_body",
+        }
+    }
+}
+
 /// Rebuild the body text and the stored sender from the raw message blob.
 ///
 /// The sender is resolved with the account's current header rules, which is
@@ -2047,10 +2099,25 @@ fn extract_content(
     blobs: &Engine,
     content_hash: &str,
     override_headers: Option<&[String]>,
-) -> Option<(String, ResolvedSender)> {
-    let key = hex_to_key(content_hash).ok()?;
-    let bytes = blobs.get(&key).ok()??;
-    let message = MessageParser::new().parse(&bytes)?;
+) -> ExtractedContent {
+    let key = match hex_to_key(content_hash) {
+        Ok(key) => key,
+        Err(e) => return ExtractedContent::BlobReadError(format!("{e:#?}")),
+    };
+    let bytes = match blobs.get(&key) {
+        Ok(Some(bytes)) => bytes,
+        Ok(None) => return ExtractedContent::BlobMissing,
+        Err(e) => return ExtractedContent::BlobReadError(format!("{e:#?}")),
+    };
+    let message = match MessageParser::new().parse(&bytes) {
+        Some(message) => message,
+        None => {
+            return ExtractedContent::Unparseable {
+                blob_len: bytes.len() as u64,
+                head_hex: hex::encode(&bytes[..bytes.len().min(SKIP_HEAD_BYTES)]),
+            };
+        }
+    };
     // Normalize straight from the parsed body. For a plain (borrowed) body this
     // avoids the full copy `into_owned()` would make, and for every body it
     // avoids the `Vec<&str>` that `split_whitespace().collect()` builds — on a
@@ -2069,7 +2136,53 @@ fn extract_content(
     // document instead of carrying it to the end of the iteration.
     drop(message);
     drop(bytes);
-    Some((text, sender))
+    ExtractedContent::Ready(text, sender)
+}
+
+/// Builds a `blob_missing` / `blob_read_error` / `unparseable_body` report
+/// record, or `None` when the content was usable. Every variant keeps the
+/// document's stored fields, so the operator can still re-fetch the message
+/// even when the outline of the failure is all the report carries.
+fn content_skip_record(
+    outcome: &ExtractedContent,
+    segment_id: &str,
+    doc_id: u32,
+    fields: serde_json::Value,
+) -> Option<serde_json::Value> {
+    match outcome {
+        ExtractedContent::Ready(..) => None,
+        ExtractedContent::BlobMissing => Some(skip_record(
+            "blob_missing",
+            "email",
+            segment_id,
+            doc_id,
+            None,
+            Some(fields),
+        )),
+        ExtractedContent::BlobReadError(error) => Some(skip_record(
+            "blob_read_error",
+            "email",
+            segment_id,
+            doc_id,
+            Some(error.clone()),
+            Some(fields),
+        )),
+        ExtractedContent::Unparseable { blob_len, head_hex } => {
+            let mut record = skip_record(
+                "unparseable_body",
+                "email",
+                segment_id,
+                doc_id,
+                Some("stored blob is not a parseable message".to_string()),
+                Some(fields),
+            );
+            if let Some(obj) = record.as_object_mut() {
+                obj.insert("blob_len".into(), serde_json::Value::from(*blob_len));
+                obj.insert("head_hex".into(), serde_json::Value::String(head_hex.clone()));
+            }
+            Some(record)
+        }
+    }
 }
 
 // ─── wrap-up helpers ──────────────────────────────────────────────────────────
@@ -2409,6 +2522,10 @@ mod tests {
         format!("{byte:02x}").repeat(32)
     }
 
+    /// Bytes that exist in the blob store but are not an EML: no header field
+    /// and no blank line, so `mail-parser` refuses them.
+    const UNPARSEABLE_BLOB: &[u8] = b"retained body text without any header block at all";
+
     fn text_store_opts() -> TextOptions {
         TextOptions::default()
             .set_indexing_options(
@@ -2490,10 +2607,6 @@ mod tests {
         engine.shutdown().unwrap();
     }
 
-    /// Fake data root: a blob engine (1 body) + 2 emails (with tags / attachment
-    /// JSON) + 1 attachment, all with **no** INDEX_FORMAT marker. The second
-    /// email's blob is deliberately absent so the run exercises the
-    /// `missing_body` report path.
     /// Write `(eid, account_id, imap_uid)` documents into a fresh v3 index.
     fn build_uid_fixture(prefix: &str, docs: &[(&str, u64, u64)]) -> PathBuf {
         let dir = temp_root(prefix);
@@ -2542,6 +2655,10 @@ mod tests {
         let _ = std::fs::remove_dir_all(&unassigned);
     }
 
+    /// Fake data root: a blob engine (1 valid body + 1 unparseable blob) +
+    /// 3 emails (with tags / attachment JSON) + 1 attachment, all with **no**
+    /// INDEX_FORMAT marker. One email's blob is absent and another's is not a
+    /// message, so the run exercises both degraded-body report paths.
     fn build_fixture(prefix: &str) -> (PathBuf, ResolvedDirs) {
         let root = temp_root(prefix);
         let dirs = resolve_dirs(&root, None, None);
@@ -2558,6 +2675,9 @@ mod tests {
                          \r\n\
                          laserdrucker brother toner\r\n";
         put_blob(&dirs.blobs_dir, &hex32(0xaa), body_eml);
+        // A blob that exists but is not a message: the shape a more lenient
+        // parser could archive from a malformed fetch.
+        put_blob(&dirs.blobs_dir, &hex32(0xcc), UNPARSEABLE_BLOB);
 
         // ── legacy email index ──
         {
@@ -2621,6 +2741,27 @@ mod tests {
             d2.add_u64(f("regular_attachment_count"), 0);
             d2.add_u64(f("shard_id"), 0);
             w.add_document(d2).unwrap();
+
+            let mut d3 = TantivyDocument::new();
+            d3.add_text(f("id"), "env-3");
+            d3.add_text(f("message_id"), "<m3@x>");
+            d3.add_u64(f("account_id"), 1);
+            d3.add_u64(f("mailbox_id"), 10);
+            d3.add_u64(f("uid"), 3);
+            d3.add_text(f("subject"), "Kaputte Mail");
+            d3.add_text(f("preview"), "kein kopf");
+            d3.add_text(f("content_hash"), hex32(0xcc)); // blob exists, not an EML
+            d3.add_text(f("from"), "erin@example.com");
+            d3.add_text(f("to"), "frank@example.com");
+            d3.add_i64(f("date"), 1_700_000_002_000);
+            d3.add_i64(f("internal_date"), 1_700_000_002_000);
+            d3.add_i64(f("ingest_at"), 1_700_000_002_000);
+            d3.add_u64(f("size"), 46);
+            d3.add_text(f("thread_id"), "t-3");
+            d3.add_u64(f("attachment_count"), 0);
+            d3.add_u64(f("regular_attachment_count"), 0);
+            d3.add_u64(f("shard_id"), 0);
+            w.add_document(d3).unwrap();
             w.commit().unwrap();
         }
 
@@ -2683,6 +2824,50 @@ mod tests {
         found
     }
 
+    /// The three ways a body can be unavailable must stay distinguishable: they
+    /// lead to different operator actions (re-fetch, investigate storage, or
+    /// nothing at all).
+    #[test]
+    fn extract_content_reports_why_a_blob_is_unusable() {
+        let dir = temp_root("extract-content");
+        let mut config = Config::default();
+        config.flush_interval_secs = 0;
+        config.gc_interval_secs = 0;
+        let engine = Engine::open(&dir, config).unwrap();
+
+        assert!(matches!(
+            extract_content(&engine, "not-hex", None),
+            ExtractedContent::BlobReadError(_)
+        ));
+        assert!(matches!(
+            extract_content(&engine, &hex32(0x11), None),
+            ExtractedContent::BlobMissing
+        ));
+
+        let mut key = [0u8; 32];
+        let unparseable = b"body without headers";
+        hex::decode_to_slice(hex32(0x22), &mut key).unwrap();
+        engine.put(key, unparseable, Codec::Lz4).unwrap();
+        match extract_content(&engine, &hex32(0x22), None) {
+            ExtractedContent::Unparseable { blob_len, head_hex } => {
+                assert_eq!(blob_len, unparseable.len() as u64);
+                assert_eq!(head_hex, hex::encode(unparseable));
+            }
+            other => panic!("expected unparseable, got {other:?}"),
+        }
+
+        let ok = b"From: a@example.com\r\nSubject: x\r\n\r\nhello\r\n";
+        hex::decode_to_slice(hex32(0x33), &mut key).unwrap();
+        engine.put(key, ok, Codec::Lz4).unwrap();
+        match extract_content(&engine, &hex32(0x33), None) {
+            ExtractedContent::Ready(body, _) => assert_eq!(body, "hello"),
+            other => panic!("expected ready, got {other:?}"),
+        }
+
+        engine.shutdown().unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn reindex_rebuilds_preserves_and_swaps() {
         let (root, dirs) = build_fixture("main");
@@ -2717,8 +2902,8 @@ mod tests {
         let searcher = reader.searcher();
         assert_eq!(
             searcher.num_docs(),
-            2,
-            "both messages are indexed (the second just has an empty body)"
+            3,
+            "every message is indexed (the degraded ones with an empty body)"
         );
         let f = SchemaTools::email_fields();
 
@@ -2774,20 +2959,37 @@ mod tests {
         );
         assert_eq!(asearcher.search(&aname_q, &Count).unwrap(), 1);
 
-        // ── the NDJSON report recorded the missing body ──
+        // ── the NDJSON report separates the two failure modes ──
         let report = std::fs::read_to_string(root.join(DEFAULT_REPORT_FILE)).unwrap();
         let lines: Vec<serde_json::Value> = report
             .lines()
             .map(|l| serde_json::from_str(l).unwrap())
             .collect();
-        assert_eq!(lines.len(), 1, "exactly one degraded document");
-        assert_eq!(lines[0]["kind"], "missing_body");
+        assert_eq!(lines.len(), 2, "two degraded documents");
+
+        // Absent blob → `blob_missing`, no payload detail.
+        assert_eq!(lines[0]["kind"], "blob_missing");
         assert_eq!(lines[0]["phase"], "email");
         // Identifying fields must be present so the message can be re-fetched.
         assert_eq!(lines[0]["fields"]["id"], "env-2");
         assert_eq!(lines[0]["fields"]["uid"], 2);
         assert_eq!(lines[0]["fields"]["message_id"], "<m2@x>");
         assert_eq!(lines[0]["fields"]["content_hash"], hex32(0xbb));
+        assert!(lines[0].get("blob_len").is_none());
+
+        // Present but unparseable → its own kind, with enough detail to tell a
+        // body fragment from an EMPTY or binary blob.
+        assert_eq!(lines[1]["kind"], "unparseable_body");
+        assert_eq!(lines[1]["phase"], "email");
+        assert_eq!(lines[1]["fields"]["id"], "env-3");
+        assert_eq!(lines[1]["fields"]["uid"], 3);
+        assert_eq!(lines[1]["fields"]["message_id"], "<m3@x>");
+        assert_eq!(lines[1]["fields"]["content_hash"], hex32(0xcc));
+        assert_eq!(lines[1]["blob_len"], UNPARSEABLE_BLOB.len() as u64);
+        assert_eq!(
+            lines[1]["head_hex"],
+            hex::encode(&UNPARSEABLE_BLOB[..UNPARSEABLE_BLOB.len().min(SKIP_HEAD_BYTES)])
+        );
     }
 
     /// The tool never deletes the previous indexes — it only renames the whole

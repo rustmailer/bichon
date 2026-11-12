@@ -388,7 +388,7 @@ impl MessageApi {
             account_id,
             &envelope_id,
         )?;
-        let content = retrieve_email_content(account_id, envelope_id.clone(), block_remote)?;
+        let content = retrieve_email_content(account_id, envelope_id.clone(), block_remote).await?;
         if let Some(ip) = context.ip_addr {
             emit(Event::EmailViewed {
                 email_id: envelope_id.clone(),
@@ -426,12 +426,10 @@ impl MessageApi {
         // readable (directly or through a view), so is the nested message.
         bichon_core::account::access::load_readable(&context, account_id, &envelope_id)?;
         let content_hash = content_hash.0.trim();
-        Ok(Json(retrieve_nested_eml_content(
-            account_id,
-            envelope_id,
-            content_hash,
-            block_remote,
-        )?))
+        Ok(Json(
+            retrieve_nested_eml_content(account_id, envelope_id, content_hash, block_remote)
+                .await?,
+        ))
     }
 
     /// Retrieves the envelope (metadata) of a specific message.

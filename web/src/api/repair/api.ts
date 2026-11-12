@@ -87,8 +87,9 @@ export interface BlobRepairRecord {
  * blob drain. The axios timeout is 60s, which covers it.
  *
  * Repairs are non-destructive — content is hash-verified against the archived
- * `content_hash` before being written, and blob storage is first-write-wins —
- * so this deliberately does not go through the approval flow that deletion does.
+ * `content_hash` before being written, and only the record's own blob keys are
+ * replaced — so this deliberately does not go through the approval flow that
+ * deletion does.
  */
 export const repairMessage = async (accountId: number, envelopeId: string) => {
     const response = await axiosInstance.post<BlobRepairReport>(
