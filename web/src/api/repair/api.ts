@@ -43,6 +43,12 @@ export interface BlobRepairReport {
     /** RFC `Message-ID` of the repaired record, for display. */
     message_id: string
     status: BlobRepairStatus
+    /**
+     * `true` when the envelope document was re-derived from the archived EML
+     * because its presentation fields (subject, preview, body, sender) differed.
+     * Independent of blob integrity.
+     */
+    index_updated: boolean
     /** Whether the email blob was missing before the repair. */
     email_missing_before: boolean
     /** Whether the email blob is still missing after the repair. */
@@ -80,11 +86,16 @@ export interface BlobRepairRecord {
 }
 
 /**
- * Re-fetches the whole message from the IMAP server and re-attaches any missing
- * content — the body and every attachment, not just one of them.
+ * Heals one archived message in place.
  *
- * Can take a while: the server fetches from IMAP and may wait up to 30s on a
- * blob drain. The axios timeout is 60s, which covers it.
+ * Blob half: re-fetches the whole message from the IMAP server and re-attaches
+ * any missing content — the body and every attachment, not just one of them.
+ * Can take a while: the server may wait up to 30s on a blob drain; the axios
+ * timeout is 60s, which covers it.
+ *
+ * Index half: if the record's stored presentation fields no longer match the
+ * archived EML (e.g. a charset that an older build could not decode), the
+ * document is re-derived and rewritten. Reports `index_updated` when that ran.
  *
  * Repairs are non-destructive — content is hash-verified against the archived
  * `content_hash` before being written, and only the record's own blob keys are

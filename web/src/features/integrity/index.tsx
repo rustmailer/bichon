@@ -816,7 +816,7 @@ function FailuresTable({
     (f.failure_type === 'missing_email_blob' ||
       f.failure_type === 'missing_attachment_blob') &&
     require_any_permission(
-      ['system:root', 'data:manage'],
+      ['system:root', 'data:manage', 'data:manage:all'],
       f.account_id
     )
 

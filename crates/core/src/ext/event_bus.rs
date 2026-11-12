@@ -182,11 +182,13 @@ pub enum Event {
         account_id: u64,
         reason: String,
     },
-    /// A blob repair re-fetched the message from IMAP and rewrote missing
-    /// email or attachment blobs in place, keeping the envelope id. Emitted
-    /// for every outcome the repair reports, `failed` included: an attempt
-    /// to rewrite archived content is worth recording even when the fetched
-    /// bytes did not match and nothing was written.
+    /// A repair re-fetched the message from IMAP when its archived blobs were
+    /// missing or unreadable, and/or rebuilt the index document from the
+    /// archived EML when its presentation fields were wrong — both in place,
+    /// keeping the envelope id. Emitted for every outcome the repair reports,
+    /// `failed` included: an attempt to rewrite archived content is worth
+    /// recording even when the fetched bytes did not match and nothing was
+    /// written.
     EmailRepaired {
         email_id: String,
         user: String,
@@ -195,10 +197,12 @@ pub enum Event {
         account_id: u64,
         mailbox_id: u64,
         subject: String,
-        /// `complete` (nothing was missing), `repaired`, `partial` or `failed`.
+        /// `complete` (nothing was wrong), `repaired`, `partial` or `failed`.
         status: String,
         email_missing_before: bool,
         email_missing_after: bool,
+        /// Whether the envelope document was re-derived from the archived EML.
+        index_updated: bool,
         /// How many attachment blobs were suspected missing before / after.
         missing_before: usize,
         missing_after: usize,

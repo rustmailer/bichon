@@ -204,4 +204,26 @@ mod tests {
             Some("Αγαπητέ πελάτη")
         );
     }
+
+    /// Regression for #406: multibyte CJK charsets are only decodable when
+    /// mail-parser is built with its `full_encoding` feature. Without it,
+    /// `big5` labels decode as UTF-8 and produce U+FFFD.
+    #[test]
+    fn big5_subject_and_base64_body() {
+        let eml = concat!(
+            "Subject: =?big5?B?2HA=?=\r\n",
+            "MIME-Version: 1.0\r\n",
+            "Content-Type: text/plain; charset=\"big5\"\r\n",
+            "Content-Transfer-Encoding: base64\r\n",
+            "\r\n",
+            "2HDYcNhwqrrYcNhw2HA=\r\n",
+        );
+
+        let message = MessageParser::default().parse(eml).unwrap();
+        assert_eq!(message.subject(), Some("喵"));
+        assert_eq!(
+            crate::envelope::extractor::first_body_text(&message).as_deref(),
+            Some("喵喵喵的喵喵喵")
+        );
+    }
 }

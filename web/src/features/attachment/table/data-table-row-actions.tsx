@@ -52,7 +52,7 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
   const { require_any_permission } = useCurrentUser()
 
   const canRepair = require_any_permission(
-    ['system:root', 'data:manage'],
+    ['system:root', 'data:manage', 'data:manage:all'],
     row.original.account_id
   )
 

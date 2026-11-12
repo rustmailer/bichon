@@ -62,7 +62,11 @@ export function SearchActionsMenu({
   const [repairsOpen, setRepairsOpen] = useState(false)
   const [exportRequest, setExportRequest] = useState<ExportRequest | null>(null)
   // Repairs are an operator action; deletion jobs are visible to their creator.
-  const canSeeRepairs = require_any_permission(['system:root', 'data:manage'])
+  const canSeeRepairs = require_any_permission([
+    'system:root',
+    'data:manage',
+    'data:manage:all',
+  ])
 
   const attachments = kind === 'Attachment'
   const hasFilter = Object.keys(filter).length > 0

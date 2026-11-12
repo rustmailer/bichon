@@ -134,7 +134,7 @@ export function MailMessageView({
   // the tooltip.
   const { require_any_permission } = useCurrentUser();
   const canEditTags = require_any_permission(
-    ['system:root', 'data:manage'],
+    ['system:root', 'data:manage', 'data:manage:all'],
     envelope.account_id
   );
   const canDelete = require_any_permission(
@@ -156,7 +156,7 @@ export function MailMessageView({
   // Repair is non-destructive (hash-verified re-fetch), so it uses the same
   // permission as metadata management rather than the delete/restore gates.
   const canRepair = require_any_permission(
-    ['system:root', 'data:manage'],
+    ['system:root', 'data:manage', 'data:manage:all'],
     envelope.account_id
   );
   const noPermission = t('common.noPermission', 'No permission');
