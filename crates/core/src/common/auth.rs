@@ -105,6 +105,11 @@ impl ClientContext {
 
         match perm {
             Permission::DATA_READ => global.contains(Permission::DATA_READ_ALL),
+            // `data:manage:all` is the global counterpart of `data:manage`
+            // (repair, tag edits). Without this arm a custom role holding only
+            // the `:all` form is refused per-account even though the CLI and
+            // the role editor treat the two as equivalent.
+            Permission::DATA_MANAGE => global.contains(Permission::DATA_MANAGE_ALL),
             Permission::DATA_DELETE => global.contains(Permission::DATA_DELETE_ALL),
             Permission::DATA_RAW_DOWNLOAD => global.contains(Permission::DATA_RAW_DOWNLOAD_ALL),
             Permission::DATA_EXPORT_BATCH => global.contains(Permission::DATA_EXPORT_BATCH_ALL),
@@ -140,5 +145,57 @@ impl ClientContext {
                 ErrorCode::Forbidden
             ))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn globals(perms: &[&str]) -> HashSet<String> {
+        perms.iter().map(|p| p.to_string()).collect()
+    }
+
+    /// Every global `X:all` permission must satisfy its scoped form `X`.
+    ///
+    /// This is written as a convention over the permission table, not as a
+    /// list of pairs, so adding a new `X:all` and forgetting the mapping in
+    /// `check_global_logic` fails here instead of silently producing a role
+    /// that the CLI treats as powerful but every endpoint refuses.
+    #[test]
+    fn every_global_all_permission_implies_its_scoped_form() {
+        for (global, _) in Permission::global_permissions() {
+            let Some(scoped) = global.strip_suffix(":all") else {
+                continue;
+            };
+            assert!(
+                ClientContext::check_global_logic(&globals(&[global]), scoped),
+                "global permission '{global}' must satisfy its scoped form '{scoped}'"
+            );
+        }
+    }
+
+    /// `repair-message` and the tag-edit endpoints check `data:manage` with an
+    /// account id. A custom role holding only the global `data:manage:all`
+    /// must pass that check, exactly as the CLI and the role editor assume.
+    #[test]
+    fn data_manage_all_satisfies_the_per_account_permission() {
+        assert!(ClientContext::check_global_logic(
+            &globals(&[Permission::DATA_MANAGE_ALL]),
+            Permission::DATA_MANAGE,
+        ));
+    }
+
+    /// An unrelated `:all` permission must not leak into `data:manage`.
+    #[test]
+    fn data_manage_is_not_satisfied_by_other_global_permissions() {
+        assert!(!ClientContext::check_global_logic(
+            &globals(&[Permission::DATA_DELETE_ALL]),
+            Permission::DATA_MANAGE,
+        ));
+        assert!(!ClientContext::check_global_logic(
+            &globals(&[]),
+            Permission::DATA_MANAGE,
+        ));
     }
 }

@@ -84,7 +84,11 @@ export function MailBulkActions({
         'data:export:batch',
         'data:export:batch:all',
     ])
-    const canTagAll = !scopeMode && canForAll(['system:root', 'data:manage'])
+    const canTagAll = !scopeMode && canForAll([
+        'system:root',
+        'data:manage',
+        'data:manage:all',
+    ])
     const canDeleteAll = scopeMode || canForAll([
         'system:root',
         'data:delete',

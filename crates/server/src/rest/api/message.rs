@@ -493,10 +493,15 @@ impl MessageApi {
         Ok(attachment)
     }
 
-    /// Re-fetches one archived message from IMAP and restores missing email or
-    /// attachment blobs in place. The envelope and its id are kept, so no
-    /// duplicate is created; nothing is written unless the fetched message
-    /// hashes to the archived content hash.
+    /// Heals one archived message in place, keeping its envelope id (so no
+    /// duplicate is created).
+    ///
+    /// If the email or attachment blobs are missing or unreadable, the message
+    /// is re-fetched from IMAP and the blobs are rewritten — nothing is
+    /// written unless the fetched message hashes to the archived content hash.
+    /// Independently, if the indexed presentation fields (subject, preview,
+    /// body, sender) no longer match the archived EML, the document is
+    /// re-derived and rewritten. The report says which half ran.
     #[oai(
         path = "/repair-message/:account_id/:envelope_id",
         method = "post",
@@ -527,6 +532,7 @@ impl MessageApi {
             status: report.status.clone(),
             email_missing_before: report.email_missing_before,
             email_missing_after: report.email_missing_after,
+            index_updated: report.index_updated,
             missing_before: report.missing_before.len(),
             missing_after: report.missing_after.len(),
             skipped_due_to_backup: report.skipped_due_to_backup,

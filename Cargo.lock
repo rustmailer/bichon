@@ -2729,6 +2729,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3d4ea9311ef3ca6189aa85c5f984bd47b2f12079bcabae28917d900ab26c9ecc"
 dependencies = [
  "encodify",
+ "encoding_rs",
  "hashify 0.3.2",
  "memchr",
  "serde",

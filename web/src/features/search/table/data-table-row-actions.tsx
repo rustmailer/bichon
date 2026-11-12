@@ -47,7 +47,10 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
   // own account: `data:manage` for tags/repair, `data:export:batch` for
   // restore, `data:delete` for deletion.
   const accountId = row.original.account_id
-  const canEditTags = require_any_permission(['system:root', 'data:manage'], accountId)
+  const canEditTags = require_any_permission(
+    ['system:root', 'data:manage', 'data:manage:all'],
+    accountId
+  )
   const canRestore = require_any_permission(
     ['system:root', 'data:export:batch', 'data:export:batch:all'],
     accountId
@@ -62,7 +65,7 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
   // bytes, hash-verified before the write — so unlike deletion it does not go
   // through the approval flow.
   const canRepair = require_any_permission(
-    ['system:root', 'data:manage'],
+    ['system:root', 'data:manage', 'data:manage:all'],
     row.original.account_id
   )
 

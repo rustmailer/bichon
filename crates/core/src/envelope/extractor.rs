@@ -42,7 +42,7 @@ use crate::{
         tantivy::{
             attachment::ATTACHMENT_MANAGER,
             dedup_cache::DEDUP_CACHE,
-            envelope::ENVELOPE_MANAGER,
+            envelope::{DerivedFieldOverrides, ENVELOPE_MANAGER},
             model::{AttachmentModel, EnvelopeWithAttachments},
         },
     },
@@ -368,6 +368,133 @@ pub fn resolve_sender(
     resolved
 }
 
+/// Longest preview stored at ingest, in characters.
+const PREVIEW_LIMIT: usize = 100;
+
+/// Truncates a body to the stored preview form. The ingest path and the
+/// repair path must agree, or every repair would look like a change.
+fn preview_text(body: &str) -> String {
+    if body.chars().count() > PREVIEW_LIMIT {
+        body.chars().take(PREVIEW_LIMIT).collect::<String>() + "..."
+    } else {
+        body.to_string()
+    }
+}
+
+/// Presentation fields re-derived from an archived EML.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+struct DerivedEnvelopeFields {
+    subject: String,
+    preview: String,
+    body: String,
+    from: String,
+    from_name: Option<String>,
+    wire_from: Option<String>,
+}
+
+/// Re-derives the presentation fields exactly the way ingest does, so a
+/// repair compares like with like.
+///
+/// The sender uses the account's current alias rules (as reindex does) rather
+/// than the values frozen at ingest; the comparison in
+/// [`plan_derived_overrides`] only rewrites a field when it actually differs.
+fn derive_envelope_fields(
+    message: &Message<'_>,
+    override_headers: Option<&[String]>,
+) -> DerivedEnvelopeFields {
+    let text = first_body_text(message)
+        .or_else(|| first_body_html(message).map(|html| extract_text(&html)))
+        .unwrap_or_default();
+    let body = crate::utils::normalize_whitespace(&text);
+    let mut subject = message.subject().map(String::from).unwrap_or_default();
+    if subject.contains('\u{FFFD}') {
+        subject = normalize_subject(header_raw_str(message, HeaderName::Subject));
+    }
+    let sender = resolve_sender(message, override_headers);
+    DerivedEnvelopeFields {
+        subject,
+        preview: preview_text(&body),
+        body,
+        from: sender
+            .address
+            .unwrap_or_else(|| "unknown".to_string()),
+        from_name: sender.name,
+        wire_from: sender.wire_from,
+    }
+}
+
+/// Computes the overrides needed to bring a stored envelope in line with a
+/// fresh parse. Returns `None` when every comparable field already matches.
+///
+/// The body is not stored in the index, so it cannot be compared directly; it
+/// is re-added whenever a comparable field changed. Preview is derived from the
+/// body, so a body-only decode difference normally surfaces there too.
+fn plan_derived_overrides(
+    stored: &Envelope,
+    derived: &DerivedEnvelopeFields,
+) -> Option<DerivedFieldOverrides> {
+    let subject = (stored.subject != derived.subject).then(|| derived.subject.clone());
+    let preview = (stored.preview != derived.preview).then(|| derived.preview.clone());
+    let from = (stored.from != derived.from).then(|| derived.from.clone());
+    let from_name = (stored.from_name != derived.from_name).then(|| derived.from_name.clone());
+    let wire_from = (stored.wire_from != derived.wire_from).then(|| derived.wire_from.clone());
+    if subject.is_none()
+        && preview.is_none()
+        && from.is_none()
+        && from_name.is_none()
+        && wire_from.is_none()
+    {
+        return None;
+    }
+    Some(DerivedFieldOverrides {
+        subject,
+        preview,
+        from,
+        from_name,
+        wire_from,
+        body: Some(derived.body.clone()),
+    })
+}
+
+/// Re-derives the presentation fields from the archived EML and rewrites the
+/// envelope document when they differ.
+///
+/// Blob integrity and document correctness are independent: a healthy blob can
+/// still hold a document decoded by a buggy build, and a corrupt blob may hold
+/// correct metadata. Returns the repaired subject when the document was
+/// rewritten, so the report/audit trail shows the usable value instead of the
+/// broken one that triggered the repair.
+async fn repair_indexed_fields(envelope: &Envelope) -> BichonResult<Option<String>> {
+    let bytes = match BLOB_MANAGER.get_email(&envelope.content_hash)? {
+        Some(bytes) => bytes,
+        None => return Ok(None),
+    };
+    let message = match MessageParser::new().parse(&bytes) {
+        Some(message) => message,
+        None => return Ok(None),
+    };
+    // Without the account's current alias rules, re-deriving the sender could
+    // silently revert a rule-derived `From`; skip rather than guess.
+    let Ok(account) = AccountModel::get(envelope.account_id) else {
+        return Ok(None);
+    };
+    // Legal hold freezes the indexed representation at the hold date. Blob
+    // recovery restores exact bytes, but re-deriving the document would change
+    // what searches return, so leave the index alone for held accounts.
+    if account.is_on_hold() {
+        return Ok(None);
+    }
+    let derived = derive_envelope_fields(&message, account.override_from_headers.as_deref());
+    let subject = derived.subject.clone();
+    let Some(overrides) = plan_derived_overrides(envelope, &derived) else {
+        return Ok(None);
+    };
+    let rewritten = ENVELOPE_MANAGER
+        .update_envelope_derived_fields(envelope.account_id, &envelope.id, overrides)
+        .await?;
+    Ok(rewritten.then_some(subject))
+}
+
 /// Whether any configured spam header carries exactly `yes` / `true`.
 fn has_spam_header(message: &Message<'_>, spam_headers: &[String]) -> bool {
     !spam_headers.is_empty()
@@ -477,7 +604,6 @@ async fn extract_envelope_core(
         }
     }
 
-    let preview_limit = 100;
     let text = if let Some(text) = first_body_text(&message) {
         text
     } else if let Some(html) = first_body_html(&message) {
@@ -488,11 +614,7 @@ async fn extract_envelope_core(
 
     let text = crate::utils::normalize_whitespace(&text);
 
-    let preview = if text.chars().count() > preview_limit {
-        text.chars().take(preview_limit).collect::<String>() + "..."
-    } else {
-        text.clone()
-    };
+    let preview = preview_text(&text);
 
     let body_text = text;
 
@@ -1618,8 +1740,14 @@ pub struct BlobRepairReport {
     pub subject: String,
     /// RFC `Message-ID` of the record, for display. See [`Self::account_id`].
     pub message_id: String,
-    /// `complete` (nothing missing), `repaired`, `partial` or `failed`.
+    /// `complete` (nothing was wrong), `repaired`, `partial` or `failed`.
     pub status: String,
+    /// `true` when the envelope document was re-derived from the archived EML
+    /// because its presentation fields differed. Independent of blob
+    /// integrity: a healthy blob can still hold a document decoded by a buggy
+    /// build. Added after the field's first release, so absent means `false`.
+    #[serde(default)]
+    pub index_updated: bool,
     /// Whether the email blob was missing before repair.
     pub email_missing_before: bool,
     /// Whether the email blob is still missing after repair.
@@ -1758,6 +1886,11 @@ fn known_placeholder_hashes(detached_eml: &[u8], attachments: &[AttachmentInfo])
 /// could never overwrite a corrupt record. A record that stays `partial` after
 /// a repair therefore points at the IMAP side (fetch failure, or the message
 /// no longer hashing to the archived `content_hash`), not at the blob store.
+///
+/// The repair also rebuilds the index document from the archived EML when its
+/// presentation fields (subject, preview, body, sender) differ. That half runs
+/// even when the blobs were never broken: a document decoded by a buggy build
+/// is repaired without any IMAP round-trip.
 pub async fn repair_envelope_blobs(
     account_id: u64,
     envelope_id: &str,
@@ -1775,11 +1908,11 @@ pub async fn repair_envelope_blobs(
 
     // Attachment metadata that cannot be read back (or no longer matches the
     // count the envelope records) leaves the record's parts unenumerable, so
-    // the integrity check below could not verify it and this endpoint — which
-    // only ever writes blobs — could not heal it either. Fail loudly instead of
-    // hashing a record we cannot enumerate and reporting the result as
-    // `complete`. `reattach_eml_content` already rejects the same condition on
-    // the read path, so this cannot regress a record that reads back fine.
+    // the integrity check below could not verify it and this endpoint could not
+    // heal it either. Fail loudly instead of hashing a record we cannot
+    // enumerate and reporting the result as `complete`. `reattach_eml_content`
+    // already rejects the same condition on the read path, so this cannot
+    // regress a record that reads back fine.
     let actual_count = attachments.as_ref().map_or(0, Vec::len);
     if envelope.attachment_count != actual_count {
         return Ok(attachment_count_mismatch_report(
@@ -1802,27 +1935,62 @@ pub async fn repair_envelope_blobs(
         missing_before: diagnosis.unresolved,
         ..Default::default()
     };
-    if !diagnosis.broken {
-        report.status = STATUS_COMPLETE.into();
-        return Ok(report);
-    }
-    let persisted = match recover_message_blob(&envelope).await {
-        Ok((_, persisted)) => persisted,
-        Err(e) => {
-            report.status = "failed".into();
-            report.error = Some(e.to_string());
-            // Nothing was written, so the post-state is the pre-state: report
-            // the same suspect set instead of leaving the client with an empty
-            // `missing_after` and no way to tell what is still broken.
-            report.missing_after = report.missing_before.clone();
-            return Ok(report);
+    if diagnosis.broken {
+        match recover_message_blob(&envelope).await {
+            Ok((_, persisted)) => {
+                report.skipped_due_to_backup = !persisted;
+                // recover_message_blob only queues the write; wait for it to land.
+                let _ = tokio::time::timeout(
+                    std::time::Duration::from_secs(30),
+                    BLOB_MANAGER.drain(),
+                )
+                .await;
+                let after = diagnose_blobs(&envelope, attachments.as_deref())?;
+                apply_post_state(&mut report, &after);
+            }
+            Err(e) => {
+                report.status = "failed".into();
+                report.error = Some(e.to_string());
+                // Nothing was written, so the post-state is the pre-state:
+                // report the same suspect set instead of leaving the client
+                // with an empty `missing_after` and no way to tell what is
+                // still broken.
+                report.missing_after = report.missing_before.clone();
+            }
         }
-    };
-    report.skipped_due_to_backup = !persisted;
-    // recover_message_blob only queues the write; wait for it to land.
-    let _ = tokio::time::timeout(std::time::Duration::from_secs(30), BLOB_MANAGER.drain()).await;
-    let after = diagnose_blobs(&envelope, attachments.as_deref())?;
-    apply_post_state(&mut report, &after);
+    } else {
+        report.status = STATUS_COMPLETE.into();
+    }
+
+    // The index half is independent of blob integrity, and needs a readable
+    // email blob. This is what heals documents decoded by a buggy build: the
+    // archived bytes were always intact.
+    if !report.email_missing_after {
+        match repair_indexed_fields(&envelope).await {
+            Ok(Some(subject)) => {
+                report.index_updated = true;
+                // Show the repaired value in the report and audit trail; the
+                // stored one is exactly the broken text the user was looking at.
+                report.subject = subject;
+                // Something was rewritten, so the record was not a no-op.
+                if report.status == STATUS_COMPLETE {
+                    report.status = "repaired".into();
+                }
+            }
+            Ok(None) => {}
+            Err(e) => {
+                tracing::warn!(
+                    envelope_id = %envelope.id,
+                    error = %e,
+                    "failed to rebuild the envelope document during repair"
+                );
+                report.error = Some(e.to_string());
+                if report.status != "failed" {
+                    report.status = "partial".into();
+                }
+            }
+        }
+    }
     Ok(report)
 }
 
@@ -1885,6 +2053,82 @@ mod test {
     // Keep the blob writer alive across these storage tests.
     static STORAGE_RUNTIME: std::sync::LazyLock<tokio::runtime::Runtime> =
         std::sync::LazyLock::new(|| tokio::runtime::Runtime::new().unwrap());
+
+    /// Issue #406: the repaired document must be re-derived with the same
+    /// decoding the ingest path uses. Big5 needs mail-parser's `full_encoding`
+    /// feature, which is exactly what the regression dropped.
+    #[test]
+    fn derive_envelope_fields_decodes_big5_and_matches_ingest_preview() {
+        let eml = concat!(
+            "From: =?big5?B?2HA=?= <sender@example.test>\r\n",
+            "Subject: =?big5?B?2HA=?=\r\n",
+            "MIME-Version: 1.0\r\n",
+            "Content-Type: text/plain; charset=\"big5\"\r\n",
+            "Content-Transfer-Encoding: base64\r\n",
+            "\r\n",
+            "2HDYcNhwqrrYcNhw2HA=\r\n",
+        );
+        let message = super::MessageParser::new().parse(eml).expect("parses");
+        let derived = super::derive_envelope_fields(&message, None);
+
+        assert_eq!(derived.subject, "喵");
+        assert_eq!(derived.body, "喵喵喵的喵喵喵");
+        assert_eq!(
+            derived.preview, "喵喵喵的喵喵喵",
+            "preview must be the ingest truncation of the decoded body"
+        );
+        assert_eq!(derived.from, "sender@example.test");
+        assert_eq!(derived.from_name.as_deref(), Some("喵"));
+        assert_eq!(derived.wire_from, None);
+    }
+
+    #[test]
+    fn plan_derived_overrides_is_quiet_when_every_field_matches() {
+        let stored = crate::store::envelope::Envelope {
+            subject: "Quarterly report".into(),
+            preview: "the body".into(),
+            from: "a@example.test".into(),
+            from_name: Some("Alice".into()),
+            ..Default::default()
+        };
+        let derived = super::DerivedEnvelopeFields {
+            subject: "Quarterly report".into(),
+            preview: "the body".into(),
+            body: "the body".into(),
+            from: "a@example.test".into(),
+            from_name: Some("Alice".into()),
+            wire_from: None,
+        };
+        assert_eq!(super::plan_derived_overrides(&stored, &derived), None);
+    }
+
+    /// Only the fields that actually differ are overridden; a body-only fix is
+    /// carried along because the body is not stored and cannot be compared.
+    #[test]
+    fn plan_derived_overrides_names_only_the_fields_that_differ() {
+        let stored = crate::store::envelope::Envelope {
+            subject: "\u{FFFD}p".into(),
+            preview: "\u{FFFD}p".into(),
+            from: "a@example.test".into(),
+            from_name: Some("Alice".into()),
+            ..Default::default()
+        };
+        let derived = super::DerivedEnvelopeFields {
+            subject: "喵".into(),
+            preview: "喵喵".into(),
+            body: "喵喵".into(),
+            from: "a@example.test".into(),
+            from_name: Some("Alice".into()),
+            wire_from: None,
+        };
+        let overrides = super::plan_derived_overrides(&stored, &derived).expect("subject differs");
+        assert_eq!(overrides.subject.as_deref(), Some("喵"));
+        assert_eq!(overrides.preview.as_deref(), Some("喵喵"));
+        assert_eq!(overrides.body.as_deref(), Some("喵喵"));
+        assert_eq!(overrides.from, None, "unchanged fields stay untouched");
+        assert_eq!(overrides.from_name, None);
+        assert_eq!(overrides.wire_from, None);
+    }
 
     #[test]
     fn empty_attachment_uses_the_raw_storage_key_space() {
