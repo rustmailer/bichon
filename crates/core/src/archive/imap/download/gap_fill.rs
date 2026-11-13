@@ -232,27 +232,25 @@ pub async fn gap_fill_mailbox(
     let mut remote_headers: Vec<RemoteHeader> = Vec::with_capacity(remote_uids.len());
     let batch_size = account.download_batch_size.unwrap_or(DEFAULT_BATCH_SIZE) as usize;
     let mut cancelled = false;
-    // Progress reported so far across all header batches, so the UI can show
-    // enumeration progress (and slow-server hints) while a huge mailbox is
-    // being scanned.
-    let headers_fetched = std::sync::Mutex::new(0u64);
-    // Header chunks share one progress callback (it only reads outer state).
-    let header_progress = |count: u64, stall_secs: Option<f64>| {
-        *headers_fetched.lock().unwrap() = count;
-        GapFillState::update_folder_progress(
-            account_id,
-            remote_mailbox.name.clone(),
-            remote_uids.len() as u64,
-            count,
-            crate::imap::executor::slow_server_message(None, stall_secs),
-        )
-    };
     for chunk in remote_uids.chunks(batch_size) {
         if token.is_cancelled() {
             cancelled = true;
             break;
         }
         let seq_set = compress_uid_list(chunk.to_vec());
+        // FETCH reports a count for this attempt only. Keep completed batches
+        // as a fixed base so repeated stall reports and retries cannot count
+        // the same headers twice.
+        let headers_fetched = remote_headers.len() as u64;
+        let header_progress = |count: u64, stall_secs: Option<f64>| {
+            GapFillState::update_folder_progress(
+                account_id,
+                remote_mailbox.name.clone(),
+                remote_uids.len() as u64,
+                headers_fetched + count,
+                crate::imap::executor::slow_server_message(None, stall_secs),
+            )
+        };
         // A network error mid-phase used to leave the (now dead) session in
         // place: every later chunk silently returned no rows, so most of the
         // folder was never compared while the run reported a tiny (or zero)
@@ -322,7 +320,8 @@ pub async fn gap_fill_mailbox(
         };
         match header_result {
             Ok(headers) => {
-                *headers_fetched.lock().unwrap() += headers.len() as u64;
+                // Fast batches may never trigger the stall callback.
+                header_progress(headers.len() as u64, None)?;
                 remote_headers.extend(headers);
             }
             Err(e) => {
