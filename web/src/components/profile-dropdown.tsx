@@ -68,7 +68,7 @@ export function ProfileDropdown() {
         <DropdownMenuContent className='w-56' align='end' forceMount>
           <DropdownMenuLabel className='font-normal'>
             <div className='flex flex-col gap-1.5'>
-              <p className='text-sm leading-none font-medium'>{user?.username}</p>
+              <p className='text-xs leading-none font-medium'>{user?.username}</p>
               <p className='text-muted-foreground text-xs leading-none'>
                 {user?.email}
               </p>
@@ -77,15 +77,15 @@ export function ProfileDropdown() {
 
           <DropdownMenuSeparator />
           <DropdownMenuGroup>
-            <DropdownMenuItem asChild>
+            <DropdownMenuItem asChild className='text-xs'>
               <Link to='/settings/profile'>{t('profile.menu.profile')}</Link>
             </DropdownMenuItem>
-            <DropdownMenuItem asChild>
+            <DropdownMenuItem asChild className='text-xs'>
               <Link to='/settings'>{t('profile.menu.settings')}</Link>
             </DropdownMenuItem>
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => setOpen(true)}>
+          <DropdownMenuItem className='text-xs' onClick={() => setOpen(true)}>
             {t('profile.menu.sign_out')}
           </DropdownMenuItem>
         </DropdownMenuContent>

@@ -79,6 +79,7 @@ const EVENT_TYPES = [
   'proxy.removed',
   'sso.login',
   'sso.logout',
+  'sso.config_updated',
   'mfa.enabled',
   'mfa.disabled',
   'mfa.reset_by_admin',
@@ -146,6 +147,10 @@ function eventTypeLabel(t: (key: string, defaultValue: string) => string, et: st
     'proxy.removed': t('audit.eventTypes.proxyRemoved', 'Proxy removed'),
     'sso.login': t('audit.eventTypes.ssoLogin', 'SSO login'),
     'sso.logout': t('audit.eventTypes.ssoLogout', 'SSO logout'),
+    'sso.config_updated': t(
+      'audit.eventTypes.ssoConfigUpdated',
+      'SSO configuration updated',
+    ),
     'mfa.enabled': t('audit.eventTypes.mfaEnabled', 'Two-factor authentication enabled'),
     'mfa.disabled': t('audit.eventTypes.mfaDisabled', 'Two-factor authentication disabled'),
     'mfa.reset_by_admin': t(

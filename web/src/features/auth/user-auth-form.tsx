@@ -20,6 +20,7 @@
 import {
   HTMLAttributes,
   forwardRef,
+  useEffect,
   useState,
   type ComponentProps,
   type ReactNode,
@@ -48,6 +49,27 @@ import { useLocation, useNavigate } from '@tanstack/react-router'
 import { Button } from '@/components/button'
 import { useTranslation } from 'react-i18next'
 import i18n from '@/i18n'
+
+/** Plain-language text for the OIDC error codes the server redirects with.
+ *  Unknown codes fall back to showing the raw code. */
+const OIDC_ERROR_KEYS: Record<string, string> = {
+  license_required: 'auth.ssoErrLicense',
+  email_domain_not_allowed: 'auth.ssoErrDomain',
+  discovery_invalid_issuer: 'settings.sso.errInvalidIssuer',
+  discovery_dns: 'settings.sso.errDns',
+  discovery_connection_refused: 'settings.sso.errRefused',
+  discovery_timeout: 'settings.sso.errTimeout',
+  discovery_tls: 'settings.sso.errTls',
+  discovery_network: 'settings.sso.errNetwork',
+  discovery_redirect: 'settings.sso.errRedirect',
+  discovery_not_found: 'settings.sso.errNotFound',
+  discovery_access_denied: 'settings.sso.errAccessDenied',
+  discovery_server_error: 'settings.sso.errServerError',
+  discovery_http_error: 'settings.sso.errServerError',
+  discovery_not_json: 'settings.sso.errNotJson',
+  discovery_incomplete: 'settings.sso.errIncomplete',
+  discovery_issuer_mismatch: 'settings.sso.errIssuerMismatch',
+}
 import { KeyRound, Loader2, Lock, LogIn, Shield, User } from 'lucide-react'
 import { ldapLogin, login, mfaVerify, type LoginResult } from '@/api/users/api'
 import { resolveApiUrl } from '@/api/branding/api'
@@ -102,6 +124,34 @@ export function UserAuthForm({ className, ...props }: UserAuthFormProps) {
   const redirect = toSearchParams(search).get('redirect') || '/';
 
   const { isPro, ssoEnabled, ldapEnabled } = useEdition()
+
+  // The OIDC callback redirects back here with ?oidc_error=<code>. Surface it
+  // once and strip it from the URL so a refresh does not repeat the toast.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const code = params.get('oidc_error')
+    if (!code) return
+    const friendly = OIDC_ERROR_KEYS[code]
+    toast({
+      variant: 'destructive',
+      title: t('auth.ssoFailed', 'Single sign-on failed'),
+      description: friendly
+        ? t(friendly, { status: '-' })
+        : t(
+            'auth.ssoFailedDesc',
+            'The identity provider returned: {{code}}',
+            { code },
+          ),
+    })
+    params.delete('oidc_error')
+    const query = params.toString()
+    window.history.replaceState(
+      null,
+      '',
+      `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`,
+    )
+  }, [t])
+
   // Enterprise LDAP: the form authenticates against the directory (default
   // when enabled); a link lets the user fall back to their local account.
   const [loginMode, setLoginMode] = useState<'local' | 'ldap'>(
@@ -119,9 +169,9 @@ export function UserAuthForm({ className, ...props }: UserAuthFormProps) {
   })
 
   const mutation = useMutation({
-    mutationFn: (data: Record<string, any>) => {
+    mutationFn: (data: LoginFormValues) => {
       if (mfaChallenge) {
-        return mfaVerify(mfaChallenge, data.code)
+        return mfaVerify(mfaChallenge, data.code ?? '')
       }
       if (loginMode === 'ldap') {
         return ldapLogin({

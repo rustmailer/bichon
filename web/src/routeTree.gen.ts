@@ -85,6 +85,9 @@ const AuthenticatedUsersRolesLazyImport = createFileRoute(
 const AuthenticatedUsersApiTokensLazyImport = createFileRoute(
   '/_authenticated/users/api-tokens',
 )()
+const AuthenticatedSettingsSsoLazyImport = createFileRoute(
+  '/_authenticated/settings/sso',
+)()
 const AuthenticatedSettingsSiemLazyImport = createFileRoute(
   '/_authenticated/settings/siem',
 )()
@@ -406,6 +409,15 @@ const AuthenticatedUsersApiTokensLazyRoute =
     import('./routes/_authenticated/users/api-tokens.lazy').then(
       (d) => d.Route,
     ),
+  )
+
+const AuthenticatedSettingsSsoLazyRoute =
+  AuthenticatedSettingsSsoLazyImport.update({
+    id: '/sso',
+    path: '/sso',
+    getParentRoute: () => AuthenticatedSettingsRouteLazyRoute,
+  } as any).lazy(() =>
+    import('./routes/_authenticated/settings/sso.lazy').then((d) => d.Route),
   )
 
 const AuthenticatedSettingsSiemLazyRoute =
@@ -805,6 +817,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSettingsSiemLazyImport
       parentRoute: typeof AuthenticatedSettingsRouteLazyImport
     }
+    '/_authenticated/settings/sso': {
+      id: '/_authenticated/settings/sso'
+      path: '/sso'
+      fullPath: '/settings/sso'
+      preLoaderRoute: typeof AuthenticatedSettingsSsoLazyImport
+      parentRoute: typeof AuthenticatedSettingsRouteLazyImport
+    }
     '/_authenticated/users/api-tokens': {
       id: '/_authenticated/users/api-tokens'
       path: '/api-tokens'
@@ -922,6 +941,7 @@ interface AuthenticatedSettingsRouteLazyRouteChildren {
   AuthenticatedSettingsProfileLazyRoute: typeof AuthenticatedSettingsProfileLazyRoute
   AuthenticatedSettingsProxyLazyRoute: typeof AuthenticatedSettingsProxyLazyRoute
   AuthenticatedSettingsSiemLazyRoute: typeof AuthenticatedSettingsSiemLazyRoute
+  AuthenticatedSettingsSsoLazyRoute: typeof AuthenticatedSettingsSsoLazyRoute
   AuthenticatedSettingsIndexLazyRoute: typeof AuthenticatedSettingsIndexLazyRoute
 }
 
@@ -949,6 +969,7 @@ const AuthenticatedSettingsRouteLazyRouteChildren: AuthenticatedSettingsRouteLaz
       AuthenticatedSettingsProfileLazyRoute,
     AuthenticatedSettingsProxyLazyRoute: AuthenticatedSettingsProxyLazyRoute,
     AuthenticatedSettingsSiemLazyRoute: AuthenticatedSettingsSiemLazyRoute,
+    AuthenticatedSettingsSsoLazyRoute: AuthenticatedSettingsSsoLazyRoute,
     AuthenticatedSettingsIndexLazyRoute: AuthenticatedSettingsIndexLazyRoute,
   }
 
@@ -1070,6 +1091,7 @@ export interface FileRoutesByFullPath {
   '/settings/profile': typeof AuthenticatedSettingsProfileLazyRoute
   '/settings/proxy': typeof AuthenticatedSettingsProxyLazyRoute
   '/settings/siem': typeof AuthenticatedSettingsSiemLazyRoute
+  '/settings/sso': typeof AuthenticatedSettingsSsoLazyRoute
   '/users/api-tokens': typeof AuthenticatedUsersApiTokensLazyRoute
   '/users/roles': typeof AuthenticatedUsersRolesLazyRoute
   '/attachment': typeof AuthenticatedAttachmentIndexRoute
@@ -1117,6 +1139,7 @@ export interface FileRoutesByTo {
   '/settings/profile': typeof AuthenticatedSettingsProfileLazyRoute
   '/settings/proxy': typeof AuthenticatedSettingsProxyLazyRoute
   '/settings/siem': typeof AuthenticatedSettingsSiemLazyRoute
+  '/settings/sso': typeof AuthenticatedSettingsSsoLazyRoute
   '/users/api-tokens': typeof AuthenticatedUsersApiTokensLazyRoute
   '/users/roles': typeof AuthenticatedUsersRolesLazyRoute
   '/attachment': typeof AuthenticatedAttachmentIndexRoute
@@ -1169,6 +1192,7 @@ export interface FileRoutesById {
   '/_authenticated/settings/profile': typeof AuthenticatedSettingsProfileLazyRoute
   '/_authenticated/settings/proxy': typeof AuthenticatedSettingsProxyLazyRoute
   '/_authenticated/settings/siem': typeof AuthenticatedSettingsSiemLazyRoute
+  '/_authenticated/settings/sso': typeof AuthenticatedSettingsSsoLazyRoute
   '/_authenticated/users/api-tokens': typeof AuthenticatedUsersApiTokensLazyRoute
   '/_authenticated/users/roles': typeof AuthenticatedUsersRolesLazyRoute
   '/_authenticated/attachment/': typeof AuthenticatedAttachmentIndexRoute
@@ -1221,6 +1245,7 @@ export interface FileRouteTypes {
     | '/settings/profile'
     | '/settings/proxy'
     | '/settings/siem'
+    | '/settings/sso'
     | '/users/api-tokens'
     | '/users/roles'
     | '/attachment'
@@ -1267,6 +1292,7 @@ export interface FileRouteTypes {
     | '/settings/profile'
     | '/settings/proxy'
     | '/settings/siem'
+    | '/settings/sso'
     | '/users/api-tokens'
     | '/users/roles'
     | '/attachment'
@@ -1317,6 +1343,7 @@ export interface FileRouteTypes {
     | '/_authenticated/settings/profile'
     | '/_authenticated/settings/proxy'
     | '/_authenticated/settings/siem'
+    | '/_authenticated/settings/sso'
     | '/_authenticated/users/api-tokens'
     | '/_authenticated/users/roles'
     | '/_authenticated/attachment/'
@@ -1427,6 +1454,7 @@ export const routeTree = rootRoute
         "/_authenticated/settings/profile",
         "/_authenticated/settings/proxy",
         "/_authenticated/settings/siem",
+        "/_authenticated/settings/sso",
         "/_authenticated/settings/"
       ]
     },
@@ -1548,6 +1576,10 @@ export const routeTree = rootRoute
     },
     "/_authenticated/settings/siem": {
       "filePath": "_authenticated/settings/siem.lazy.tsx",
+      "parent": "/_authenticated/settings"
+    },
+    "/_authenticated/settings/sso": {
+      "filePath": "_authenticated/settings/sso.lazy.tsx",
       "parent": "/_authenticated/settings"
     },
     "/_authenticated/users/api-tokens": {

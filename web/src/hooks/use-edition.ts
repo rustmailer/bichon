@@ -24,6 +24,10 @@ export function useEdition() {
   })
 
   return {
+    /** True until the first `/features` response arrives. Callers that
+     *  redirect or hide whole pages must wait for this, or they will treat a
+     *  Pro server as Community during the first render. */
+    isLoading: data === undefined,
     isPro: data?.edition === 'pro' || data?.edition === 'enterprise',
     isEnterprise: data?.edition === 'enterprise',
     edition: data?.edition ?? 'community',

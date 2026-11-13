@@ -437,6 +437,9 @@ pub enum Event {
     SsoLogout {
         user: String,
     },
+    /// Pro/Enterprise: an admin changed the OIDC SSO configuration from the
+    /// WebUI. The client secret is never part of the event.
+    SsoConfigUpdated { user: String },
     LicenseUploaded {
         user: String,
         email: String,

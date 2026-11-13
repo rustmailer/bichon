@@ -20,7 +20,7 @@
 import { Outlet } from '@tanstack/react-router'
 import { Main } from '@/components/layout/main'
 import SidebarNav from './components/sidebar-nav'
-import { BadgeCheck, Brush, FileCode2, Inbox, KeyRound, LockKeyhole, Palette, Radar, SettingsIcon, ShieldCheck, UserCog, Users, Waypoints } from 'lucide-react'
+import { BadgeCheck, Brush, FileCode2, Fingerprint, Inbox, KeyRound, LockKeyhole, Palette, Radar, SettingsIcon, ShieldCheck, UserCog, Users, Waypoints } from 'lucide-react'
 import { FixedHeader } from '@/components/layout/fixed-header'
 import { useCurrentUser } from '@/hooks/use-current-user'
 import { useEdition } from '@/hooks/use-edition'
@@ -45,6 +45,7 @@ export default function Settings() {
       icon: <ShieldCheck size={18} />
     },
     {
+      // Per-user security setting: every user manages their own authenticator.
       title: t('settings.sidebar.mfa', 'Two-factor Auth'),
       href: '/settings/mfa',
       icon: <LockKeyhole size={18} />,
@@ -58,6 +59,12 @@ export default function Settings() {
       title: t('settings.sidebar.branding', 'Branding'),
       href: '/settings/branding',
       icon: <Brush size={18} />,
+      visible: isPro && require_any_permission(['system:root', 'user:manage']),
+    },
+    {
+      title: t('settings.sidebar.sso', 'Single Sign-On'),
+      href: '/settings/sso',
+      icon: <Fingerprint size={18} />,
       visible: isPro && require_any_permission(['system:root', 'user:manage']),
     },
     {

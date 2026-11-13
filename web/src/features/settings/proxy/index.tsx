@@ -43,6 +43,9 @@ export default function ProxyManagerPage() {
   const { require_any_permission } = useCurrentUser()
   const { proxyList, isLoading } = useProxyList()
   const columns = getColumns(t)
+  // Creating/editing/deleting proxies is root-only on the server; the UI must
+  // not open a dialog the save would only reject later.
+  const canManage = require_any_permission(['system:root'])
 
   return (
     <div className="w-full max-w-5xl ml-0 px-4">
@@ -50,7 +53,12 @@ export default function ProxyManagerPage() {
         <div>
           <div className="mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
             <div className="flex gap-2">
-              <Button className="space-x-1" disabled={!require_any_permission(['system:root'])} onClick={() => setOpen('add')}>
+              <Button
+                className="space-x-1"
+                disabled={!canManage}
+                title={canManage ? undefined : t('common.noPermission')}
+                onClick={() => setOpen('add')}
+              >
                 <span>{t('settings.add')}</span> <Plus size={18} />
               </Button>
             </div>
@@ -74,7 +82,11 @@ export default function ProxyManagerPage() {
                   <p className="mt-2 mb-4 text-sm text-muted-foreground">
                     {t('settings.noProxiesDesc')}
                   </p>
-                  <Button onClick={() => setOpen('add')}>
+                  <Button
+                    disabled={!canManage}
+                    title={canManage ? undefined : t('common.noPermission')}
+                    onClick={() => setOpen('add')}
+                  >
                     {t('settings.add')} {t('settings.proxy')}
                   </Button>
                 </div>
