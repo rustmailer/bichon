@@ -18,6 +18,8 @@ use reqwest::Client;
 use std::path::{Path, PathBuf};
 use sysinfo::Disks;
 
+pub mod noninteractive;
+
 pub async fn handle_account_export(
     config: &BichonCliConfig,
     account: MinimalAccount,
