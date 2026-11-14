@@ -1,3 +1,12 @@
+# cargo-about configuration for Bichon's third-party license reports.
+#
+# `accepted` is the SPDX policy for *third-party* crates. A dependency whose
+# license is not listed here fails the generation, so adding an entry is a
+# deliberate compliance decision, not a workaround.
+#
+# The project's own crates are filtered out of the final reports (see
+# scripts/third-party-licenses.mjs).
+
 accepted = [
     "Apache-2.0",
     "MIT",
@@ -14,5 +23,32 @@ accepted = [
     "BSD-2-Clause",
     "NCSA",
     "CC0-1.0",
-    "OpenSSL"
+    "OpenSSL",
 ]
+
+# The release workflow ships these targets. Platform-specific crates for
+# other operating systems are not part of the distributed binaries.
+targets = [
+    "x86_64-unknown-linux-gnu",
+    "x86_64-unknown-linux-musl",
+    "aarch64-unknown-linux-gnu",
+    "x86_64-apple-darwin",
+    "aarch64-apple-darwin",
+    "x86_64-pc-windows-msvc",
+]
+
+# Scan local crate sources only. This keeps the reports reproducible and
+# offline; crates.io publishes the full license files with each crate.
+no-clearly-defined = true
+
+# Ignore unpublished workspace crates where cargo-about can detect them.
+[private]
+ignore = true
+
+# First-party crates. cargo-about 0.6.x accepts the deprecated `AGPL-3.0`
+# spelling; the reports filter these crates by name.
+[bichon-core]
+accepted = ["AGPL-3.0"]
+
+[bichon-server]
+accepted = ["AGPL-3.0"]

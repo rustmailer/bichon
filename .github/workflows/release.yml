@@ -107,6 +107,7 @@ jobs:
           cp target/${{ matrix.target }}/release/${{ env.BINARY_NAME }} release/
           cp target/${{ matrix.target }}/release/${{ env.BINARY_CLI }} release/
           cp target/${{ matrix.target }}/release/${{ env.BINARY_ADMIN }} release/
+          cp -r third-party-licenses release/
           tar -czvf "${{ env.BINARY_NAME }}-${{ github.ref_name }}-${{ matrix.target }}.tar.gz" -C release .
           mv "${{ env.BINARY_NAME }}-${{ github.ref_name }}-${{ matrix.target }}.tar.gz" release/
 
@@ -129,7 +130,10 @@ jobs:
 
           Copy-Item -Path README.md -Destination release/
           Copy-Item -Path LICENSE -Destination release/
-          
+
+          New-Item -ItemType Directory -Force -Path "release/third-party-licenses" | Out-Null
+          Copy-Item -Path "third-party-licenses/*.txt" -Destination "release/third-party-licenses/"
+
           Compress-Archive -Path release\* -DestinationPath "release/${{ env.BINARY_NAME }}-${{ github.ref_name }}-${{ matrix.target }}.zip" -Force
 
       - name: Upload build artifact

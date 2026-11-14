@@ -14,6 +14,8 @@ WORKDIR /opt/bichon
 # Copy compiled binary (ensure it's statically linked or compatible with bullseye)
 COPY ${TARGETARCH}/bichon-server /opt/bichon/bichon-server
 COPY ${TARGETARCH}/LICENSE /opt/bichon/
+# Third-party notices for every binary shipped in this image.
+COPY ${TARGETARCH}/third-party-licenses/ /opt/bichon/third-party-licenses/
 
 
 # cli tools
