@@ -53,6 +53,59 @@ pub struct RemoteHeader {
     pub internal_date: i64,
 }
 
+/// Cumulative progress of the header-enumeration phase across batches.
+///
+/// `fetch_uid_headers` reports how many headers the *current attempt* has
+/// received and restarts that count after a retry, so the headers of finished
+/// batches are kept as a fixed base. A batch snapshots the base when it
+/// starts; repeated stall reports and retries therefore cannot count the same
+/// header twice, and a successful batch advances the base exactly once.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct HeaderScanProgress {
+    completed: u64,
+    total: u64,
+}
+
+impl HeaderScanProgress {
+    fn new(total: u64) -> Self {
+        Self { completed: 0, total }
+    }
+
+    fn total(&self) -> u64 {
+        self.total
+    }
+
+    /// Cumulative value to show while the current batch has received
+    /// `attempt_count` headers.
+    fn reported(&self, attempt_count: u64) -> u64 {
+        self.completed + attempt_count
+    }
+
+    /// Closes a successful batch that produced `headers` headers and returns
+    /// the cumulative value to show for it.
+    fn complete_batch(&mut self, headers: u64) -> u64 {
+        self.completed += headers;
+        self.completed
+    }
+}
+
+/// Reports one header-enumeration progress point for the active gap-fill run.
+fn report_header_progress(
+    account_id: u64,
+    folder_name: &str,
+    total: u64,
+    scanned: u64,
+    stall_secs: Option<f64>,
+) -> BichonResult<()> {
+    GapFillState::update_folder_progress(
+        account_id,
+        folder_name.to_string(),
+        total,
+        scanned,
+        crate::imap::executor::slow_server_message(None, stall_secs),
+    )
+}
+
 /// Which remote uids are missing locally. A remote message is "present" if its
 /// message-id exists locally. The (size, internal_date) fingerprint is a
 /// fallback for every remote message — not only those without a message-id —
@@ -232,23 +285,24 @@ pub async fn gap_fill_mailbox(
     let mut remote_headers: Vec<RemoteHeader> = Vec::with_capacity(remote_uids.len());
     let batch_size = account.download_batch_size.unwrap_or(DEFAULT_BATCH_SIZE) as usize;
     let mut cancelled = false;
+    let mut header_progress_state = HeaderScanProgress::new(remote_uids.len() as u64);
     for chunk in remote_uids.chunks(batch_size) {
         if token.is_cancelled() {
             cancelled = true;
             break;
         }
         let seq_set = compress_uid_list(chunk.to_vec());
-        // FETCH reports a count for this attempt only. Keep completed batches
-        // as a fixed base so repeated stall reports and retries cannot count
+        // FETCH reports a count for this attempt only. Snapshot the base of
+        // completed batches so repeated stall reports and retries cannot count
         // the same headers twice.
-        let headers_fetched = remote_headers.len() as u64;
-        let header_progress = |count: u64, stall_secs: Option<f64>| {
-            GapFillState::update_folder_progress(
+        let batch_progress = header_progress_state;
+        let header_progress = move |count: u64, stall_secs: Option<f64>| {
+            report_header_progress(
                 account_id,
-                remote_mailbox.name.clone(),
-                remote_uids.len() as u64,
-                headers_fetched + count,
-                crate::imap::executor::slow_server_message(None, stall_secs),
+                &remote_mailbox.name,
+                batch_progress.total(),
+                batch_progress.reported(count),
+                stall_secs,
             )
         };
         // A network error mid-phase used to leave the (now dead) session in
@@ -320,8 +374,16 @@ pub async fn gap_fill_mailbox(
         };
         match header_result {
             Ok(headers) => {
-                // Fast batches may never trigger the stall callback.
-                header_progress(headers.len() as u64, None)?;
+                // Fast batches may never trigger the stall callback, so report
+                // the batch's completion explicitly and advance the base once.
+                let scanned = header_progress_state.complete_batch(headers.len() as u64);
+                report_header_progress(
+                    account_id,
+                    &remote_mailbox.name,
+                    header_progress_state.total(),
+                    scanned,
+                    None,
+                )?;
                 remote_headers.extend(headers);
             }
             Err(e) => {
@@ -892,5 +954,58 @@ mod test {
         assert_eq!(summary_message(0, 0), None);
         assert!(summary_message(2, 0).unwrap().contains("could not be parsed"));
         assert!(summary_message(0, 3).unwrap().contains("could not be compared"));
+    }
+
+    #[test]
+    fn header_scan_progress_accumulates_across_fast_batches() {
+        // Fast batches never trigger the stall callback, so the value reported
+        // when each batch completes is the only progress the UI sees. It must
+        // be cumulative across the whole scan: reporting only the current
+        // batch left the bar pinned at `batch_size / total`.
+        let mut progress = HeaderScanProgress::new(100);
+        assert_eq!(progress.complete_batch(30), 30);
+        assert_eq!(progress.complete_batch(30), 60);
+        assert_eq!(progress.complete_batch(40), 100);
+        assert_eq!(progress.total(), 100);
+    }
+
+    #[test]
+    fn header_scan_progress_stall_reports_use_the_batch_base() {
+        // Within a batch the server re-reports its attempt count every few
+        // seconds; each report adds that count to the fixed base of finished
+        // batches, so the value keeps advancing without counting anything twice.
+        let mut progress = HeaderScanProgress::new(60);
+        assert_eq!(progress.complete_batch(30), 30);
+
+        let batch = progress;
+        assert_eq!(batch.reported(5), 35);
+        assert_eq!(batch.reported(5), 35, "repeated stall reports must not add up");
+        assert_eq!(batch.reported(12), 42);
+        assert_eq!(batch.reported(0), 30, "a retry restarts the attempt count");
+    }
+
+    #[test]
+    fn header_scan_progress_retry_is_counted_once() {
+        // A retried batch restarts its attempt count at 0 while the base stays
+        // put, so the headers of the successful attempt are added exactly once.
+        let mut progress = HeaderScanProgress::new(60);
+        assert_eq!(progress.complete_batch(30), 30);
+
+        let retried_batch = progress;
+        assert_eq!(retried_batch.reported(29), 59, "first attempt died late");
+        assert_eq!(retried_batch.reported(0), 30, "retry starts over from zero");
+        assert_eq!(progress.complete_batch(30), 60);
+    }
+
+    #[test]
+    fn header_scan_progress_failed_batch_does_not_advance_the_base() {
+        // A failed batch never reaches `complete_batch` (its headers are not
+        // added to the remote side), so later reports continue from the same
+        // base instead of skipping over headers that were never received.
+        let mut progress = HeaderScanProgress::new(90);
+        assert_eq!(progress.complete_batch(30), 30);
+        // Second batch fails: no `complete_batch` call.
+        assert_eq!(progress.reported(0), 30);
+        assert_eq!(progress.reported(30), 60);
     }
 }
