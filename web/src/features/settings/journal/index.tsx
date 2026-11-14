@@ -40,7 +40,7 @@ export function JournalSettings() {
   const { t } = useTranslation()
   const { toast } = useToast()
   const { isPro, isEnterprise } = useEdition()
-  const { require_any_permission } = useCurrentUser()
+  const { canGlobal } = useCurrentUser()
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -52,7 +52,7 @@ export function JournalSettings() {
   const [cidrs, setCidrs] = useState('')
 
   const canManage =
-    (isPro || isEnterprise) && require_any_permission(['system:root'])
+    (isPro || isEnterprise) && canGlobal('system:root')
 
   useEffect(() => {
     let mounted = true

@@ -591,6 +591,9 @@ pub enum Event {
         ip: Option<IpAddr>,
         reason: String,
     },
+    /// Enterprise: an admin changed the LDAP/AD configuration from the WebUI.
+    /// The service-account password is never part of the event.
+    LdapConfigUpdated { user: String },
     /// The SIEM webhook forwarder gave up on a batch after exhausting its
     /// retries (Enterprise). The cursor is NOT advanced, so the batch is
     /// retried on the next cycle (at-least-once delivery).

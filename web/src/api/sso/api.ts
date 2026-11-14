@@ -47,8 +47,24 @@ export interface SsoTestResult {
   error?: string
 }
 
+/** Live availability of the configured provider, for the sign-in page. The
+ *  server caches the probe, so opening the page does not hit the IdP every
+ *  time. Public endpoint — the page needs it before a session exists. */
+export interface SsoStatus {
+  configured: boolean
+  available: boolean
+  /** `discovery_<kind>` when unavailable — the same codes as `?oidc_error=`. */
+  code: string | null
+  checked_at: number
+}
+
 export async function get_sso_config(): Promise<SsoConfigView> {
   const { data } = await axiosInstance.get<SsoConfigView>('api/v1/sso')
+  return data
+}
+
+export async function get_sso_status(): Promise<SsoStatus> {
+  const { data } = await axiosInstance.get<SsoStatus>('api/auth/oidc/status')
   return data
 }
 

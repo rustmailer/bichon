@@ -20,58 +20,82 @@
 import { Outlet } from '@tanstack/react-router'
 import { Main } from '@/components/layout/main'
 import SidebarNav from './components/sidebar-nav'
-import { BadgeCheck, Brush, FileCode2, Fingerprint, Inbox, KeyRound, LockKeyhole, Palette, Radar, SettingsIcon, ShieldCheck, UserCog, Users, Waypoints } from 'lucide-react'
+import { BadgeCheck, Brush, Building2, FileCode2, Fingerprint, Inbox, KeyRound, LockKeyhole, Palette, Radar, SettingsIcon, ShieldCheck, UserCog, Users, Waypoints } from 'lucide-react'
 import { FixedHeader } from '@/components/layout/fixed-header'
 import { useCurrentUser } from '@/hooks/use-current-user'
 import { useEdition } from '@/hooks/use-edition'
 import { useTranslation } from 'react-i18next'
 import { Separator } from '@/components/ui/separator'
+import { ScrollArea } from '@/components/ui/scroll-area'
 
 export default function Settings() {
   const { t } = useTranslation()
-  const { canGlobal, require_any_permission } = useCurrentUser()
+  const { canGlobal } = useCurrentUser()
   const { isPro, isEnterprise } = useEdition()
 
+
+  // Grouped so the growing list stays scannable. Every entry lands in
+  // exactly one group; the order inside a group is the order shown.
+  const groups = {
+    account: t('settings.sidebarGroups.account', 'Account'),
+    authentication: t('settings.sidebarGroups.authentication', 'Authentication'),
+    integrations: t('settings.sidebarGroups.integrations', 'Integrations'),
+    administration: t('settings.sidebarGroups.administration', 'Administration'),
+    developer: t('settings.sidebarGroups.developer', 'Developer'),
+  }
 
   const sidebarNavItems = [
     {
       title: t('settings.sidebar.profile'),
       href: '/settings/profile',
       icon: <UserCog size={18} />,
+      group: groups.account,
     },
     {
       title: t('settings.sidebar.access'),
       href: '/settings/access',
-      icon: <ShieldCheck size={18} />
+      icon: <ShieldCheck size={18} />,
+      group: groups.account,
     },
     {
       // Per-user security setting: every user manages their own authenticator.
       title: t('settings.sidebar.mfa', 'Two-factor Auth'),
       href: '/settings/mfa',
       icon: <LockKeyhole size={18} />,
+      group: groups.account,
     },
     {
       title: t('settings.appearance.title'),
       href: '/settings/appearance',
       icon: <Palette size={18} />,
+      group: groups.account,
     },
     {
-      title: t('settings.sidebar.branding', 'Branding'),
-      href: '/settings/branding',
-      icon: <Brush size={18} />,
-      visible: isPro && require_any_permission(['system:root', 'user:manage']),
+      title: t('settings.sidebar.apiTokens'),
+      href: '/settings/api-tokens',
+      icon: <KeyRound size={18} />,
+      group: groups.account,
     },
     {
       title: t('settings.sidebar.sso', 'Single Sign-On'),
       href: '/settings/sso',
       icon: <Fingerprint size={18} />,
-      visible: isPro && require_any_permission(['system:root', 'user:manage']),
+      group: groups.authentication,
+      visible: isPro && (canGlobal('system:root') || canGlobal('user:manage')),
+    },
+    {
+      title: t('settings.sidebar.ldap', 'LDAP'),
+      href: '/settings/ldap',
+      icon: <Building2 size={18} />,
+      group: groups.authentication,
+      visible: isEnterprise && (canGlobal('system:root') || canGlobal('user:manage')),
     },
     {
       title: t('settings.sidebar.siem', 'SIEM'),
       href: '/settings/siem',
       icon: <Radar size={18} />,
-      visible: isEnterprise && require_any_permission(['system:root', 'user:manage']),
+      group: groups.integrations,
+      visible: isEnterprise && (canGlobal('system:root') || canGlobal('user:manage')),
     },
     {
       // The mirror of SIEM: SIEM forwards audit events out, journaling takes
@@ -82,47 +106,59 @@ export default function Settings() {
       title: t('settings.sidebar.journal', 'SMTP journaling'),
       href: '/settings/journal',
       icon: <Inbox size={18} />,
-      visible: (isPro || isEnterprise) && require_any_permission(['system:root']),
-    },
-    {
-      title: t('settings.sidebar.approvals', 'Dual control'),
-      href: '/settings/approvals',
-      icon: <Users size={18} />,
-      visible: isEnterprise && require_any_permission(['system:root', 'user:manage']),
-    },
-    {
-      title: t('settings.sidebar.apiTokens'),
-      href: '/settings/api-tokens',
-      icon: <KeyRound size={18} />,
+      group: groups.integrations,
+      visible: (isPro || isEnterprise) && canGlobal('system:root'),
     },
     {
       title: t('settings.sidebar.proxy'),
       icon: <Waypoints size={18} />,
       href: '/settings/proxy',
+      group: groups.integrations,
+    },
+    {
+      title: t('settings.sidebar.branding', 'Branding'),
+      href: '/settings/branding',
+      icon: <Brush size={18} />,
+      group: groups.administration,
+      visible: isPro && (canGlobal('system:root') || canGlobal('user:manage')),
+    },
+    {
+      title: t('settings.sidebar.approvals', 'Dual control'),
+      href: '/settings/approvals',
+      icon: <Users size={18} />,
+      group: groups.administration,
+      visible: isEnterprise && (canGlobal('system:root') || canGlobal('user:manage')),
     },
     {
       title: t('settings.sidebar.configurations'),
       icon: <SettingsIcon size={18} />,
       href: '/settings/configurations',
+      group: groups.administration,
       visible: canGlobal('system:root'),
     },
     {
       title: t('navigation.license'),
       href: '/settings/license',
       icon: <BadgeCheck size={18} />,
-      visible: isPro && require_any_permission(['system:root', 'user:manage']),
+      group: groups.administration,
+      visible: isPro && (canGlobal('system:root') || canGlobal('user:manage')),
     },
     {
       title: t('navigation.apiDocs'),
       href: '/settings/api-docs',
       icon: <FileCode2 size={18} />,
+      group: groups.developer,
     },
   ].filter(item => item.visible !== false)
 
   return (
     <>
       <FixedHeader />
-      <Main>
+      {/* A fixed-height shell: the title and the settings nav stay put and
+          only the panel scrolls, with the app's ScrollArea bar instead of the
+          browser's. Without `fixed`, `overflow-hidden` below had nothing to
+          constrain and the whole page scrolled. */}
+      <Main fixed>
         <div className='space-y-0.5'>
           <h1 className='text-lg font-bold tracking-tight md:text-3xl'>
             {t('settings.header.title')}
@@ -132,12 +168,14 @@ export default function Settings() {
           </p>
         </div>
         <Separator className='my-4 lg:my-6' />
-        <div className='flex flex-1 flex-col space-y-2 md:space-y-2 overflow-hidden lg:flex-row lg:space-x-12 lg:space-y-0'>
+        <div className='flex min-h-0 flex-1 flex-col space-y-2 overflow-hidden md:space-y-2 lg:flex-row lg:space-x-12 lg:space-y-0'>
           <aside className='top-0 lg:sticky lg:w-1/5'>
             <SidebarNav items={sidebarNavItems} />
           </aside>
-          <div className='flex w-full p-1 pr-4 overflow-y-hidden'>
-            <Outlet />
+          <div className='flex min-h-0 w-full flex-1 p-1 pr-4'>
+            <ScrollArea className='h-full w-full'>
+              <Outlet />
+            </ScrollArea>
           </div>
         </div>
       </Main>

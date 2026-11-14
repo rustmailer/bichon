@@ -132,7 +132,7 @@ export function ApprovalSettings() {
   const { t } = useTranslation()
   const { toast } = useToast()
   const { isEnterprise } = useEdition()
-  const { require_any_permission } = useCurrentUser()
+  const { canGlobal } = useCurrentUser()
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -149,7 +149,7 @@ export function ApprovalSettings() {
   const [breakGlassHours, setBreakGlassHours] = useState('1')
 
   const canManage =
-    isEnterprise && require_any_permission(['system:root', 'user:manage'])
+    isEnterprise && (canGlobal('system:root') || canGlobal('user:manage'))
 
   useEffect(() => {
     if (!canManage) return

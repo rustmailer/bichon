@@ -44,9 +44,9 @@ interface DataTableRowActionsProps {
 
 export function DataTableRowActions({ row }: DataTableRowActionsProps) {
   const { setOpen, setCurrentRow } = useProxyContext()
-  const { require_any_permission } = useCurrentUser()
+  const { canGlobal } = useCurrentUser()
   const { t } = useTranslation()
-  const canManage = require_any_permission(['system:root'])
+  const canManage = canGlobal('system:root')
   const testMutation = useMutation({
     mutationFn: () => test_proxy(row.original.id),
     onSuccess: (result) => {

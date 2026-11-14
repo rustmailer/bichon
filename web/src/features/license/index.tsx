@@ -87,6 +87,10 @@ export default function LicensePage() {
       toast({ title: t('license.uploadSuccess') })
       setLicenseText('')
       queryClient.invalidateQueries({ queryKey: ['license-status'] })
+      // The sidebar and every edition gate read `/features` (cached for the
+      // life of the page). Without this, Enterprise items — LDAP, SIEM,
+      // compliance — stay hidden until a full reload after an upgrade.
+      queryClient.invalidateQueries({ queryKey: ['edition'] })
     },
     onError: (err: AxiosError<{ error?: string }>) => {
       toast({

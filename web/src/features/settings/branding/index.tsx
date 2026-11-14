@@ -49,7 +49,7 @@ export function BrandingSettings() {
   const { toast } = useToast()
   const queryClient = useQueryClient()
   const { isPro } = useEdition()
-  const { require_any_permission } = useCurrentUser()
+  const { canGlobal } = useCurrentUser()
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -61,7 +61,7 @@ export function BrandingSettings() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const canManage =
-    isPro && require_any_permission(['system:root', 'user:manage'])
+    isPro && (canGlobal('system:root') || canGlobal('user:manage'))
 
   useEffect(() => {
     let mounted = true

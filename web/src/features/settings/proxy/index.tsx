@@ -40,12 +40,12 @@ export default function ProxyManagerPage() {
   const { t } = useTranslation()
   const [currentRow, setCurrentRow] = useState<Proxy | null>(null)
   const [open, setOpen] = useDialogState<ProxyDialogType>(null)
-  const { require_any_permission } = useCurrentUser()
+  const { canGlobal } = useCurrentUser()
   const { proxyList, isLoading } = useProxyList()
   const columns = getColumns(t)
   // Creating/editing/deleting proxies is root-only on the server; the UI must
   // not open a dialog the save would only reject later.
-  const canManage = require_any_permission(['system:root'])
+  const canManage = canGlobal('system:root')
 
   return (
     <div className="w-full max-w-5xl ml-0 px-4">

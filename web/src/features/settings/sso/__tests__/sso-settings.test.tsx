@@ -22,7 +22,7 @@ vi.mock('@/hooks/use-edition', () => ({
 
 vi.mock('@/hooks/use-current-user', () => ({
   useCurrentUser: () => ({
-    require_any_permission: () => state.allowed,
+    canGlobal: () => state.allowed,
     isLoading: false,
   }),
 }))

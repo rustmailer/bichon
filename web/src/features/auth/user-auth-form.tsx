@@ -40,7 +40,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { PasswordInput } from '@/components/password-input'
 import { OtpInput } from '@/components/otp-input'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { setToken } from '@/stores/authStore'
 import { toast } from '@/hooks/use-toast'
 import { AxiosError } from 'axios'
@@ -73,6 +73,7 @@ const OIDC_ERROR_KEYS: Record<string, string> = {
 import { KeyRound, Loader2, Lock, LogIn, Shield, User } from 'lucide-react'
 import { ldapLogin, login, mfaVerify, type LoginResult } from '@/api/users/api'
 import { resolveApiUrl } from '@/api/branding/api'
+import { get_sso_status } from '@/api/sso/api'
 import { useTheme } from '@/context/theme-context'
 import { isTheme } from '@/lib/theme'
 import { useEdition } from '@/hooks/use-edition'
@@ -124,6 +125,19 @@ export function UserAuthForm({ className, ...props }: UserAuthFormProps) {
   const redirect = toSearchParams(search).get('redirect') || '/';
 
   const { isPro, ssoEnabled, ldapEnabled } = useEdition()
+
+  // Ask whether the configured provider is actually reachable. A down IdP
+  // used to be visible only in the server log: the page offered the button
+  // and sent the user to a raw error page. The server caches the probe, so
+  // this is one cheap request per page load.
+  const { data: ssoStatus } = useQuery({
+    queryKey: ['sso-status'],
+    queryFn: get_sso_status,
+    enabled: ssoEnabled,
+    staleTime: 30_000,
+    retry: 0,
+  })
+  const ssoUnavailable = ssoStatus !== undefined && !ssoStatus.available
 
   // The OIDC callback redirects back here with ?oidc_error=<code>. Surface it
   // once and strip it from the URL so a refresh does not repeat the toast.
@@ -342,25 +356,40 @@ export function UserAuthForm({ className, ...props }: UserAuthFormProps) {
                 </Button>
 
                 {isPro && (
-                  <Button
-                    variant='outline'
-                    size='lg'
-                    className='w-full'
-                    type='button'
-                    onClick={() => {
-                      if (ssoEnabled) {
-                        window.location.href = resolveApiUrl('/api/auth/oidc/login')
-                      } else {
-                        toast({
-                          title: t('auth.ssoNotEnabled'),
-                          description: t('auth.ssoNotEnabledDesc'),
-                        })
-                      }
-                    }}
-                  >
-                    <Shield size={16} className='mr-2' />
-                    {t('auth.ssoLogin')}
-                  </Button>
+                  <>
+                    <Button
+                      variant='outline'
+                      size='lg'
+                      className='w-full'
+                      type='button'
+                      onClick={() => {
+                        if (!ssoEnabled) {
+                          toast({
+                            title: t('auth.ssoNotEnabled'),
+                            description: t('auth.ssoNotEnabledDesc'),
+                          })
+                        } else if (ssoUnavailable) {
+                          // Fresh probe says the provider is down. Navigating
+                          // would just hang and bounce back; tell the user
+                          // now and point them at the local login above.
+                          toast({
+                            variant: 'destructive',
+                            title: t('auth.ssoUnavailable'),
+                          })
+                        } else {
+                          window.location.href = resolveApiUrl('/api/auth/oidc/login')
+                        }
+                      }}
+                    >
+                      <Shield size={16} className='mr-2' />
+                      {t('auth.ssoLogin')}
+                    </Button>
+                    {ssoUnavailable && (
+                      <p className='text-center text-xs font-medium text-destructive'>
+                        {t('auth.ssoUnavailable')}
+                      </p>
+                    )}
+                  </>
                 )}
 
                 {/* `ldapEnabled` already means "Enterprise + flag set" — the

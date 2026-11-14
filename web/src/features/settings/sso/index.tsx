@@ -1,6 +1,7 @@
 import { Loader2, PlugZap, Save, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
+import { useQueryClient } from '@tanstack/react-query'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useTranslation } from 'react-i18next'
 import { Navigate } from '@tanstack/react-router'
@@ -85,10 +86,8 @@ function valuesFromConfig(cfg: SsoConfigView): SsoFormValues {
 export function SsoSettings() {
   const { t } = useTranslation()
   const { isPro, isLoading: editionLoading } = useEdition()
-  const {
-    require_any_permission,
-    isLoading: userLoading,
-  } = useCurrentUser()
+  const { canGlobal, isLoading: userLoading } = useCurrentUser()
+  const queryClient = useQueryClient()
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -103,7 +102,7 @@ export function SsoSettings() {
   )
 
   const canManage =
-    isPro && require_any_permission(['system:root', 'user:manage'])
+    isPro && (canGlobal('system:root') || canGlobal('user:manage'))
 
   const secretAvailable = Boolean(current?.client_secret_set) && !clearSecret
   // The resolver is created once; this getter lets it observe the current
@@ -201,6 +200,9 @@ export function SsoSettings() {
       }
       const saved = await update_sso_config(payload)
       setCurrent(saved)
+      // The sign-in page reads `sso_enabled` from the cached `/features`;
+      // refresh it so enabling or disabling applies after the next logout.
+      queryClient.invalidateQueries({ queryKey: ['edition'] })
       setClearSecret(false)
       form.reset(valuesFromConfig(saved))
       setNotice({

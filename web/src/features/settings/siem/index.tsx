@@ -1,5 +1,6 @@
 import { Eye, Loader2, Send, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import {
   get_siem_config,
@@ -52,7 +53,8 @@ export function SiemSettings() {
   const { t } = useTranslation()
   const { toast } = useToast()
   const { isEnterprise } = useEdition()
-  const { require_any_permission } = useCurrentUser()
+  const { canGlobal } = useCurrentUser()
+  const queryClient = useQueryClient()
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -78,7 +80,7 @@ export function SiemSettings() {
   const [retryMaxDelay, setRetryMaxDelay] = useState('60')
 
   const canManage =
-    isEnterprise && require_any_permission(['system:root', 'user:manage'])
+    isEnterprise && (canGlobal('system:root') || canGlobal('user:manage'))
 
   useEffect(() => {
     let mounted = true
@@ -155,6 +157,7 @@ export function SiemSettings() {
       }
       const saved = await update_siem_config(payload)
       setCurrent(saved)
+      queryClient.invalidateQueries({ queryKey: ['edition'] })
       setAuthToken('')
       setHmacSecret('')
       setClearToken(false)

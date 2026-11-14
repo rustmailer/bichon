@@ -90,6 +90,7 @@ const EVENT_TYPES = [
   'timestamp.anchored',
   'ldap.login',
   'ldap.login_failed',
+  'ldap.config_updated',
   'siem.forward_failed',
   'siem.config_updated',
   'approval.requested',
@@ -169,6 +170,10 @@ function eventTypeLabel(t: (key: string, defaultValue: string) => string, et: st
     'ldap.login_failed': t(
       'audit.eventTypes.ldapLoginFailed',
       'LDAP login failed',
+    ),
+    'ldap.config_updated': t(
+      'audit.eventTypes.ldapConfigUpdated',
+      'LDAP configuration updated',
     ),
     'siem.forward_failed': t(
       'audit.eventTypes.siemForwardFailed',
