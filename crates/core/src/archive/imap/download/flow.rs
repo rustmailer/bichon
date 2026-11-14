@@ -87,6 +87,23 @@ fn incremental_skip_target(
     ((next as u64) <= highest as u64 + 1).then_some(highest)
 }
 
+/// Watermark to persist after an incremental round.
+///
+/// `fetch_new_mail` returns `None` when the folder has no new mail, and a
+/// database upgraded from a version that did not store `highest_uid` has no
+/// stored watermark either. The index maximum used to pick the start UID is
+/// then the highest archived UID, i.e. the correct watermark. Returning `None`
+/// instead made reconcile keep `None`, so every later round re-ran the Tantivy
+/// query, re-opened a connection (the UIDNEXT shortcut needs a stored
+/// watermark) and re-logged the fallback warning forever (#411).
+fn incremental_highest_uid(
+    new_max_uid: Option<u32>,
+    stored_highest: Option<u32>,
+    index_max_uid: Option<u32>,
+) -> Option<u32> {
+    new_max_uid.or(stored_highest).or(index_max_uid)
+}
+
 /// Per-round result of [`reconcile_mailboxes`].
 #[derive(Clone, Debug, Default)]
 pub struct ReconcileSummary {
@@ -1276,6 +1293,9 @@ async fn perform_incremental_sync(
 
         // Use stored highest_uid if available; otherwise fall back to Tantivy
         // query once (backward compatibility with pre-existing databases).
+        // The index maximum doubles as the watermark when this round finds no
+        // new mail, so the fallback does not have to run again next round.
+        let mut index_max_uid: Option<u32> = None;
         let start_uid = match local_mailbox.highest_uid {
             Some(uid) => {
                 info!(
@@ -1294,7 +1314,10 @@ async fn perform_incremental_sync(
                 );
                 let local_max_uid = ENVELOPE_MANAGER.get_max_uid(account.id, local_mailbox.id)?;
                 match local_max_uid {
-                    Some(uid) => uid + 1,
+                    Some(uid) => {
+                        index_max_uid = u32::try_from(uid).ok();
+                        uid + 1
+                    }
                     None => {
                         info!(
                             "No maximum UID found in index for mailbox, assuming local storage is missing."
@@ -1364,8 +1387,14 @@ async fn perform_incremental_sync(
         .await?;
         session.logout().await.ok();
 
-        // Keep existing highest_uid if no new mail was fetched.
-        Ok(new_max_uid.or(local_mailbox.highest_uid))
+        // Keep an existing watermark when no new mail was fetched; for an
+        // upgraded database without one, adopt the index maximum so the
+        // fallback (and its warning) runs once instead of every round.
+        Ok(incremental_highest_uid(
+            new_max_uid,
+            local_mailbox.highest_uid,
+            index_max_uid,
+        ))
     } else {
         DownloadState::update_folder_progress(
             account.id,
@@ -1459,6 +1488,54 @@ mod tests {
         // Server did not report UIDNEXT: sync normally.
         assert_eq!(incremental_skip_target(None, Some(150)), None);
         assert_eq!(incremental_skip_target(None, None), None);
+    }
+
+    // ── Watermark persistence for upgraded databases (#411) ────────
+
+    #[test]
+    fn no_new_mail_adopts_the_index_maximum_as_the_watermark() {
+        // Upgraded database: no stored watermark and the folder has no new
+        // mail. The index maximum is the highest archived UID, so it must be
+        // persisted; returning None made every round repeat the Tantivy
+        // query, the connection and the "no stored highest_uid" warning.
+        assert_eq!(
+            incremental_highest_uid(None, None, Some(13_328)),
+            Some(13_328)
+        );
+    }
+
+    #[test]
+    fn fetched_mail_wins_over_the_fallback() {
+        assert_eq!(
+            incremental_highest_uid(Some(13_330), None, Some(13_328)),
+            Some(13_330)
+        );
+    }
+
+    #[test]
+    fn stored_watermark_wins_over_the_index_maximum() {
+        // The index can be behind (batched commits) or ahead (other archive
+        // paths); a stored watermark is authoritative and must not move.
+        assert_eq!(
+            incremental_highest_uid(None, Some(100), Some(13_328)),
+            Some(100)
+        );
+    }
+
+    #[test]
+    fn no_watermark_inputs_leave_it_unset() {
+        assert_eq!(incremental_highest_uid(None, None, None), None);
+    }
+
+    #[test]
+    fn adopted_index_maximum_enables_the_uidnext_shortcut() {
+        // Once the index maximum is saved, the next round skips the
+        // connection entirely when UIDNEXT has not moved past it.
+        let watermark = incremental_highest_uid(None, None, Some(13_328));
+        assert_eq!(
+            incremental_skip_target(Some(13_329), watermark),
+            Some(13_328)
+        );
     }
 
     // ── Session status mapping (#396) ──────────────────────────────
