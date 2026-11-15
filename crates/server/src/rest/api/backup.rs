@@ -31,6 +31,7 @@
 
 use bichon_core::backup::backend::EngineBackend;
 use bichon_core::backup::config::{self, BackupConfig, BackupTargetType};
+use bichon_core::backup::errors::{self, BackupErrorEntry};
 use bichon_core::backup::manager::{self, BackupTrigger, BACKUP_MANAGER};
 use bichon_core::backup::manifest::Manifest;
 use bichon_core::backup::model::BackupRecord;
@@ -264,6 +265,26 @@ impl BackupApi {
         require_backup_access(&context)?;
         let limit = limit.0.unwrap_or(20).min(200);
         Ok(Json(BackupRecord::list_recent(limit)))
+    }
+
+    /// The newest backup-run anomalies, newest first: runs that failed at
+    /// some phase plus runs whose task died without reporting (panic, abort,
+    /// or a restart mid-run). A rolling log capped at the 30 newest entries,
+    /// independent of the run history — failures stay visible even after many
+    /// successful runs have rolled through it.
+    #[oai(
+        path = "/backup/errors",
+        method = "get",
+        operation_id = "list_backup_errors"
+    )]
+    async fn list_backup_errors(
+        &self,
+        context: WrappedContext,
+        limit: Query<Option<usize>>,
+    ) -> ApiResult<Json<Vec<BackupErrorEntry>>> {
+        require_backup_access(&context)?;
+        let limit = limit.0.unwrap_or(errors::LIMIT).min(errors::LIMIT);
+        Ok(Json(errors::list_recent(limit)))
     }
 
     /// Every committed restore point (manifest), newest first.

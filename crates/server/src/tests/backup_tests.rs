@@ -189,6 +189,25 @@ async fn backup_records_returns_empty_array_when_none_exist() {
 }
 
 #[tokio::test]
+async fn backup_errors_returns_the_rolling_log() {
+    setup().await;
+    let token = admin_token().await;
+    let cli = api_client(build_api_route());
+    let resp = cli
+        .get("/api/v1/backup/errors")
+        .header("Authorization", &format!("Bearer {}", token))
+        .send()
+        .await;
+    resp.assert_status_is_ok();
+    let entries: Vec<serde_json::Value> = resp.json().await.value().deserialize();
+    assert!(
+        entries.len() <= 30,
+        "the error log is capped at 30 entries, got {}",
+        entries.len()
+    );
+}
+
+#[tokio::test]
 async fn backup_run_rejected_when_disabled() {
     setup().await;
     let token = admin_token().await;

@@ -33,10 +33,12 @@ import { useTranslation } from 'react-i18next'
 import {
   getBackupStatus,
   getLatestBackupDrill,
+  listBackupErrors,
   listBackupRecords,
   requestBackupRebase,
   triggerBackup,
   type ArtifactStat,
+  type BackupErrorEntry,
   type BackupRecord,
   type BackupStatusView,
   type DrillReport,
@@ -78,6 +80,8 @@ const MAX_IDLE_POLLS = 10
  *  fetches them all and pages client-side. */
 const HISTORY_LIMIT = 200
 const HISTORY_PAGE_SIZE = 10
+/** The server keeps the newest 30 failures; the drawer shows all of them. */
+const ERROR_LIMIT = 30
 
 const getErrorMessage = (error: unknown) => {
   if (error instanceof AxiosError) {
@@ -160,6 +164,8 @@ export default function BackupPage() {
   const { isPro } = useEdition()
   const [status, setStatus] = React.useState<BackupStatusView | null>(null)
   const [records, setRecords] = React.useState<BackupRecord[]>([])
+  const [errors, setErrors] = React.useState<BackupErrorEntry[]>([])
+  const [errorsOpen, setErrorsOpen] = React.useState(false)
   const [drill, setDrill] = React.useState<DrillReport | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [refreshing, setRefreshing] = React.useState(false)
@@ -196,12 +202,14 @@ export default function BackupPage() {
         setRefreshing(true)
       }
       try {
-        const [statusData, recordsData] = await Promise.all([
+        const [statusData, recordsData, errorsData] = await Promise.all([
           getBackupStatus(),
           listBackupRecords(HISTORY_LIMIT),
+          listBackupErrors(ERROR_LIMIT),
         ])
         setStatus(statusData)
         setRecords(recordsData)
+        setErrors(errorsData)
         // A successful run commits a restore point. Flag the list as stale
         // instead of refetching it — each fetch is a list call against the
         // backup target (billable on S3), so the refresh is left to the user.
@@ -370,6 +378,20 @@ export default function BackupPage() {
                 {records.length > 0 && (
                   <Badge variant='secondary' className='ml-2'>
                     {records.length}
+                  </Badge>
+                )}
+              </Button>
+              <Button
+                variant='outline'
+                onClick={() => setErrorsOpen(true)}
+                disabled={loading}
+                className='text-xs'
+              >
+                <AlertTriangle className='mr-2 h-4 w-4' />
+                {t('backup.errors', 'Errors')}
+                {errors.length > 0 && (
+                  <Badge variant='destructive' className='ml-2'>
+                    {errors.length}
                   </Badge>
                 )}
               </Button>
@@ -812,6 +834,106 @@ export default function BackupPage() {
                 </Button>
               </div>
             )}
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Backup errors: a rolling 30-entry log, independent of the run
+          history — failures stay visible after many successful runs. */}
+      <Sheet open={errorsOpen} onOpenChange={setErrorsOpen}>
+        <SheetContent
+          side='right'
+          className='flex w-full flex-col gap-0 overflow-hidden sm:max-w-3xl'
+        >
+          <SheetHeader className='pb-2'>
+            <SheetTitle>
+              {t('backup.errorsTitle', 'Recent backup errors')}
+            </SheetTitle>
+            <SheetDescription className='text-xs'>
+              {t(
+                'backup.errorsHint',
+                'The newest 30 failed or abnormally ended runs. The server log has the full details.'
+              )}
+            </SheetDescription>
+          </SheetHeader>
+          <div className='flex-1 overflow-y-auto px-4 pb-6'>
+            <div className='overflow-x-auto rounded-md border'>
+              <Table className='text-xs'>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className='text-xs'>
+                      {t('backup.time', 'Time')}
+                    </TableHead>
+                    <TableHead className='text-xs'>
+                      {t('backup.phase')}
+                    </TableHead>
+                    <TableHead className='text-xs'>
+                      {t('backup.errorTarget', 'Target')}
+                    </TableHead>
+                    <TableHead className='text-xs'>
+                      {t('backup.error')}
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {errors.length === 0 ? (
+                    <TableRow>
+                      <TableCell
+                        colSpan={4}
+                        className='py-8 text-center text-muted-foreground'
+                      >
+                        {t('backup.errorsEmpty', 'No recent errors')}
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    errors.map((entry) => (
+                      <TableRow key={entry.id}>
+                        <TableCell className='whitespace-nowrap text-xs'>
+                          <div>{formatTime(entry.at)}</div>
+                          <div className='mt-0.5 flex items-center gap-1 text-muted-foreground'>
+                            <span>{entry.trigger || '—'}</span>
+                            <Badge
+                              variant={
+                                entry.kind === 'abrupt_exit'
+                                  ? 'destructive'
+                                  : 'outline'
+                              }
+                            >
+                              {entry.kind === 'abrupt_exit'
+                                ? t('backup.errorAbruptExit', 'Interrupted')
+                                : t('backup.statusFailed')}
+                            </Badge>
+                          </div>
+                        </TableCell>
+                        <TableCell className='text-xs'>
+                          {entry.phase}
+                        </TableCell>
+                        <TableCell className='text-xs text-muted-foreground'>
+                          {entry.target ? (
+                            <span
+                              className='block max-w-[180px] truncate'
+                              title={entry.target}
+                            >
+                              {entry.target}
+                            </span>
+                          ) : (
+                            '—'
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <span
+                            className='block max-w-[360px] truncate text-xs text-destructive'
+                            title={entry.message}
+                          >
+                            {entry.message}
+                          </span>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
           </div>
         </SheetContent>
       </Sheet>

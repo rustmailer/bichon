@@ -622,7 +622,7 @@ export function BackupConfigForm({ onSaved }: { onSaved?: () => void }) {
           <p className='text-xs text-muted-foreground'>
             {t(
               'backup.target.s3EndpointHint',
-              'For a custom backend type the endpoint with a scheme (e.g. http://localhost:9000 for MinIO); a bare host (s3.amazonaws.com) uses AWS signature/region resolution.'
+              'Endpoint of the S3 API. The scheme is optional — a bare host (e.g. s3.us-west-004.backblazeb2.com) is used as https. Leave empty only for AWS S3.'
             )}
           </p>
           <div className='grid gap-4 sm:grid-cols-2'>

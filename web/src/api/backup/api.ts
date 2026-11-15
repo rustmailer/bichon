@@ -212,6 +212,37 @@ export const listBackupRecords = async (limit = 20) => {
   return response.data
 }
 
+/** How a run ended, for the error log. */
+export type BackupErrorKind = 'failed' | 'abrupt_exit'
+
+/** One entry in the rolling backup error log (server keeps the newest 30). */
+export interface BackupErrorEntry {
+  id: string
+  /** UTC millis when the entry was written. */
+  at: number
+  /** Run record id, when the run got far enough to have one. */
+  run_id: string | null
+  /** `manual` or `schedule` (empty when unknown). */
+  trigger: string
+  /** Phase the run was in: `preflight`, `capture:<preparer>`, `upload`, ... */
+  phase: string
+  kind: BackupErrorKind
+  message: string
+  /** Where the run was writing (target plus prefix). */
+  target: string | null
+}
+
+/** The newest backup failures (at most 30, newest first). */
+export const listBackupErrors = async (limit = 30) => {
+  const response = await axiosInstance.get<BackupErrorEntry[]>(
+    'api/v1/backup/errors',
+    {
+      params: { limit },
+    }
+  )
+  return response.data
+}
+
 /** Every committed restore point (manifest), newest first. */
 export const listBackupManifests = async () => {
   const response = await axiosInstance.get<ManifestView[]>(

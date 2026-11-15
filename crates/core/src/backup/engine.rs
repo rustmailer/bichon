@@ -145,6 +145,25 @@ pub struct S3Options {
     pub force_path_style: bool,
 }
 
+/// Turn a configured S3 endpoint into a URL `object_store` can use.
+///
+/// Providers advertise their endpoint as a bare host
+/// (`s3.us-west-004.backblazeb2.com`; MinIO often as `host:9000`), and
+/// operators paste it that way. Without a scheme the failure only surfaces
+/// when the first request is built, inside the retry loop, as an error that
+/// does not point at the missing scheme. Defaulting to `https://` makes such
+/// an entry work as intended, and trimming the trailing slash keeps the
+/// concatenated `<endpoint>/<bucket>` path well-formed.
+fn normalize_endpoint(endpoint: &str) -> String {
+    let endpoint = endpoint.trim();
+    let with_scheme = if endpoint.contains("://") {
+        endpoint.to_string()
+    } else {
+        format!("https://{endpoint}")
+    };
+    with_scheme.trim_end_matches('/').to_string()
+}
+
 /// Build the production `object_store` for an S3-compatible endpoint.
 pub fn s3_store(opts: &S3Options) -> BichonResult<Arc<dyn ObjectStore>> {
     if opts.bucket.is_empty() {
@@ -159,8 +178,9 @@ pub fn s3_store(opts: &S3Options) -> BichonResult<Arc<dyn ObjectStore>> {
         .with_access_key_id(&opts.access_key)
         .with_secret_access_key(&opts.secret_key);
     if !opts.endpoint.is_empty() {
-        builder = builder.with_endpoint(&opts.endpoint);
-        if opts.endpoint.starts_with("http://") {
+        let endpoint = normalize_endpoint(&opts.endpoint);
+        builder = builder.with_endpoint(&endpoint);
+        if endpoint.starts_with("http://") {
             builder = builder.with_allow_http(true);
         }
         if opts.force_path_style {
@@ -1188,6 +1208,48 @@ mod tests {
     /// Full store path for a manifest-format key under the test engine root.
     fn store_path(key: &str) -> StorePath {
         StorePath::parse(format!("test/v1/{key}")).unwrap()
+    }
+
+    /// Endpoints are advertised without a scheme (Backblaze's docs, MinIO's
+    /// console); a bare host must become an https endpoint, not an object key
+    /// that fails at the first request.
+    #[test]
+    fn endpoint_normalization_adds_a_missing_scheme_and_trims() {
+        assert_eq!(
+            normalize_endpoint("s3.us-west-004.backblazeb2.com"),
+            "https://s3.us-west-004.backblazeb2.com"
+        );
+        assert_eq!(
+            normalize_endpoint("  https://s3.us-west-004.backblazeb2.com/  "),
+            "https://s3.us-west-004.backblazeb2.com"
+        );
+        // An explicit scheme is kept as-is (http stays http, so `allow_http`
+        // still applies to MinIO-style endpoints).
+        assert_eq!(
+            normalize_endpoint("http://minio.internal:9000"),
+            "http://minio.internal:9000"
+        );
+        assert_eq!(
+            normalize_endpoint("minio.internal:9000"),
+            "https://minio.internal:9000"
+        );
+    }
+
+    /// A bare-host endpoint must produce a usable client, not fail at build.
+    #[test]
+    fn s3_store_accepts_a_scheme_less_endpoint() {
+        let opts = S3Options {
+            endpoint: "s3.us-west-004.backblazeb2.com".to_string(),
+            bucket: "backup-bucket".to_string(),
+            region: "us-west-004".to_string(),
+            access_key: "key-id".to_string(),
+            secret_key: "secret".to_string(),
+            force_path_style: true,
+        };
+        assert!(
+            s3_store(&opts).is_ok(),
+            "a bare host must not fail client construction"
+        );
     }
 
     #[tokio::test]

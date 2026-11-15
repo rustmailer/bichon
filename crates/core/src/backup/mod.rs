@@ -50,6 +50,7 @@ pub mod artifact;
 pub mod backend;
 pub mod config;
 pub mod engine;
+pub mod errors;
 pub mod gate;
 pub mod manager;
 pub mod manifest;
