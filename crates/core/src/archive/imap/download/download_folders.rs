@@ -21,23 +21,51 @@ use std::collections::BTreeSet;
 use crate::{
     decode_mailbox_name, raise_error,
     {
-        account::migration::{AccountModel, AccountType, REMOTE_CLEANUP_FOLDER},
+        account::{
+            migration::{AccountModel, AccountType, REMOTE_CLEANUP_FOLDER},
+            state::DownloadState,
+        },
         archive::imap::mailbox::{AttributeEnum, MailBox},
         archive::imap::mailbox_cache,
         error::{code::ErrorCode, BichonResult},
-        imap::{executor::ImapExecutor, session::SessionStream},
+        imap::{
+            executor::{poll_with_stall_reports, ImapExecutor, STALL_REPORT_INTERVAL},
+            session::SessionStream,
+        },
         mailbox::list::convert_names_to_mailboxes,
     },
 };
 use async_imap::{types::Name, Session};
+use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
 pub async fn get_download_folders(
     account: &AccountModel,
     session: &mut Session<Box<dyn SessionStream>>,
+    token: &CancellationToken,
 ) -> BichonResult<Vec<MailBox>> {
     assert_eq!(account.account_type, AccountType::IMAP);
-    let names = ImapExecutor::list_all_mailboxes(session).await?;
+    // A large account can make `LIST *` take a while; keep the status card
+    // informed instead of leaving the round silent. The token makes the wait
+    // cancellable without dropping and rebuilding the command future.
+    let account_id = account.id;
+    let listing = ImapExecutor::list_all_mailboxes(session);
+    let names = match poll_with_stall_reports(listing, STALL_REPORT_INTERVAL, token, |stall_secs| {
+        let _ = DownloadState::update_session_message(
+            account_id,
+            format!("Listing mailboxes… IMAP server silent for {stall_secs}s"),
+        );
+    })
+    .await
+    {
+        Some(result) => result?,
+        None => {
+            return Err(raise_error!(
+                "Mailbox listing cancelled".to_string(),
+                ErrorCode::InternalError
+            ))
+        }
+    };
     if names.is_empty() {
         warn!(
             "Account {}: No mailboxes returned from IMAP server.",

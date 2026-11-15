@@ -34,8 +34,8 @@ use crate::{
         },
         error::{code::ErrorCode, BichonResult},
         imap::executor::{
-            compress_uid_list, generate_uid_sequence_hashset, slow_server_message, ImapExecutor,
-            DEFAULT_BATCH_SIZE,
+            compress_uid_list, generate_uid_sequence_hashset, slow_server_message, FetchOutcome,
+            ImapExecutor, DEFAULT_BATCH_SIZE,
         },
         store::tantivy::envelope::ENVELOPE_MANAGER,
     },
@@ -44,12 +44,83 @@ use std::time::{Duration, Instant};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
-const MAX_NETWORK_RETRIES: u32 = 3;
+pub(crate) const MAX_NETWORK_RETRIES: u32 = 3;
+
+/// Consecutive folders that may fail with a *network* error before the round
+/// treats the server as throttling and defers the remaining folders (#396).
+/// An explicit IMAP throttle response defers immediately; this covers servers
+/// that go silent instead.
+pub(crate) const STALLED_FOLDER_THRESHOLD: u32 = 2;
 
 /// Whether an error is worth retrying on a fresh connection. Throttling is
 /// retryable too — just much more slowly (see [`retry_backoff_secs`]).
 pub(crate) fn is_retryable_error(code: ErrorCode) -> bool {
     matches!(code, ErrorCode::NetworkError | ErrorCode::ImapServerThrottled)
+}
+
+/// Retry policy for a *connection-level* operation (LOGIN, LIST, EXAMINE).
+///
+/// Batch fetches have their own retry loops; the operations that open the
+/// session used to have none, so a single timeout while a throttling server
+/// ignored a new login failed the whole folder — or the whole sync round
+/// (#396). Only transient transport failures are retried: a protocol or
+/// authentication rejection will not change on a fresh connection, and a
+/// cancelled round must stop immediately.
+pub(crate) fn should_retry_network(code: ErrorCode, retries: u32, cancelled: bool) -> bool {
+    !cancelled && retries < MAX_NETWORK_RETRIES && is_retryable_error(code)
+}
+
+/// Backoff duration for a retry.
+///
+/// Test builds retry immediately: the retry loops are exercised by unit tests
+/// that assert attempt counts, and waiting out a 5/30/120 s table would make
+/// those tests unusably slow. Production uses the real backoff.
+fn retry_sleep(seconds: u64) -> Duration {
+    #[cfg(test)]
+    {
+        let _ = seconds;
+        Duration::ZERO
+    }
+    #[cfg(not(test))]
+    {
+        Duration::from_secs(seconds)
+    }
+}
+
+/// Run a connection-level operation, retrying transient failures with the
+/// shared backoff and retry budget.
+///
+/// `op` is called again from scratch on every attempt, so a caller whose
+/// operation owns a connection (LOGIN + LIST, connect + EXAMINE) rebuilds it
+/// inside `op` instead of reusing a session that may be dead.
+pub(crate) async fn retry_network_op<T, F, Fut>(
+    mut op: F,
+    token: &CancellationToken,
+) -> BichonResult<T>
+where
+    F: FnMut() -> Fut,
+    Fut: std::future::Future<Output = BichonResult<T>>,
+{
+    let mut retries = 0u32;
+    loop {
+        match op().await {
+            Ok(value) => return Ok(value),
+            Err(e) if should_retry_network(e.code(), retries, token.is_cancelled()) => {
+                retries += 1;
+                let backoff = retry_backoff_secs(e.code(), retries);
+                warn!(
+                    retries,
+                    error = %e,
+                    "IMAP connection-level operation failed; retrying in {}s ({}/{})",
+                    backoff,
+                    retries,
+                    MAX_NETWORK_RETRIES
+                );
+                tokio::time::sleep(retry_sleep(backoff)).await;
+            }
+            Err(e) => return Err(e),
+        }
+    }
 }
 
 /// Seconds to wait before retry number `retry` (1-based).
@@ -1011,6 +1082,13 @@ pub async fn reconcile_mailboxes(
             remote_mailboxes.iter().map(|m| m.name.clone()).collect(),
         )?;
 
+        // Consecutive folders that failed with a *network* error. A server
+        // that is rate-limiting a large account often stops answering instead
+        // of sending an IMAP throttle response (#396): after this many in a
+        // row, defer the rest of the round instead of opening another login
+        // per folder and prolonging the lockout.
+        let mut consecutive_network_failures = 0u32;
+
         for (local_mailbox, remote_mailbox) in &existing_mailboxes {
             if token.is_cancelled() {
                 DownloadState::update_session_status(
@@ -1072,7 +1150,7 @@ pub async fn reconcile_mailboxes(
                 }
             };
 
-            let new_highest_uid = if local_mailbox.uid_validity != Some(remote_uid_validity) {
+            let outcome = if local_mailbox.uid_validity != Some(remote_uid_validity) {
                 info!(
                     "Account {}: Mailbox '{}' detected with changed uid_validity (local: {:#?}, remote: {:#?}). \
                     Comparing by Message-ID to find missing emails.",
@@ -1081,6 +1159,10 @@ pub async fn reconcile_mailboxes(
 
                 reconcile_uid_validity_change(account, local_mailbox, remote_mailbox, token.clone())
                     .await
+                    .map(|highest_uid| FetchOutcome {
+                        highest_uid,
+                        stalled: false,
+                    })
             } else {
                 perform_incremental_sync(account, local_mailbox, remote_mailbox, token.clone())
                     .await
@@ -1090,7 +1172,7 @@ pub async fn reconcile_mailboxes(
             // `Partial`), and move on. Throttling is the exception: every
             // further folder would open a new connection that the server is
             // already refusing, so the round stops here.
-            let new_highest_uid = match new_highest_uid {
+            let outcome = match outcome {
                 Ok(v) => v,
                 Err(e) => {
                     let err_msg = format!("Folder '{}' sync failed: {:#?}", remote_mailbox.name, e);
@@ -1104,10 +1186,39 @@ pub async fn reconcile_mailboxes(
                         );
                         break;
                     }
+                    // Silence/timeouts are how a rate-limiting server usually
+                    // behaves here; treat a run of them as throttling too.
+                    if e.code() == ErrorCode::NetworkError {
+                        consecutive_network_failures += 1;
+                        if consecutive_network_failures >= STALLED_FOLDER_THRESHOLD {
+                            summary.throttled = true;
+                            warn!(
+                                account_id,
+                                failures = consecutive_network_failures,
+                                "The IMAP server stopped answering; deferring the remaining folders"
+                            );
+                            break;
+                        }
+                    } else {
+                        consecutive_network_failures = 0;
+                    }
                     summary.failed_folders += 1;
                     continue;
                 }
             };
+            // Repeated intra-batch stalls are the same signal without an error
+            // code: stop before the server starts refusing logins outright.
+            if outcome.stalled {
+                summary.throttled = true;
+                warn!(
+                    account_id,
+                    mailbox = %remote_mailbox.name,
+                    "Repeated stalls from the IMAP server; deferring the remaining folders"
+                );
+                break;
+            }
+            consecutive_network_failures = 0;
+            let new_highest_uid = outcome.highest_uid;
             summary.synced_folders += 1;
             info!(
                 account_id,
@@ -1256,13 +1367,14 @@ pub async fn reconcile_mailboxes(
 
 //only check new emails and sync
 /// Incrementally syncs a mailbox.
-/// Returns the new highest UID after sync, or `None` if nothing changed.
+/// Returns the new highest UID after sync (`None` if nothing changed) and
+/// whether the server looked throttled while fetching.
 async fn perform_incremental_sync(
     account: &AccountModel,
     local_mailbox: &MailBox,
     remote_mailbox: &MailBox,
     token: CancellationToken,
-) -> BichonResult<Option<u32>> {
+) -> BichonResult<FetchOutcome> {
     if remote_mailbox.exists > 0 {
         // Fast path: `UIDNEXT` comes from the STATUS the round already ran on
         // the listing connection. When it has not passed the local watermark,
@@ -1288,7 +1400,10 @@ async fn perform_incremental_sync(
                 FolderStatus::Success,
                 Some("No new emails found.".into()),
             )?;
-            return Ok(Some(highest));
+            return Ok(FetchOutcome {
+                highest_uid: Some(highest),
+                stalled: false,
+            });
         }
 
         // Use stored highest_uid if available; otherwise fall back to Tantivy
@@ -1350,7 +1465,10 @@ async fn perform_incremental_sync(
                                 }
                             },
                         };
-                        return Ok(result);
+                        return Ok(FetchOutcome {
+                            highest_uid: result,
+                            stalled: false,
+                        });
                     }
                 }
             }
@@ -1390,11 +1508,14 @@ async fn perform_incremental_sync(
         // Keep an existing watermark when no new mail was fetched; for an
         // upgraded database without one, adopt the index maximum so the
         // fallback (and its warning) runs once instead of every round.
-        Ok(incremental_highest_uid(
-            new_max_uid,
-            local_mailbox.highest_uid,
-            index_max_uid,
-        ))
+        Ok(FetchOutcome {
+            highest_uid: incremental_highest_uid(
+                new_max_uid.highest_uid,
+                local_mailbox.highest_uid,
+                index_max_uid,
+            ),
+            stalled: new_max_uid.stalled,
+        })
     } else {
         DownloadState::update_folder_progress(
             account.id,
@@ -1404,7 +1525,10 @@ async fn perform_incremental_sync(
             FolderStatus::Success,
             None,
         )?;
-        Ok(local_mailbox.highest_uid)
+        Ok(FetchOutcome {
+            highest_uid: local_mailbox.highest_uid,
+            stalled: false,
+        })
     }
 }
 
@@ -1454,6 +1578,115 @@ mod tests {
         assert!(!is_retryable_error(ErrorCode::ImapAuthenticationFailed));
         assert!(!is_retryable_error(ErrorCode::ImapCommandFailed));
         assert!(!is_retryable_error(ErrorCode::InternalError));
+    }
+
+    /// Connection-level operations (LOGIN, LIST, EXAMINE) are retried on the
+    /// same terms as batch fetches, but never past the cap, never after a
+    /// cancellation, and never for a failure a fresh connection cannot fix.
+    #[test]
+    fn connection_retries_are_bounded_to_transient_failures() {
+        assert!(should_retry_network(ErrorCode::NetworkError, 0, false));
+        assert!(should_retry_network(ErrorCode::NetworkError, 2, false));
+        assert!(should_retry_network(ErrorCode::ImapServerThrottled, 0, false));
+        assert!(
+            !should_retry_network(ErrorCode::NetworkError, MAX_NETWORK_RETRIES, false),
+            "the retry cap must be honoured"
+        );
+        assert!(
+            !should_retry_network(ErrorCode::NetworkError, 0, true),
+            "a cancelled round must stop immediately"
+        );
+        assert!(!should_retry_network(
+            ErrorCode::ImapAuthenticationFailed,
+            0,
+            false
+        ));
+        assert!(!should_retry_network(ErrorCode::ImapCommandFailed, 0, false));
+        assert!(!should_retry_network(ErrorCode::InternalError, 0, false));
+    }
+
+    #[tokio::test]
+    async fn network_op_retries_until_it_succeeds() {
+        use std::sync::atomic::{AtomicU32, Ordering};
+        let attempts = AtomicU32::new(0);
+        let token = CancellationToken::new();
+
+        let result: BichonResult<u32> = retry_network_op(
+            || async {
+                let n = attempts.fetch_add(1, Ordering::SeqCst) + 1;
+                if n < 3 {
+                    Err(raise_error!("timed out".into(), ErrorCode::NetworkError))
+                } else {
+                    Ok(7)
+                }
+            },
+            &token,
+        )
+        .await;
+
+        assert_eq!(result.expect("the third attempt succeeds"), 7);
+        assert_eq!(attempts.load(Ordering::SeqCst), 3);
+    }
+
+    /// The initial attempt plus [`MAX_NETWORK_RETRIES`] retries, no more. Time
+    /// is paused so the backoff sleeps do not slow the test.
+    #[tokio::test]
+    async fn network_op_gives_up_after_the_retry_budget() {
+        use std::sync::atomic::{AtomicU32, Ordering};
+        let attempts = AtomicU32::new(0);
+        let token = CancellationToken::new();
+
+        let result: BichonResult<()> = retry_network_op(
+            || async {
+                attempts.fetch_add(1, Ordering::SeqCst);
+                Err(raise_error!(
+                    "server silent".into(),
+                    ErrorCode::NetworkError
+                ))
+            },
+            &token,
+        )
+        .await;
+
+        assert_eq!(result.unwrap_err().code(), ErrorCode::NetworkError);
+        assert_eq!(attempts.load(Ordering::SeqCst), MAX_NETWORK_RETRIES + 1);
+    }
+
+    /// A permanent failure is not retried, and neither is anything after a
+    /// cancellation — retrying would only hammer a server that already said no.
+    #[tokio::test]
+    async fn network_op_does_not_retry_permanent_failures_or_cancellation() {
+        use std::sync::atomic::{AtomicU32, Ordering};
+
+        let attempts = AtomicU32::new(0);
+        let token = CancellationToken::new();
+        let permanent: BichonResult<()> = retry_network_op(
+            || async {
+                attempts.fetch_add(1, Ordering::SeqCst);
+                Err(raise_error!(
+                    "protocol error".into(),
+                    ErrorCode::ImapCommandFailed
+                ))
+            },
+            &token,
+        )
+        .await;
+        assert_eq!(permanent.unwrap_err().code(), ErrorCode::ImapCommandFailed);
+        assert_eq!(attempts.load(Ordering::SeqCst), 1);
+
+        let attempts = AtomicU32::new(0);
+        let cancelled = CancellationToken::new();
+        cancelled.cancel();
+        let stopped: BichonResult<()> = retry_network_op(
+            || async {
+                attempts.fetch_add(1, Ordering::SeqCst);
+                Err(raise_error!("timed out".into(), ErrorCode::NetworkError))
+            },
+            &cancelled,
+        )
+        .await;
+        assert_eq!(stopped.unwrap_err().code(), ErrorCode::NetworkError);
+        assert_eq!(attempts.load(Ordering::SeqCst), 1);
     }
 
     #[test]

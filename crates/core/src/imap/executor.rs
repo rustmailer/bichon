@@ -134,6 +134,82 @@ pub(crate) fn classify_login_error(e: &async_imap::error::Error) -> ErrorCode {
     }
 }
 
+/// How often a silent stream re-reports progress to the caller (and the UI).
+pub(crate) const STALL_REPORT_INTERVAL: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Minimum gap between two *log lines* for one stalled stream.
+///
+/// Progress is re-reported every [`STALL_REPORT_INTERVAL`] so the UI can show
+/// the wait climbing, but logging the same warning every 5 seconds produced
+/// thousands of lines for a single slow server (#396): log at most once a
+/// minute per stream, and at `debug` in between.
+pub(crate) const STALL_LOG_INTERVAL: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// Poll `fut` until it completes, reporting a stall every
+/// [`STALL_REPORT_INTERVAL`] while the server is silent.
+///
+/// The **same** future is polled across timeouts, never rebuilt: dropping an
+/// in-flight IMAP command desynchronizes the session and makes the server
+/// restart the work (#373). Returns `None` when the run is cancelled while the
+/// future is still pending.
+pub(crate) async fn poll_with_stall_reports<F, T>(
+    fut: F,
+    interval: std::time::Duration,
+    token: &CancellationToken,
+    mut on_stall: impl FnMut(u64),
+) -> Option<T>
+where
+    F: std::future::Future<Output = T>,
+{
+    let started = std::time::Instant::now();
+    tokio::pin!(fut);
+    loop {
+        match tokio::time::timeout(interval, &mut fut).await {
+            Ok(value) => return Some(value),
+            Err(_) => {
+                if token.is_cancelled() {
+                    return None;
+                }
+                on_stall(started.elapsed().as_secs());
+            }
+        }
+    }
+}
+
+/// Rate-limits the "server is silent" warning of one stream.
+pub(crate) struct StallLogger {
+    interval: std::time::Duration,
+    /// `None` until the first report, so the first stall is always logged.
+    last: Option<std::time::Instant>,
+}
+
+impl Default for StallLogger {
+    fn default() -> Self {
+        Self::new(STALL_LOG_INTERVAL)
+    }
+}
+
+impl StallLogger {
+    pub(crate) fn new(interval: std::time::Duration) -> Self {
+        Self {
+            interval,
+            last: None,
+        }
+    }
+
+    /// Whether this stall should be logged now, re-arming the window.
+    pub(crate) fn should_log(&mut self, now: std::time::Instant) -> bool {
+        let due = match self.last {
+            None => true,
+            Some(last) => now.duration_since(last) >= self.interval,
+        };
+        if due {
+            self.last = Some(now);
+        }
+        due
+    }
+}
+
 fn classify_io_error(io: &std::io::Error) -> ErrorCode {
     matches!(
         io.kind(),
@@ -146,6 +222,18 @@ fn classify_io_error(io: &std::io::Error) -> ErrorCode {
     )
     .then_some(ErrorCode::NetworkError)
     .unwrap_or(ErrorCode::ImapCommandFailed)
+}
+
+/// Result of one incremental fetch pass over a mailbox.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct FetchOutcome {
+    /// New highest UID, when the pass observed one.
+    pub highest_uid: Option<u32>,
+    /// At least one batch reported repeated stalls. The server is behaving
+    /// like it is throttling us even if it never says so (#396): the caller
+    /// should stop the round and defer the remaining folders instead of
+    /// hammering it folder after folder.
+    pub stalled: bool,
 }
 
 /// The outcome of one batched body fetch ([`ImapExecutor::uid_batch_retrieve_emails`]).
@@ -256,7 +344,7 @@ impl ImapExecutor {
         start_uid: u64,
         before: Option<&str>,
         token: CancellationToken,
-    ) -> BichonResult<Option<u32>> {
+    ) -> BichonResult<FetchOutcome> {
         assert!(start_uid > 0, "start_uid must be greater than 0");
 
         let examined = session
@@ -295,7 +383,8 @@ impl ImapExecutor {
         date: &str,
         examined: async_imap::types::Mailbox,
         token: CancellationToken,
-    ) -> BichonResult<Option<u32>> {
+    ) -> BichonResult<FetchOutcome> {
+        let mut stalled = false;
         let uid_range = format!("{start_uid}:*");
         let (entries, skipped_oversized) = Self::collect_range_uids(
             session,
@@ -341,7 +430,12 @@ impl ImapExecutor {
                 .await?
                 {
                     EmptyEnumeration::NotAnomaly => {}
-                    EmptyEnumeration::Advanced(new_highest) => return Ok(Some(new_highest)),
+                    EmptyEnumeration::Advanced(new_highest) => {
+                        return Ok(FetchOutcome {
+                            highest_uid: Some(new_highest),
+                            stalled,
+                        })
+                    }
                     EmptyEnumeration::KeepWatermark => {
                         DownloadState::update_folder_progress(
                             account.id,
@@ -351,7 +445,10 @@ impl ImapExecutor {
                             FolderStatus::Success,
                             Some("UID FETCH range returned empty; tail UIDs may have been purged. highest_uid unchanged, will retry on next sync.".into()),
                         )?;
-                        return Ok(None);
+                        return Ok(FetchOutcome {
+                            highest_uid: None,
+                            stalled,
+                        });
                     }
                 }
             }
@@ -363,7 +460,10 @@ impl ImapExecutor {
                 FolderStatus::Success,
                 Some("No new emails found.".into()),
             )?;
-            return Ok(None);
+            return Ok(FetchOutcome {
+                highest_uid: None,
+                stalled,
+            });
         }
 
         let max_uid = uid_vec.last().copied();
@@ -427,6 +527,8 @@ impl ImapExecutor {
             if outcome.throttled {
                 // Server appears to be rate-limiting; back off before the next
                 // batch so we don't hammer the limiter with back-to-back bursts.
+                // The caller stops the round on `stalled`.
+                stalled = true;
                 tokio::time::sleep(std::time::Duration::from_secs(5)).await;
             }
             count += outcome.stored;
@@ -451,7 +553,10 @@ impl ImapExecutor {
             None,
         )?;
 
-        Ok(max_uid)
+        Ok(FetchOutcome {
+            highest_uid: max_uid,
+            stalled,
+        })
     }
 
     /// Enumerates every UID in `{start}:*` via a lightweight
@@ -657,7 +762,8 @@ impl ImapExecutor {
         start_uid: u64,
         examined: async_imap::types::Mailbox,
         token: CancellationToken,
-    ) -> BichonResult<Option<u32>> {
+    ) -> BichonResult<FetchOutcome> {
+        let mut stalled = false;
         let uid_range = format!("{start_uid}:*");
         info!(
             "[account {}][mailbox {}] fetch_new_mail: enumerate UIDs via UID FETCH {}",
@@ -716,7 +822,12 @@ impl ImapExecutor {
                 .await?
                 {
                     EmptyEnumeration::NotAnomaly => {}
-                    EmptyEnumeration::Advanced(new_highest) => return Ok(Some(new_highest)),
+                    EmptyEnumeration::Advanced(new_highest) => {
+                        return Ok(FetchOutcome {
+                            highest_uid: Some(new_highest),
+                            stalled,
+                        })
+                    }
                     EmptyEnumeration::KeepWatermark => {
                         // The gap between highest_uid and uid_next may be
                         // caused by messages being deleted on the server side.
@@ -730,7 +841,10 @@ impl ImapExecutor {
                             FolderStatus::Success,
                             Some("UID FETCH range returned empty; tail UIDs may have been purged. highest_uid unchanged, will retry on next sync.".into()),
                         )?;
-                        return Ok(None);
+                        return Ok(FetchOutcome {
+                            highest_uid: None,
+                            stalled,
+                        });
                     }
                 }
             }
@@ -742,7 +856,10 @@ impl ImapExecutor {
                 FolderStatus::Success,
                 Some("No new emails found.".into()),
             )?;
-            return Ok(None);
+            return Ok(FetchOutcome {
+                highest_uid: None,
+                stalled,
+            });
         }
 
         let max_uid = uid_vec.last().copied();
@@ -852,6 +969,12 @@ impl ImapExecutor {
             };
             match batch_result {
                 Ok(outcome) => {
+                    if outcome.throttled {
+                        // Repeated stalls: back off before the next batch, and
+                        // let the caller defer the remaining folders.
+                        stalled = true;
+                        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                    }
                     count += outcome.stored;
                     filtered += outcome.filtered;
                     DownloadState::update_folder_progress_and_filtered(
@@ -891,7 +1014,10 @@ impl ImapExecutor {
             None,
         )?;
 
-        Ok(max_uid)
+        Ok(FetchOutcome {
+            highest_uid: max_uid,
+            stalled,
+        })
     }
 
     /// Downloads the bodies of `uid_set` in one batch.
@@ -987,7 +1113,6 @@ impl ImapExecutor {
         // While the server is silent, re-report the current wait every few
         // seconds so the UI shows the wait climbing instead of a stale
         // average (the average only moves when a message actually arrives).
-        const STALL_REPORT_INTERVAL: std::time::Duration = std::time::Duration::from_secs(5);
         loop {
             // On error, report the number of emails already stored through the
             // progress callback so a partial batch is not counted as fully
@@ -1404,7 +1529,8 @@ impl ImapExecutor {
         let mut last_recv = std::time::Instant::now();
         // While the server is silent, re-report the current count every few
         // seconds so the UI shows the wait climbing instead of a stale state.
-        const STALL_REPORT_INTERVAL: std::time::Duration = std::time::Duration::from_secs(5);
+        // The log line is rate-limited separately (see `StallLogger`).
+        let mut stall_logger = StallLogger::default();
         loop {
             let item = match tokio::time::timeout(STALL_REPORT_INTERVAL, stream.try_next()).await {
                 Ok(Ok(item)) => Ok(item),
@@ -1420,11 +1546,19 @@ impl ImapExecutor {
                     if let Some(progress) = progress {
                         progress(result.len() as u64, Some(stall_secs))?;
                     }
-                    tracing::warn!(
-                        stall_secs = format!("{:.0}", stall_secs),
-                        fetched = result.len(),
-                        "fetch_uid_headers: server silent, waiting"
-                    );
+                    if stall_logger.should_log(std::time::Instant::now()) {
+                        tracing::warn!(
+                            stall_secs = format!("{:.0}", stall_secs),
+                            fetched = result.len(),
+                            "fetch_uid_headers: server silent, waiting"
+                        );
+                    } else {
+                        tracing::debug!(
+                            stall_secs = format!("{:.0}", stall_secs),
+                            fetched = result.len(),
+                            "fetch_uid_headers: server silent, still waiting"
+                        );
+                    }
                     continue;
                 }
             };
@@ -1684,6 +1818,82 @@ mod test {
     use super::*;
     use crate::imap::session::SessionStream;
     use tokio_io_timeout::TimeoutStream;
+
+    // ── stall logging & polling ────────────────────────────────────
+
+    /// The first stall is logged; repeats are rate-limited to one per window
+    /// so a slow server cannot flood the log (#396: 9,529 lines in one run).
+    #[test]
+    fn stall_logger_rate_limits_repeats() {
+        let base = std::time::Instant::now();
+        let mut logger = StallLogger::new(std::time::Duration::from_secs(60));
+        assert!(logger.should_log(base), "the first stall is reported");
+        assert!(!logger.should_log(base + std::time::Duration::from_secs(5)));
+        assert!(!logger.should_log(base + std::time::Duration::from_secs(59)));
+        assert!(
+            logger.should_log(base + std::time::Duration::from_secs(60)),
+            "the window re-arms after the interval"
+        );
+        assert!(!logger.should_log(base + std::time::Duration::from_secs(65)));
+    }
+
+    /// The helper must poll one and the same future: a rebuilt future would
+    /// restart the sleep on every tick and never complete (#373).
+    #[tokio::test]
+    async fn stall_polling_reports_and_does_not_rebuild_the_future() {
+        let token = CancellationToken::new();
+        let mut reports = 0u32;
+        let value = poll_with_stall_reports(
+            async {
+                tokio::time::sleep(std::time::Duration::from_millis(35)).await;
+                7u32
+            },
+            std::time::Duration::from_millis(10),
+            &token,
+            |_| reports += 1,
+        )
+        .await;
+
+        // Completion is the real proof that the future was not rebuilt: a
+        // rebuilt future would restart the 35 ms sleep on every tick and never
+        // finish. The count only needs to show that stalls were reported.
+        assert_eq!(value, Some(7));
+        assert!(
+            reports >= 1,
+            "a 35 ms wait with a 10 ms interval must report a stall, got {reports}"
+        );
+    }
+
+    #[tokio::test]
+    async fn stall_polling_is_silent_when_the_future_completes_at_once() {
+        let token = CancellationToken::new();
+        let mut reports = 0u32;
+        let value = poll_with_stall_reports(
+            async { 3u32 },
+            std::time::Duration::from_millis(10),
+            &token,
+            |_| reports += 1,
+        )
+        .await;
+        assert_eq!(value, Some(3));
+        assert_eq!(reports, 0);
+    }
+
+    #[tokio::test]
+    async fn stall_polling_stops_on_cancellation() {
+        let token = CancellationToken::new();
+        token.cancel();
+        let mut reports = 0u32;
+        let value = poll_with_stall_reports(
+            std::future::pending::<u32>(),
+            std::time::Duration::from_millis(10),
+            &token,
+            |_| reports += 1,
+        )
+        .await;
+        assert_eq!(value, None, "a cancelled wait reports no value");
+        assert_eq!(reports, 0, "no progress updates after cancellation");
+    }
 
     // ── compress_uid_list ──────────────────────────────────────────
 
@@ -2334,11 +2544,12 @@ To: recipient@example.com\r\n\r\n";
         .unwrap();
 
         assert_eq!(
-            result,
+            result.highest_uid,
             Some(152),
             "a proven-empty tail must advance highest_uid to UIDNEXT-1, \
              otherwise the folder re-enumerates the same range every round"
         );
+        assert!(!result.stalled);
         session.logout().await.ok();
     }
 
@@ -2376,7 +2587,7 @@ To: recipient@example.com\r\n\r\n";
         .unwrap();
 
         assert_eq!(
-            result, None,
+            result.highest_uid, None,
             "a range that does contain mail must keep highest_uid unchanged"
         );
         session.logout().await.ok();

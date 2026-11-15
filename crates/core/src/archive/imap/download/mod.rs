@@ -26,7 +26,7 @@ use crate::{
     },
     archive::imap::{download::flow::FetchDirection, mailbox::MailBox},
     backup::gate::WRITE_GATE,
-    error::BichonResult,
+    error::{code::ErrorCode, BichonResult},
     imap::executor::ImapExecutor,
 };
 use download_folders::get_download_folders;
@@ -63,23 +63,25 @@ pub async fn process_imap_download(
     if matches!(download_task, DownloadTask::Idle) {
         return Ok(());
     }
-    let mut session = match ImapExecutor::create_connection(account_id).await {
-        Ok(session) => session,
-        Err(e) => {
-            let err_msg = format!("Failed to connect to IMAP server: {:#?}", e);
-            DownloadState::append_session_error(account_id, err_msg.clone())?;
-            DownloadState::update_session_status(
-                account_id,
-                DownloadStatus::Failed,
-                Some(err_msg),
-            )?;
-            return Err(e);
-        }
-    };
-    let remote_mailboxes = match get_download_folders(account, &mut session).await {
+    // Connect and list the mailboxes, retrying transient failures. A single
+    // LOGIN or LIST timeout used to mark the whole round Failed (#396), even
+    // though a fresh connection usually succeeds right away — on a throttled
+    // server that is exactly what the #396 logs showed.
+    let remote_mailboxes = match flow::retry_network_op(
+        || async {
+            let mut session = ImapExecutor::create_connection(account_id).await?;
+            let listed = get_download_folders(account, &mut session, &token).await;
+            session.logout().await.ok();
+            listed
+        },
+        &token,
+    )
+    .await
+    {
         Ok(mailboxes) => mailboxes,
         Err(err) => {
-            let err_msg = format!("Failed to fetch mailboxes: {:#?}", err);
+            let err_msg =
+                format!("Failed to connect to or list the IMAP server's mailboxes: {:#?}", err);
             warn!(account_id = account.id, error = %err, "{}", err_msg);
             DownloadState::append_session_error(account_id, err_msg.clone())?;
             DownloadState::update_session_status(
@@ -90,7 +92,6 @@ pub async fn process_imap_download(
             return Ok(());
         }
     };
-    session.logout().await.ok();
     if matches!(download_task, DownloadTask::FullFetch) {
         let result = match &account.date_since {
             Some(date_since) => {
@@ -162,16 +163,19 @@ pub async fn process_imap_download(
             account_id,
         )
         .await;
-        let (cancelled, total_downloaded, total_failed, total_filtered) = match run_outcome {
+        let pass = match run_outcome {
             Ok(v) => v,
             Err(e) => {
                 warn!(account_id = account_id, "Gap-fill phase error: {:#?}", e);
-                (false, 0, 1, 0)
+                GapFillPass {
+                    failed: 1,
+                    ..Default::default()
+                }
             }
         };
-        let status = if cancelled {
+        let status = if pass.cancelled {
             GapFillStatus::Cancelled
-        } else if total_failed > 0 {
+        } else if pass.failed > 0 {
             GapFillStatus::Failed
         } else {
             GapFillStatus::Success
@@ -179,24 +183,35 @@ pub async fn process_imap_download(
         GapFillState::finish_run(
             account_id,
             status,
-            total_downloaded,
-            total_failed,
-            total_filtered,
+            pass.downloaded,
+            pass.failed,
+            pass.filtered,
         )?;
-        let skipped = if total_filtered > 0 {
-            format!(", {} skipped by archive rules", total_filtered)
-        } else {
-            String::new()
-        };
-        let summary = if cancelled {
+        let mut notes = String::new();
+        if pass.filtered > 0 {
+            notes.push_str(&format!(", {} skipped by archive rules", pass.filtered));
+        }
+        if pass.deferred > 0 {
+            notes.push_str(&format!(
+                ", {} folder(s) deferred (the server stopped answering) — re-run gap-fill later",
+                pass.deferred
+            ));
+        }
+        if pass.retried > 0 {
+            notes.push_str(&format!(
+                ", retried {} failed folder(s) after backoff: {} recovered",
+                pass.retried, pass.recovered
+            ));
+        }
+        let summary = if pass.cancelled {
             format!(
                 "Gap-fill cancelled: {} downloaded, {} failed{}",
-                total_downloaded, total_failed, skipped
+                pass.downloaded, pass.failed, notes
             )
         } else {
             format!(
                 "Gap-fill finished: {} downloaded, {} failed{}",
-                total_downloaded, total_failed, skipped
+                pass.downloaded, pass.failed, notes
             )
         };
         DownloadState::update_session_message(account_id, summary.clone())?;
@@ -252,6 +267,83 @@ type GapFillScanFuture<'a> = std::pin::Pin<
     Box<dyn std::future::Future<Output = BichonResult<GapFillFolderStats>> + Send + 'a>,
 >;
 
+/// One folder's scan inside a gap-fill run.
+///
+/// A trait rather than the closure this loop used to take: the production
+/// scanner owns the run's single IMAP session, and a `FnMut` closure cannot
+/// return a future that borrows its captured state.
+pub(crate) trait GapFillScanner: Send {
+    fn scan<'a>(
+        &'a mut self,
+        local: &'a MailBox,
+        remote: &'a MailBox,
+        token: CancellationToken,
+    ) -> GapFillScanFuture<'a>;
+}
+
+/// The production scanner: one IMAP session for every folder of the run.
+/// Gap-fill used to log in per folder (and again for the downloads), which is
+/// exactly what a rate-limiting server punishes with `EXAMINE` timeouts
+/// (#396).
+struct LiveGapFillScanner<'a> {
+    account: &'a AccountModel,
+    conn: gap_fill::GapFillConnection,
+}
+
+impl GapFillScanner for LiveGapFillScanner<'_> {
+    fn scan<'a>(
+        &'a mut self,
+        local: &'a MailBox,
+        remote: &'a MailBox,
+        token: CancellationToken,
+    ) -> GapFillScanFuture<'a> {
+        Box::pin(gap_fill::gap_fill_mailbox(
+            self.account,
+            local,
+            remote,
+            token,
+            &mut self.conn,
+        ))
+    }
+}
+
+/// Outcome of one gap-fill run (first pass plus the retry pass).
+#[derive(Debug, Default)]
+struct GapFillPass {
+    cancelled: bool,
+    downloaded: u64,
+    failed: u64,
+    filtered: u64,
+    /// Folders skipped because the server stopped answering / throttled.
+    /// They are deferred, not failed.
+    deferred: usize,
+    /// Folders that failed with a transient error in the first pass.
+    retryable_failures: Vec<String>,
+    /// How many of them the retry pass attempted.
+    retried: usize,
+    /// How many retries succeeded.
+    recovered: usize,
+}
+
+/// Backoff before retrying the folders whose first scan failed on a network
+/// error. Matches the longest throttling backoff: retrying a throttled server
+/// sooner only repeats the failure.
+#[cfg(not(test))]
+const GAP_FILL_RETRY_DELAY: std::time::Duration = std::time::Duration::from_secs(120);
+
+/// Test builds retry immediately — the wait itself is not what the tests
+/// assert, and a 2-minute pause would make them unusable.
+fn gap_fill_retry_delay() -> std::time::Duration {
+    #[cfg(test)]
+    {
+        std::time::Duration::ZERO
+    }
+    #[cfg(not(test))]
+    {
+        GAP_FILL_RETRY_DELAY
+    }
+}
+
 /// Runs the gap-fill phase across all download-folder mailboxes. Errors inside
 /// are converted into a failed-run outcome instead of propagating, so the
 /// caller can always finalize the active run.
@@ -261,48 +353,60 @@ async fn gap_fill_phase(
     remote_mailboxes: &[MailBox],
     token: CancellationToken,
     account_id: u64,
-) -> BichonResult<(bool, u64, u64, u64)> {
-    run_gap_fill_folders(
+) -> BichonResult<GapFillPass> {
+    let mut scanner = LiveGapFillScanner {
+        account,
+        conn: gap_fill::GapFillConnection::new(account_id),
+    };
+    let pass = run_gap_fill_folders(
         local_mailboxes,
         remote_mailboxes,
         token,
         account_id,
-        |local, remote, token| Box::pin(gap_fill::gap_fill_mailbox(account, local, remote, token)),
+        &mut scanner,
     )
-    .await
+    .await;
+    // Log the shared session out once, on every exit path.
+    scanner.conn.close().await;
+    pass
 }
 
 /// The folder loop, split out from [`gap_fill_phase`] so tests can inject a
 /// fake scan and exercise the cancellation rules without an IMAP server.
-/// Returns `(cancelled, downloaded, failed, filtered)`.
-async fn run_gap_fill_folders<'a, F>(
-    local_mailboxes: &'a [MailBox],
-    remote_mailboxes: &'a [MailBox],
+async fn run_gap_fill_folders(
+    local_mailboxes: &[MailBox],
+    remote_mailboxes: &[MailBox],
     token: CancellationToken,
     account_id: u64,
-    mut scan: F,
-) -> BichonResult<(bool, u64, u64, u64)>
-where
-    F: FnMut(&'a MailBox, &'a MailBox, CancellationToken) -> GapFillScanFuture<'a>,
-{
-    let mut total_downloaded = 0u64;
-    let mut total_failed = 0u64;
-    let mut total_filtered = 0u64;
-    let mut cancelled = false;
-    for local_mailbox in local_mailboxes {
+    scanner: &mut dyn GapFillScanner,
+) -> BichonResult<GapFillPass> {
+    let mut pass = GapFillPass::default();
+    // Consecutive folders that failed with a network error. A throttling
+    // server often stops answering rather than sending an IMAP throttle
+    // response (#396); after this many in a row, defer the rest instead of
+    // opening another session per folder and prolonging the lockout.
+    let mut consecutive_network_failures = 0u32;
+    let remaining_folders = |from: usize| {
+        local_mailboxes[from..]
+            .iter()
+            .filter(|m| remote_mailboxes.iter().any(|r| r.name == m.name))
+            .count()
+    };
+    for (index, local_mailbox) in local_mailboxes.iter().enumerate() {
         let Some(remote) = remote_mailboxes.iter().find(|r| r.name == local_mailbox.name) else {
             continue;
         };
         if token.is_cancelled() {
-            cancelled = true;
+            pass.cancelled = true;
             break;
         }
         DownloadState::set_current_folder(account_id, local_mailbox.name.clone())?;
-        match scan(local_mailbox, remote, token.clone()).await {
+        match scanner.scan(local_mailbox, remote, token.clone()).await {
             Ok(stats) => {
-                total_downloaded += stats.downloaded;
-                total_failed += stats.failed;
-                total_filtered += stats.filtered;
+                consecutive_network_failures = 0;
+                pass.downloaded += stats.downloaded;
+                pass.failed += stats.failed;
+                pass.filtered += stats.filtered;
                 GapFillState::add_folder_result(account_id, local_mailbox.name.clone(), stats)?;
             }
             Err(e) => {
@@ -312,7 +416,11 @@ where
                 );
                 warn!(account_id = account_id, "{}", err_msg);
                 DownloadState::append_session_error(account_id, err_msg)?;
-                total_failed += 1; // count the mailbox as a failed unit
+                pass.failed += 1; // count the mailbox as a failed unit
+                let retryable = flow::should_retry_network(e.code(), 0, false);
+                if retryable {
+                    pass.retryable_failures.push(local_mailbox.name.clone());
+                }
                 GapFillState::add_folder_result(
                     account_id,
                     local_mailbox.name.clone(),
@@ -324,6 +432,29 @@ where
                         message: None,
                     },
                 )?;
+                if e.code() == ErrorCode::ImapServerThrottled {
+                    pass.deferred = remaining_folders(index + 1);
+                    warn!(
+                        account_id,
+                        deferred = pass.deferred,
+                        "Gap-fill: server throttled this account; deferring the remaining folders"
+                    );
+                    break;
+                }
+                if e.code() == ErrorCode::NetworkError {
+                    consecutive_network_failures += 1;
+                    if consecutive_network_failures >= flow::STALLED_FOLDER_THRESHOLD {
+                        pass.deferred = remaining_folders(index + 1);
+                        warn!(
+                            account_id,
+                            deferred = pass.deferred,
+                            "Gap-fill: the IMAP server stopped answering; deferring the remaining folders"
+                        );
+                        break;
+                    }
+                } else {
+                    consecutive_network_failures = 0;
+                }
             }
         }
     }
@@ -331,15 +462,61 @@ where
     // above has already passed its check. Honour it so the run is finalized as
     // Cancelled instead of Success.
     if token.is_cancelled() {
-        cancelled = true;
+        pass.cancelled = true;
     }
-    Ok((cancelled, total_downloaded, total_failed, total_filtered))
+
+    // One more attempt for folders that failed with a transient error, after a
+    // backoff: the server that stalled on them minutes ago usually answers
+    // again. The session is reused — no new logins (#396).
+    if !pass.cancelled && !pass.retryable_failures.is_empty() && !token.is_cancelled() {
+        let waited = tokio::select! {
+            _ = tokio::time::sleep(gap_fill_retry_delay()) => true,
+            _ = token.cancelled() => false,
+        };
+        if waited {
+            pass.retried = pass.retryable_failures.len();
+            for name in std::mem::take(&mut pass.retryable_failures) {
+                let Some(local) = local_mailboxes.iter().find(|m| m.name == name) else {
+                    continue;
+                };
+                let Some(remote) = remote_mailboxes.iter().find(|r| r.name == name) else {
+                    continue;
+                };
+                DownloadState::set_current_folder(account_id, name.clone())?;
+                match scanner.scan(local, remote, token.clone()).await {
+                    Ok(stats) => {
+                        // The folder was recorded as failed (failed: 1) by the
+                        // first pass; replace that entry instead of adding a
+                        // second one.
+                        pass.failed = pass.failed.saturating_sub(1);
+                        pass.downloaded += stats.downloaded;
+                        pass.failed += stats.failed;
+                        pass.filtered += stats.filtered;
+                        pass.recovered += 1;
+                        GapFillState::replace_folder_result(account_id, name.clone(), stats)?;
+                        info!(account_id, mailbox = %name, "Gap-fill: retry recovered the folder");
+                    }
+                    Err(e) => {
+                        // Already counted as failed; keep that result.
+                        warn!(
+                            account_id,
+                            mailbox = %name,
+                            "Gap-fill: retry failed again: {:#?}",
+                            e
+                        );
+                    }
+                }
+            }
+        }
+    }
+    Ok(pass)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::error::code::ErrorCode;
+    use std::sync::{Arc, Mutex};
 
     static TEST_ENV: std::sync::Once = std::sync::Once::new();
 
@@ -371,6 +548,91 @@ mod tests {
         }
     }
 
+    /// What one fake folder scan does.
+    enum ScanAction {
+        /// Return the given stats, cancelling the run token first if asked.
+        Ok {
+            stats: GapFillFolderStats,
+            cancel: bool,
+        },
+        /// Record the folder name, cancel the run, return one downloaded.
+        RecordAndCancel(Arc<Mutex<Vec<String>>>),
+        /// Fail the first call, succeed from the second on.
+        FailFirst(Arc<Mutex<u32>>, GapFillFolderStats),
+        /// Fail the first scan of *each* folder, succeed on its retry.
+        FailEachFolderOnce(Arc<Mutex<Vec<String>>>, GapFillFolderStats),
+        /// Always fail with the given error code.
+        AlwaysErr(ErrorCode),
+        /// Fail with the given error and cancel the run.
+        FailAndCancel(ErrorCode),
+    }
+
+    /// A fake [`GapFillScanner`] that counts the folders it served. The loop
+    /// must reuse one scanner instance for the whole run: the production
+    /// scanner owns the run's single IMAP session (#396).
+    struct TestScanner {
+        action: ScanAction,
+        served: u32,
+    }
+
+    impl GapFillScanner for TestScanner {
+        fn scan<'a>(
+            &'a mut self,
+            local: &'a MailBox,
+            _remote: &'a MailBox,
+            token: CancellationToken,
+        ) -> GapFillScanFuture<'a> {
+            self.served += 1;
+            Box::pin(async move {
+                match &mut self.action {
+                    ScanAction::Ok { stats, cancel } => {
+                        if *cancel {
+                            token.cancel();
+                        }
+                        Ok(stats.clone())
+                    }
+                    ScanAction::RecordAndCancel(seen) => {
+                        seen.lock().unwrap().push(local.name.clone());
+                        token.cancel();
+                        Ok(stats(1, 0))
+                    }
+                    ScanAction::FailFirst(attempts, stats) => {
+                        let mut count = attempts.lock().unwrap();
+                        *count += 1;
+                        if *count == 1 {
+                            Err(crate::raise_error!(
+                                "simulated scan failure".into(),
+                                ErrorCode::InternalError
+                            ))
+                        } else {
+                            Ok(stats.clone())
+                        }
+                    }
+                    ScanAction::FailEachFolderOnce(seen, stats) => {
+                        let mut seen = seen.lock().unwrap();
+                        if seen.iter().any(|n| n == &local.name) {
+                            Ok(stats.clone())
+                        } else {
+                            seen.push(local.name.clone());
+                            Err(crate::raise_error!(
+                                "simulated network failure".into(),
+                                ErrorCode::NetworkError
+                            ))
+                        }
+                    }
+                    ScanAction::AlwaysErr(code) => Err(crate::raise_error!(
+                        "simulated network failure".into(),
+                        *code
+                    )),
+                    ScanAction::FailAndCancel(code) => {
+                        token.cancel();
+                        Err(crate::raise_error!("simulated network failure".into(), *code))
+                    }
+                }
+            })
+        }
+    }
+
     #[tokio::test]
     async fn cancellation_inside_the_last_folder_is_reported_as_cancelled() {
         init_test_env();
@@ -378,26 +640,25 @@ mod tests {
         let remote = local.clone();
         let token = CancellationToken::new();
 
-        let (cancelled, downloaded, failed, filtered) = run_gap_fill_folders(
-            &local,
-            &remote,
-            token.clone(),
-            9_000_001,
-            |_local, _remote, scan_token| {
-                // The user pressed Stop after this folder's scan started; the
-                // scan still returns Ok with a partial result.
-                scan_token.cancel();
-                Box::pin(async { Ok(stats(4, 2)) })
+        // The user pressed Stop after this folder's scan started; the scan
+        // still returns Ok with a partial result.
+        let mut scanner = TestScanner {
+            action: ScanAction::Ok {
+                stats: stats(4, 2),
+                cancel: true,
             },
-        )
-        .await
-        .expect("phase loop must not fail");
+            served: 0,
+        };
+        let pass = run_gap_fill_folders(&local, &remote, token.clone(), 9_000_001, &mut scanner)
+            .await
+            .expect("phase loop must not fail");
 
         assert!(
-            cancelled,
+            pass.cancelled,
             "a cancellation during the last folder must not be finalized as success"
         );
-        assert_eq!((downloaded, failed, filtered), (4, 0, 2));
+        assert_eq!((pass.downloaded, pass.failed, pass.filtered), (4, 0, 2));
+        assert_eq!(scanner.served, 1, "exactly one folder was scanned");
     }
 
     #[tokio::test]
@@ -407,18 +668,24 @@ mod tests {
         let remote = local.clone();
         let token = CancellationToken::new();
 
-        let (cancelled, downloaded, failed, filtered) = run_gap_fill_folders(
-            &local,
-            &remote,
-            token.clone(),
-            9_000_002,
-            |_local, _remote, _token| Box::pin(async { Ok(stats(3, 1)) }),
-        )
-        .await
-        .expect("phase loop must not fail");
+        let mut scanner = TestScanner {
+            action: ScanAction::Ok {
+                stats: stats(3, 1),
+                cancel: false,
+            },
+            served: 0,
+        };
+        let pass = run_gap_fill_folders(&local, &remote, token.clone(), 9_000_002, &mut scanner)
+            .await
+            .expect("phase loop must not fail");
 
-        assert!(!cancelled);
-        assert_eq!((downloaded, failed, filtered), (6, 0, 2));
+        assert!(!pass.cancelled);
+        assert_eq!((pass.downloaded, pass.failed, pass.filtered), (6, 0, 2));
+        assert_eq!(
+            scanner.served, 2,
+            "one scanner — and therefore one IMAP session — must serve every \
+             folder of the run, not one per folder"
+        );
     }
 
     #[tokio::test]
@@ -427,26 +694,20 @@ mod tests {
         let local = vec![mailbox(1, "INBOX"), mailbox(2, "Sent")];
         let remote = local.clone();
         let token = CancellationToken::new();
-        let scanned = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let scanned = Arc::new(Mutex::new(Vec::new()));
 
-        let scanned_in_scan = scanned.clone();
-        let (cancelled, downloaded, failed, _filtered) = run_gap_fill_folders(
-            &local,
-            &remote,
-            token.clone(),
-            9_000_003,
-            move |local, _remote, scan_token| {
-                scanned_in_scan.lock().unwrap().push(local.name.clone());
-                scan_token.cancel();
-                Box::pin(async { Ok(stats(1, 0)) })
-            },
-        )
-        .await
-        .expect("phase loop must not fail");
+        let mut scanner = TestScanner {
+            action: ScanAction::RecordAndCancel(scanned.clone()),
+            served: 0,
+        };
+        let pass = run_gap_fill_folders(&local, &remote, token.clone(), 9_000_003, &mut scanner)
+            .await
+            .expect("phase loop must not fail");
 
-        assert!(cancelled);
+        assert!(pass.cancelled);
         assert_eq!(*scanned.lock().unwrap(), vec!["INBOX".to_string()]);
-        assert_eq!((downloaded, failed), (1, 0));
+        assert_eq!((pass.downloaded, pass.failed), (1, 0));
+        assert_eq!(scanner.served, 1);
     }
 
     #[tokio::test]
@@ -455,34 +716,110 @@ mod tests {
         let local = vec![mailbox(1, "INBOX"), mailbox(2, "Sent")];
         let remote = local.clone();
         let token = CancellationToken::new();
-        let attempts = std::sync::Arc::new(std::sync::Mutex::new(0u32));
+        let attempts = Arc::new(Mutex::new(0u32));
 
-        let attempts_in_scan = attempts.clone();
-        let (cancelled, downloaded, failed, filtered) = run_gap_fill_folders(
-            &local,
-            &remote,
-            token.clone(),
-            9_000_004,
-            move |_local, _remote, _token| {
-                let mut count = attempts_in_scan.lock().unwrap();
-                *count += 1;
-                if *count == 1 {
-                    Box::pin(async {
-                        Err(crate::raise_error!(
-                            "simulated scan failure".into(),
-                            ErrorCode::InternalError
-                        ))
-                    })
-                } else {
-                    Box::pin(async { Ok(stats(2, 0)) })
-                }
-            },
-        )
-        .await
-        .expect("a folder error must not abort the phase");
+        let mut scanner = TestScanner {
+            action: ScanAction::FailFirst(attempts.clone(), stats(2, 0)),
+            served: 0,
+        };
+        let pass = run_gap_fill_folders(&local, &remote, token.clone(), 9_000_004, &mut scanner)
+            .await
+            .expect("a folder error must not abort the phase");
 
-        assert!(!cancelled);
-        assert_eq!((downloaded, failed, filtered), (2, 1, 0));
+        assert!(!pass.cancelled);
+        assert_eq!((pass.downloaded, pass.failed, pass.filtered), (2, 1, 0));
         assert_eq!(*attempts.lock().unwrap(), 2);
+        assert_eq!(
+            scanner.served, 2,
+            "a non-retryable failure is not retried"
+        );
+        assert_eq!(pass.retried, 0);
+    }
+
+    /// Two folders in a row that fail with a network error mean the server
+    /// stopped answering. The rest are deferred (not failed), instead of
+    /// opening another session per folder and prolonging the lockout.
+    #[tokio::test]
+    async fn repeated_network_failures_defer_the_remaining_folders() {
+        init_test_env();
+        let local = vec![
+            mailbox(1, "INBOX"),
+            mailbox(2, "Sent"),
+            mailbox(3, "Archive"),
+            mailbox(4, "Drafts"),
+        ];
+        let remote = local.clone();
+        let token = CancellationToken::new();
+
+        let mut scanner = TestScanner {
+            action: ScanAction::AlwaysErr(ErrorCode::NetworkError),
+            served: 0,
+        };
+        let pass = run_gap_fill_folders(&local, &remote, token.clone(), 9_000_005, &mut scanner)
+            .await
+            .expect("phase loop must not fail");
+
+        assert!(!pass.cancelled);
+        assert_eq!(pass.failed, 2, "both attempted folders are failures");
+        assert_eq!(pass.deferred, 2, "the remaining folders are deferred");
+        // They are retried once after the backoff; the scanner keeps failing,
+        // so they stay failed and are counted once each.
+        assert_eq!(pass.retried, 2);
+        assert_eq!(pass.recovered, 0);
+        assert_eq!(pass.failed, 2, "a failed retry must not double count");
+        assert_eq!(
+            scanner.served, 4,
+            "two first-pass scans plus two retries; the deferred folders were \
+             never attempted"
+        );
+    }
+
+    /// Folders that failed with a transient error are retried once after the
+    /// backoff, and a recovered folder replaces its failure instead of being
+    /// counted twice.
+    #[tokio::test]
+    async fn transient_failures_are_retried_and_recovered() {
+        init_test_env();
+        let local = vec![mailbox(1, "INBOX"), mailbox(2, "Sent")];
+        let remote = local.clone();
+        let token = CancellationToken::new();
+        let seen = Arc::new(Mutex::new(Vec::new()));
+
+        let mut scanner = TestScanner {
+            action: ScanAction::FailEachFolderOnce(seen.clone(), stats(3, 1)),
+            served: 0,
+        };
+        let pass = run_gap_fill_folders(&local, &remote, token.clone(), 9_000_006, &mut scanner)
+            .await
+            .expect("phase loop must not fail");
+
+        assert!(!pass.cancelled);
+        assert_eq!(pass.retried, 2, "both failed folders are retried");
+        assert_eq!(pass.recovered, 2, "both retries succeed");
+        assert_eq!(pass.failed, 0, "a recovered folder is no longer failed");
+        assert_eq!((pass.downloaded, pass.filtered), (6, 2));
+        assert_eq!(scanner.served, 4, "two scans each: first pass + retry");
+    }
+
+    /// Cancelling during the first pass skips the retry entirely.
+    #[tokio::test]
+    async fn cancelled_run_skips_the_retry_pass() {
+        init_test_env();
+        let local = vec![mailbox(1, "INBOX"), mailbox(2, "Sent")];
+        let remote = local.clone();
+        let token = CancellationToken::new();
+
+        let mut scanner = TestScanner {
+            action: ScanAction::FailAndCancel(ErrorCode::NetworkError),
+            served: 0,
+        };
+        let pass = run_gap_fill_folders(&local, &remote, token.clone(), 9_000_007, &mut scanner)
+            .await
+            .expect("phase loop must not fail");
+
+        assert!(pass.cancelled);
+        assert_eq!(pass.failed, 1);
+        assert_eq!(pass.retried, 0, "a cancelled run must not sleep and retry");
+        assert_eq!(scanner.served, 1);
     }
 }

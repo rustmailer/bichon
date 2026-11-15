@@ -616,6 +616,31 @@ impl GapFillState {
             Ok(updated)
         })
     }
+    /// Replaces a folder's outcome after a retry, keeping the run totals
+    /// consistent: the previously recorded stats are subtracted before the
+    /// new ones are added, so a folder can never be counted twice.
+    pub fn replace_folder_result(
+        account_id: u64,
+        folder_name: String,
+        stats: GapFillFolderStats,
+    ) -> BichonResult<()> {
+        Self::update_state(account_id, move |current| {
+            let mut updated = current.clone();
+            if let Some(ref mut run) = updated.active {
+                if let Some(previous) = run.folders.get(&folder_name) {
+                    run.downloaded = run.downloaded.saturating_sub(previous.downloaded);
+                    run.failed = run.failed.saturating_sub(previous.failed);
+                    run.filtered = run.filtered.saturating_sub(previous.filtered);
+                }
+                run.downloaded += stats.downloaded;
+                run.failed += stats.failed;
+                run.filtered += stats.filtered;
+                run.folders.insert(folder_name, stats);
+            }
+            Ok(updated)
+        })
+    }
+
     /// Updates the live per-folder progress of the active run (used during a
     /// gap-fill scan so the UI can show per-folder progress without waiting
     /// for the folder to finish). `candidate_count` is the planned total,

@@ -28,19 +28,21 @@ use crate::{
         state::{DownloadState, GapFillFolderStats, GapFillState},
     },
     archive::imap::{
-        download::flow::{is_retryable_error, retry_backoff_secs},
+        download::flow::{retry_backoff_secs, should_retry_network, MAX_NETWORK_RETRIES},
         mailbox::MailBox,
         tombstones,
     },
     envelope::extractor::should_archive_from_headers,
     error::BichonResult,
-    imap::executor::{classify_imap_error, compress_uid_list, ImapExecutor, DEFAULT_BATCH_SIZE},
+    imap::{
+        executor::{
+            classify_imap_error, compress_uid_list, poll_with_stall_reports, ImapExecutor,
+            StallLogger, DEFAULT_BATCH_SIZE, STALL_REPORT_INTERVAL,
+        },
+        session::SessionStream,
+    },
     store::tantivy::envelope::EnvelopeSnapshot,
 };
-
-/// Number of times a batch download is retried with a fresh connection before
-/// it is counted as failed (mirrors the incremental sync path).
-const MAX_NETWORK_RETRIES: u32 = 3;
 
 /// Lightweight header metadata for one remote message, fetched via
 /// `FETCH (UID RFC822.SIZE INTERNALDATE BODY.PEEK[HEADER.FIELDS (MESSAGE-ID)])`.
@@ -204,77 +206,238 @@ fn advance_highest_uid(
     Ok(())
 }
 
+/// The IMAP session a gap-fill run shares across folders.
+///
+/// Gap-fill used to open **two** connections per mailbox (one for the header
+/// scan, one for the downloads) and log in again for every folder. On an
+/// account with hundreds of folders that is hundreds of logins per run —
+/// exactly what makes a server rate-limit, after which it answers `EXAMINE`
+/// with silence until the socket times out (#396). The run now keeps one
+/// session alive, re-selects the mailbox per folder (skipped when it is
+/// already selected) and rebuilds the session only after an error.
+pub(crate) struct GapFillConnection {
+    account_id: u64,
+    session: Option<async_imap::Session<Box<dyn SessionStream>>>,
+    /// Mailbox the live session is currently examining.
+    selected: Option<String>,
+}
+
+impl GapFillConnection {
+    pub(crate) fn new(account_id: u64) -> Self {
+        Self {
+            account_id,
+            session: None,
+            selected: None,
+        }
+    }
+
+    /// The live session, reconnecting when the previous one was invalidated.
+    async fn session(&mut self) -> BichonResult<&mut async_imap::Session<Box<dyn SessionStream>>> {
+        if self.session.is_none() {
+            self.session = Some(ImapExecutor::create_connection(self.account_id).await?);
+            self.selected = None;
+        }
+        Ok(self.session.as_mut().expect("session was just created"))
+    }
+
+    /// Drop the session and its selection after an error that may have
+    /// desynchronized or killed it. The next use reconnects.
+    fn invalidate(&mut self) {
+        self.session = None;
+        self.selected = None;
+    }
+
+    /// Whether the live session is already positioned on `mailbox` — in which
+    /// case `open_mailbox` may skip the `EXAMINE`. The `session.is_some()`
+    /// check is load-bearing: a cleared session must never inherit the old
+    /// selection, or a fresh connection would skip the `EXAMINE` it needs.
+    fn is_selected(&self, mailbox: &str) -> bool {
+        self.session.is_some() && self.selected.as_deref() == Some(mailbox)
+    }
+
+    /// Reconnect once and select `mailbox`, without a retry loop of its own.
+    /// The batch-level retry paths already own the retry count, so they call
+    /// this; the folder-level entry point is [`Self::open_mailbox`].
+    async fn reconnect(
+        &mut self,
+        mailbox: &str,
+        token: &tokio_util::sync::CancellationToken,
+    ) -> BichonResult<()> {
+        self.invalidate();
+        let account_id = self.account_id;
+        let result = match self.session().await {
+            Ok(session) => {
+                // Selecting a mailbox is silent on a throttled server until
+                // the socket times out; report the wait instead of leaving the
+                // UI frozen on the previous folder.
+                let selected =
+                    poll_with_stall_reports(
+                        session.examine(mailbox),
+                        STALL_REPORT_INTERVAL,
+                        token, |stall_secs| {
+                        let _ = GapFillState::update_folder_progress(
+                            account_id,
+                            mailbox.to_string(),
+                            0,
+                            0,
+                            crate::imap::executor::slow_server_message(
+                                None,
+                                Some(stall_secs as f64),
+                            ),
+                        );
+                    })
+                    .await;
+                match selected {
+                    Some(res) => res
+                        .map(|_| ())
+                        .map_err(|e| raise_error!(format!("{:#?}", e), classify_imap_error(&e))),
+                    None => Err(raise_error!(
+                        "Mailbox selection cancelled".to_string(),
+                        ErrorCode::InternalError
+                    )),
+                }
+            }
+            Err(e) => Err(e),
+        };
+        match result {
+            Ok(()) => {
+                self.selected = Some(mailbox.to_string());
+                Ok(())
+            }
+            Err(e) => {
+                // A failed EXAMINE leaves the session unusable.
+                self.invalidate();
+                Err(e)
+            }
+        }
+    }
+
+    /// Select `mailbox`, reusing the live session when it is already there.
+    ///
+    /// A transient failure (timeout, throttling, reset) is retried on a fresh
+    /// connection with the shared backoff. Without this one timeout failed the
+    /// whole folder before a single header was fetched — the failure mode in
+    /// the #396 logs, where `EXAMINE` timed out on seven mailboxes in a row.
+    pub(crate) async fn open_mailbox(
+        &mut self,
+        mailbox: &str,
+        token: &tokio_util::sync::CancellationToken,
+    ) -> BichonResult<()> {
+        if self.is_selected(mailbox) {
+            return Ok(());
+        }
+        let mut retries = 0u32;
+        loop {
+            match self.reconnect(mailbox, token).await {
+                Ok(()) => return Ok(()),
+                Err(e) if should_retry_network(e.code(), retries, token.is_cancelled()) => {
+                    retries += 1;
+                    let backoff = retry_backoff_secs(e.code(), retries);
+                    warn!(
+                        account_id = self.account_id,
+                        mailbox,
+                        retries,
+                        "Gap-fill: cannot select mailbox, reconnecting in {}s ({}/{})",
+                        backoff,
+                        retries,
+                        MAX_NETWORK_RETRIES
+                    );
+                    tokio::time::sleep(std::time::Duration::from_secs(backoff)).await;
+                }
+                Err(e) => return Err(e),
+            }
+        }
+    }
+
+    /// Log the run's single session out once, at the end of the run.
+    pub(crate) async fn close(mut self) {
+        if let Some(mut session) = self.session.take() {
+            session.logout().await.ok();
+        }
+    }
+}
+
 /// Runs the gap-fill phase for one mailbox: enumerates every remote UID,
 /// diffs against local envelopes, downloads the missing ones and returns the
 /// per-folder outcome. Handles per-batch network errors by counting them as
 /// failed (retryable on a later gap-fill run) instead of aborting the phase.
-pub async fn gap_fill_mailbox(
+pub(crate) async fn gap_fill_mailbox(
     account: &AccountModel,
     local_mailbox: &MailBox,
     remote_mailbox: &MailBox,
     token: tokio_util::sync::CancellationToken,
+    conn: &mut GapFillConnection,
 ) -> BichonResult<GapFillFolderStats> {
     let account_id = account.id;
     let mut stats = GapFillFolderStats::default();
+    let encoded_name = remote_mailbox.encoded_name();
 
-    let mut session = ImapExecutor::create_connection(account_id).await?;
-    session
-        .examine(&remote_mailbox.encoded_name())
-        .await
-        .map_err(|e| raise_error!(format!("{:#?}", e), classify_imap_error(&e)))?;
+    // Reuse the run's session (one connection for every folder) and select
+    // this mailbox. A transient EXAMINE timeout is retried here instead of
+    // failing the folder outright.
+    conn.open_mailbox(&encoded_name, &token).await?;
 
     // Phase 1: enumerate every remote UID. A huge mailbox can make the server
     // take a while to answer `UID SEARCH ALL`; keep the UI informed instead of
     // appearing stuck (the socket read timeout is the final backstop).
-    let search_started = std::time::Instant::now();
     // Build the search future ONCE and keep polling it: the stall-report
     // loop used to construct a fresh `uid_search("ALL")` future on every
     // 5 s timeout, dropping the in-flight command (desyncing the session
     // and restarting the server's work each time), so any mailbox whose
     // search takes longer than one stall interval could never finish (#373).
-    // The block scope drops the pinned future before the logout on cancel —
-    // it holds the `&mut session` borrow.
+    // The block scope drops the pinned future before the session is reused
+    // for the next command — it holds the `&mut Session` borrow.
     let search_outcome = {
-        let search_fut = session.uid_search("ALL");
-        tokio::pin!(search_fut);
-        loop {
-            match tokio::time::timeout(std::time::Duration::from_secs(5), &mut search_fut).await {
-                Ok(res) => break Some(res),
-                Err(_) => {
-                    let stall = search_started.elapsed().as_secs_f64();
-                    if token.is_cancelled() {
-                        break None;
-                    }
-                    let _ = GapFillState::update_folder_progress(
-                        account_id,
-                        remote_mailbox.name.clone(),
-                        0,
-                        0,
-                        crate::imap::executor::slow_server_message(None, Some(stall)),
-                    );
-                    tracing::warn!(
-                        account_id,
-                        mailbox = %remote_mailbox.name,
-                        stall_secs = format!("{:.0}", stall),
-                        "gap-fill: UID SEARCH ALL taking long, still waiting"
-                    );
-                }
+        let session = conn.session().await?;
+        let mut stall_logger = StallLogger::default();
+        let mailbox_name = remote_mailbox.name.clone();
+        poll_with_stall_reports(
+            session.uid_search("ALL"),
+            STALL_REPORT_INTERVAL,
+            &token, move |stall_secs| {
+            let _ = GapFillState::update_folder_progress(
+                account_id,
+                mailbox_name.clone(),
+                0,
+                0,
+                crate::imap::executor::slow_server_message(None, Some(stall_secs as f64)),
+            );
+            if stall_logger.should_log(std::time::Instant::now()) {
+                tracing::warn!(
+                    account_id,
+                    mailbox = %mailbox_name,
+                    stall_secs,
+                    "gap-fill: UID SEARCH ALL taking long, still waiting"
+                );
+            } else {
+                tracing::debug!(
+                    account_id,
+                    mailbox = %mailbox_name,
+                    stall_secs,
+                    "gap-fill: UID SEARCH ALL taking long"
+                );
             }
-        }
+        })
+        .await
     };
     let results = match search_outcome {
-        Some(res) => {
-            res.map_err(|e| raise_error!(format!("{:#?}", e), classify_imap_error(&e)))?
+        Some(Ok(results)) => results,
+        Some(Err(e)) => {
+            // The session may be desynchronized after a failed search; rebuild
+            // it for the next folder instead of reusing it.
+            conn.invalidate();
+            return Err(raise_error!(format!("{:#?}", e), classify_imap_error(&e)));
         }
         None => {
-            session.logout().await.ok();
+            // The in-flight search was dropped on cancellation; do not reuse a
+            // session that may be desynchronized.
+            conn.invalidate();
             return Ok(stats);
         }
     };
     let mut remote_uids: Vec<u32> = results.into_iter().collect();
     remote_uids.sort();
     if remote_uids.is_empty() {
-        session.logout().await.ok();
         return Ok(stats);
     }
 
@@ -312,18 +475,22 @@ pub async fn gap_fill_mailbox(
         // download phase does, before giving up on it.
         let mut header_retries = 0u32;
         let header_result = loop {
-            match ImapExecutor::fetch_uid_headers(
-                &mut session,
-                &seq_set,
-                token.clone(),
-                Some(&header_progress),
-            )
-            .await
-            {
+            let attempt = match conn.session().await {
+                Ok(session) => {
+                    ImapExecutor::fetch_uid_headers(
+                        session,
+                        &seq_set,
+                        token.clone(),
+                        Some(&header_progress),
+                    )
+                    .await
+                }
+                Err(e) => Err(e),
+            };
+            match attempt {
                 Ok(headers) => break Ok(headers),
                 Err(e)
-                    if header_retries < MAX_NETWORK_RETRIES
-                        && is_retryable_error(e.code()) =>
+                    if should_retry_network(e.code(), header_retries, token.is_cancelled()) =>
                 {
                     let code = e.code();
                     header_retries += 1;
@@ -340,36 +507,29 @@ pub async fn gap_fill_mailbox(
                         header_retries,
                         MAX_NETWORK_RETRIES
                     );
-                    match ImapExecutor::create_connection(account_id).await {
-                        Ok(new_session) => {
-                            session = new_session;
-                            if let Err(e2) =
-                                session.examine(&remote_mailbox.encoded_name()).await
-                            {
-                                let err_msg = format!(
-                                    "Gap-fill: re-examine failed after reconnect: {:#?}",
-                                    e2
-                                );
-                                let _ = DownloadState::append_session_error(account_id, err_msg);
-                                break Err(e);
-                            }
-                            let backoff = retry_backoff_secs(code, header_retries);
-                            warn!(
-                                account_id,
-                                mailbox = remote_mailbox.name,
-                                "Gap-fill: backing off {}s before retrying header batch",
-                                backoff
-                            );
-                            tokio::time::sleep(std::time::Duration::from_secs(backoff)).await;
-                            continue;
-                        }
-                        Err(e2) => {
-                            tracing::error!(account_id, "Gap-fill: reconnection failed: {:#?}", e2);
-                            break Err(e);
-                        }
+                    if let Err(e2) = conn.reconnect(&encoded_name, &token).await {
+                        let err_msg = format!(
+                            "Gap-fill: re-examine failed after reconnect: {:#?}",
+                            e2
+                        );
+                        let _ = DownloadState::append_session_error(account_id, err_msg);
+                        break Err(e);
                     }
+                    let backoff = retry_backoff_secs(code, header_retries);
+                    warn!(
+                        account_id,
+                        mailbox = remote_mailbox.name,
+                        "Gap-fill: backing off {}s before retrying header batch",
+                        backoff
+                    );
+                    tokio::time::sleep(std::time::Duration::from_secs(backoff)).await;
+                    continue;
                 }
-                Err(e) => break Err(e),
+                Err(e) => {
+                    // Never leave a wedged session behind for the next folder.
+                    conn.invalidate();
+                    break Err(e);
+                }
             }
         };
         match header_result {
@@ -397,12 +557,10 @@ pub async fn gap_fill_mailbox(
         }
     }
     if cancelled {
-        session.logout().await.ok();
         GapFillState::update_folder_progress(account_id, remote_mailbox.name.clone(), 0, 0, None)?;
         return Ok(stats);
     }
     remote_headers.sort_by_key(|h| h.uid);
-    session.logout().await.ok();
 
     // Phase 3: local snapshot
     let local_snapshots = crate::store::tantivy::envelope::ENVELOPE_MANAGER
@@ -449,11 +607,9 @@ pub async fn gap_fill_mailbox(
         None,
     )?;
 
-    let mut session2 = ImapExecutor::create_connection(account_id).await?;
-    session2
-        .examine(&remote_mailbox.encoded_name())
-        .await
-        .map_err(|e| raise_error!(format!("{:#?}", e), classify_imap_error(&e)))?;
+    // Re-select only if the header phase had to reconnect; otherwise the same
+    // session the header scan used also carries the body downloads.
+    conn.open_mailbox(&encoded_name, &token).await?;
 
     // Phase 4.5: apply archive rules to the candidates from their headers,
     // before any body is downloaded. A message the filter rejects is never
@@ -482,7 +638,6 @@ pub async fn gap_fill_mailbox(
             )?;
             for chunk in missing_uids.chunks(batch_size) {
                 if token.is_cancelled() {
-                    session2.logout().await.ok();
                     stats.filtered = filtered;
                     GapFillState::update_folder_progress_and_filtered(
                         account_id,
@@ -495,13 +650,14 @@ pub async fn gap_fill_mailbox(
                     return Ok(stats);
                 }
                 let seq_set = compress_uid_list(chunk.to_vec());
-                match ImapExecutor::fetch_uid_header_blocks(
-                    &mut session2,
-                    &seq_set,
-                    token.clone(),
-                )
-                .await
-                {
+                let attempt = match conn.session().await {
+                    Ok(session) => {
+                        ImapExecutor::fetch_uid_header_blocks(session, &seq_set, token.clone())
+                            .await
+                    }
+                    Err(e) => Err(e),
+                };
+                match attempt {
                     Ok(headers) => {
                         let headers: HashMap<u32, Vec<u8>> = headers.into_iter().collect();
                         for uid in chunk {
@@ -520,7 +676,6 @@ pub async fn gap_fill_mailbox(
                     }
                     Err(e) => {
                         if token.is_cancelled() {
-                            session2.logout().await.ok();
                             stats.filtered = filtered;
                             GapFillState::update_folder_progress_and_filtered(
                                 account_id,
@@ -543,15 +698,9 @@ pub async fn gap_fill_mailbox(
                         );
                         to_download.extend_from_slice(chunk);
                         // A failed FETCH can leave the session desynchronized;
-                        // start the body phase on a fresh connection.
-                        session2.logout().await.ok();
-                        session2 = ImapExecutor::create_connection(account_id).await?;
-                        session2
-                            .examine(&remote_mailbox.encoded_name())
-                            .await
-                            .map_err(|e| {
-                                raise_error!(format!("{:#?}", e), classify_imap_error(&e))
-                            })?;
+                        // rebuild it before the body phase.
+                        conn.invalidate();
+                        conn.open_mailbox(&encoded_name, &token).await?;
                     }
                 }
             }
@@ -597,7 +746,6 @@ pub async fn gap_fill_mailbox(
             filtered,
             None,
         )?;
-        session2.logout().await.ok();
         return Ok(stats);
     }
 
@@ -626,30 +774,34 @@ pub async fn gap_fill_mailbox(
         let last_reported = std::sync::Mutex::new(0u64);
         let last_filtered = std::sync::Mutex::new(0u64);
         let batch_result = loop {
-            match ImapExecutor::uid_batch_retrieve_emails(
-                &mut session2,
-                account_id,
-                remote_mailbox.id,
-                &batch.0,
-                account.max_email_size_bytes,
-                token.clone(),
-                Some(&|cumulative, cumulative_filtered, avg_secs, stall_secs| {
-                    *last_reported.lock().unwrap() = cumulative;
-                    *last_filtered.lock().unwrap() = cumulative_filtered;
-                    let _ = GapFillState::update_folder_progress(
-                        account_id,
-                        remote_mailbox.name.clone(),
-                        planned,
-                        downloaded + cumulative,
-                        crate::imap::executor::slow_server_message(avg_secs, stall_secs),
-                    );
-                    Ok(())
-                }),
-            )
-            .await
-            {
+            let progress = |cumulative: u64, cumulative_filtered: u64, avg_secs: Option<f64>, stall_secs: Option<f64>| {
+                *last_reported.lock().unwrap() = cumulative;
+                *last_filtered.lock().unwrap() = cumulative_filtered;
+                let _ = GapFillState::update_folder_progress(
+                    account_id,
+                    remote_mailbox.name.clone(),
+                    planned,
+                    downloaded + cumulative,
+                    crate::imap::executor::slow_server_message(avg_secs, stall_secs),
+                );
+                Ok(())
+            };
+            let attempt = match conn.session().await {
+                Ok(session) => ImapExecutor::uid_batch_retrieve_emails(
+                    session,
+                    account_id,
+                    remote_mailbox.id,
+                    &batch.0,
+                    account.max_email_size_bytes,
+                    token.clone(),
+                    Some(&progress),
+                )
+                .await,
+                Err(e) => Err(e),
+            };
+            match attempt {
                 Ok(outcome) => break Ok(outcome),
-                Err(e) if retries < MAX_NETWORK_RETRIES && is_retryable_error(e.code()) => {
+                Err(e) if should_retry_network(e.code(), retries, token.is_cancelled()) => {
                     let code = e.code();
                     retries += 1;
                     warn!(
@@ -666,38 +818,30 @@ pub async fn gap_fill_mailbox(
                         retries,
                         MAX_NETWORK_RETRIES
                     );
-                    match ImapExecutor::create_connection(account_id).await {
-                        Ok(new_session) => {
-                            session2 = new_session;
-                            if let Err(e2) = session2.examine(&remote_mailbox.encoded_name()).await
-                            {
-                                let err_msg = format!(
-                                    "Gap-fill: re-examine failed after reconnect: {:#?}",
-                                    e2
-                                );
-                                DownloadState::append_session_error(account_id, err_msg)?;
-                                break Err(e);
-                            }
-                            // A throttled server needs much longer than a
-                            // transient network blip before it will accept
-                            // the next command.
-                            let backoff = retry_backoff_secs(code, retries);
-                            warn!(
-                                account_id,
-                                mailbox = remote_mailbox.name,
-                                "Gap-fill: backing off {}s before retrying batch",
-                                backoff
-                            );
-                            tokio::time::sleep(std::time::Duration::from_secs(backoff)).await;
-                            continue;
-                        }
-                        Err(e2) => {
-                            tracing::error!(account_id, "Gap-fill: reconnection failed: {:#?}", e2);
-                            break Err(e);
-                        }
+                    if let Err(e2) = conn.reconnect(&encoded_name, &token).await {
+                        let err_msg = format!(
+                            "Gap-fill: re-examine failed after reconnect: {:#?}",
+                            e2
+                        );
+                        DownloadState::append_session_error(account_id, err_msg)?;
+                        break Err(e);
                     }
+                    // A throttled server needs much longer than a transient
+                    // network blip before it will accept the next command.
+                    let backoff = retry_backoff_secs(code, retries);
+                    warn!(
+                        account_id,
+                        mailbox = remote_mailbox.name,
+                        "Gap-fill: backing off {}s before retrying batch",
+                        backoff
+                    );
+                    tokio::time::sleep(std::time::Duration::from_secs(backoff)).await;
+                    continue;
                 }
-                Err(e) => break Err(e),
+                Err(e) => {
+                    conn.invalidate();
+                    break Err(e);
+                }
             }
         };
         match batch_result {
@@ -744,8 +888,6 @@ pub async fn gap_fill_mailbox(
             }
         }
     }
-    session2.logout().await.ok();
-
     stats.downloaded = downloaded;
     // Accumulate rather than overwrite: phase 2 (header batch) failures already
     // counted into stats.failed and must survive alongside phase 5 failures.
@@ -781,6 +923,27 @@ pub async fn gap_fill_mailbox(
 #[cfg(test)]
 mod test {
     use super::*;
+
+    /// A cleared session must never inherit the previous selection: a fresh
+    /// connection has not been selected on any mailbox, so reusing the old
+    /// name would skip the `EXAMINE` — and then issue `FETCH`es against no
+    /// mailbox at all.
+    #[test]
+    fn invalidating_a_connection_clears_its_selection() {
+        let mut conn = GapFillConnection::new(7);
+        conn.selected = Some("INBOX".to_string());
+
+        // A selection without a live session is not usable.
+        assert!(!conn.is_selected("INBOX"));
+
+        conn.invalidate();
+        assert!(
+            conn.selected.is_none(),
+            "invalidate() must forget the selected mailbox"
+        );
+        assert!(!conn.is_selected("INBOX"));
+        assert!(!conn.is_selected("Sent"));
+    }
 
     fn rh(uid: u32, message_id: Option<&str>, size: u64, internal_date: i64) -> RemoteHeader {
         RemoteHeader {
