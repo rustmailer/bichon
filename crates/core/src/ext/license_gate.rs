@@ -29,12 +29,17 @@
 // the licence status is populated after that function runs and can change
 // while the process keeps running.
 
+use crate::account::migration::AccountType;
 use crate::error::code::ErrorCode;
 use crate::error::BichonResult;
 use crate::raise_error;
 use std::sync::{LazyLock, Mutex, RwLock};
 
-type AccountLimitCheck = fn() -> Result<(), String>;
+/// The check receives the type of the account being created so an edition can
+/// exempt account types that do not consume a licence slot (Pro leaves `View`
+/// accounts outside the count: a view stores nothing and projects accounts
+/// that already count).
+type AccountLimitCheck = fn(&AccountType) -> Result<(), String>;
 type SyncAllowedCheck = fn() -> bool;
 
 static ACCOUNT_LIMIT_CHECK: LazyLock<RwLock<Option<AccountLimitCheck>>> =
@@ -62,13 +67,19 @@ pub fn set_sync_allowed_check(check: SyncAllowedCheck) {
 /// limit check has passed. This is the **only** correct way to create an
 /// account in a build that can be license-limited: callers that insert
 /// directly bypass both the lock and the check.
-pub fn insert_account_checked<T>(insert: impl FnOnce() -> BichonResult<T>) -> BichonResult<T> {
+///
+/// The account's type is passed to the check so the edition decides which
+/// types consume a licence slot; the caller must not pre-filter them.
+pub fn insert_account_checked<T>(
+    account_type: &AccountType,
+    insert: impl FnOnce() -> BichonResult<T>,
+) -> BichonResult<T> {
     let _guard = ACCOUNT_CREATE_LOCK
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
 
     if let Some(check) = *ACCOUNT_LIMIT_CHECK.read().unwrap() {
-        check().map_err(|message| raise_error!(message, ErrorCode::Forbidden))?;
+        check(account_type).map_err(|message| raise_error!(message, ErrorCode::Forbidden))?;
     }
 
     insert()
@@ -100,13 +111,27 @@ mod tests {
 
     #[test]
     fn insert_runs_inside_the_lock_and_refuses_when_the_check_fails() {
-        set_account_limit_check(|| Err("limit reached".into()));
-        let err = insert_account_checked(|| Ok(1u8)).expect_err("must refuse");
+        set_account_limit_check(|_| Err("limit reached".into()));
+        let err = insert_account_checked(&AccountType::IMAP, || Ok(1u8)).expect_err("must refuse");
         assert!(format!("{err:?}").contains("limit reached"));
 
-        set_account_limit_check(|| Ok(()));
-        assert_eq!(insert_account_checked(|| Ok(1u8)).unwrap(), 1);
-        set_account_limit_check(|| Ok(()));
+        set_account_limit_check(|_| Ok(()));
+        assert_eq!(
+            insert_account_checked(&AccountType::IMAP, || Ok(1u8)).unwrap(),
+            1
+        );
+        set_account_limit_check(|_| Ok(()));
+    }
+
+    #[test]
+    fn the_check_receives_the_account_type() {
+        set_account_limit_check(|account_type| match account_type {
+            AccountType::View => Ok(()),
+            _ => Err("limit reached".into()),
+        });
+        assert!(insert_account_checked(&AccountType::View, || Ok(1u8)).is_ok());
+        assert!(insert_account_checked(&AccountType::IMAP, || Ok(1u8)).is_err());
+        set_account_limit_check(|_| Ok(()));
     }
 
     #[test]

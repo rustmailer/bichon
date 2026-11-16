@@ -826,8 +826,9 @@ impl Account {
         // Insert account into memdb. The license limit check (Pro/Enterprise)
         // runs inside `insert_account_checked` under the same lock as the
         // insert, so concurrent creations cannot both pass a check that only
-        // one should have.
-        crate::ext::license_gate::insert_account_checked(|| {
+        // one should have. The type is passed because the edition decides
+        // which account types consume a licence slot (Pro exempts views).
+        crate::ext::license_gate::insert_account_checked(&cloned.account_type, || {
             insert_impl(DB_MANAGER.db(), entity)
         })?;
 
