@@ -29,6 +29,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { toast } from '@/hooks/use-toast'
+import { errorMessage } from '@/lib/error'
 import { DeletionHistoryDrawer } from '@/features/history/history-drawers'
 import { isActive, jobLabel } from './batch-delete-status'
 
@@ -72,7 +73,7 @@ export function BatchDeletePanel() {
     onError: (error: Error) => {
       toast({
         title: t('search.delete.errorTitle'),
-        description: `${error.message}`,
+        description: errorMessage(error),
         variant: 'destructive',
       })
     },

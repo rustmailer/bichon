@@ -2358,6 +2358,8 @@
       "progress": "{{processed}} di {{total}} eliminati",
       "retentionLockDesc": "{{count}} account nell'ambito hanno un blocco di conservazione minima. I messaggi più recenti della finestra verranno saltati, non eliminati.",
       "retentionLockTitle": "La conservazione minima è attiva",
+      "runningDesc": "L'operazione in corso deve terminare prima che ne possa iniziare un'altra. Attendi oppure annullala dalla scheda di avanzamento o dalla cronologia delle eliminazioni. Nulla di questa richiesta è stato pianificato.",
+      "runningTitle": "Un'altra eliminazione è già in corso",
       "scopeLabel": "Tutti i messaggi corrispondenti",
       "selectAllMatching": "Seleziona tutti i {{formatted}} risultati corrispondenti",
       "selectAllMatchingShort": "Seleziona tutti ({{formatted}})",

@@ -2358,6 +2358,8 @@
       "progress": "{{processed}} van {{total}} verwijderd",
       "retentionLockDesc": "{{count}} account(s) in het bereik hebben een minimale-bewaringsslot. Berichten die nieuwer zijn dan het venster worden overgeslagen, niet verwijderd.",
       "retentionLockTitle": "Minimale bewaring is actief",
+      "runningDesc": "De lopende taak moet klaar zijn voordat een nieuwe kan starten. Wacht erop of annuleer hem via de voortgangskaart of de verwijdergeschiedenis. Er is niets uit dit verzoek ingepland.",
+      "runningTitle": "Er loopt al een andere verwijdering",
       "scopeLabel": "Alle overeenkomende berichten",
       "selectAllMatching": "Alle {{formatted}} overeenkomende resultaten selecteren",
       "selectAllMatchingShort": "Alles selecteren ({{formatted}})",

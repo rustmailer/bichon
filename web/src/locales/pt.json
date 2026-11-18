@@ -2358,6 +2358,8 @@
       "progress": "{{processed}} de {{total}} excluídos",
       "retentionLockDesc": "{{count}} conta(s) no âmbito têm bloqueio de retenção mínima. As mensagens mais recentes do que a janela serão ignoradas, não eliminadas.",
       "retentionLockTitle": "A retenção mínima está ativa",
+      "runningDesc": "A tarefa em andamento precisa terminar antes que outra possa começar. Aguarde-a ou cancele-a pelo cartão de progresso ou pelo histórico de exclusões. Nada deste pedido foi agendado.",
+      "runningTitle": "Já existe outra exclusão em andamento",
       "scopeLabel": "Todas as mensagens correspondentes",
       "selectAllMatching": "Selecionar todos os {{formatted}} resultados correspondentes",
       "selectAllMatchingShort": "Selecionar todas ({{formatted}})",

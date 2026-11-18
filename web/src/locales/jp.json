@@ -2358,6 +2358,8 @@
       "progress": "{{total}} 件中 {{processed}} 件を削除",
       "retentionLockDesc": "対象範囲の {{count}} 個のアカウントに最低保存期間のロックがあります。ロック期間より新しいメッセージは削除されず、スキップされます。",
       "retentionLockTitle": "最低保存期間が有効です",
+      "runningDesc": "実行中のジョブが終了するまで、新しい削除は開始できません。完了を待つか、進行状況カードまたは削除履歴からキャンセルしてください。このリクエストによる削除は何も予定されていません。",
+      "runningTitle": "別の削除がすでに実行中です",
       "scopeLabel": "一致するすべてのメッセージ",
       "selectAllMatching": "{{formatted}} 件の一致する結果をすべて選択",
       "selectAllMatchingShort": "すべて {{formatted}} 件を選択",

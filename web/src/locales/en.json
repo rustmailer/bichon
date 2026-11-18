@@ -2358,6 +2358,8 @@
       "progress": "{{processed}} of {{total}} deleted",
       "retentionLockDesc": "{{count}} account(s) in scope have a minimum-retention lock. Messages younger than the lock window will be skipped, not deleted.",
       "retentionLockTitle": "Minimum retention is active",
+      "runningDesc": "The running job must finish before another can start. Wait for it, or cancel it from the progress card or the deletion history. Nothing from this request has been scheduled.",
+      "runningTitle": "Another deletion is already running",
       "scopeLabel": "All matching messages",
       "selectAllMatching": "Select all {{formatted}} matching results",
       "selectAllMatchingShort": "Select all {{formatted}}",

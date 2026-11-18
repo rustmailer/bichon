@@ -2358,6 +2358,8 @@
       "progress": "Usunięto {{processed}} z {{total}}",
       "retentionLockDesc": "{{count}} konto/kont w zakresie ma blokadę minimalnego przechowywania. Wiadomości nowsze niż okno zostaną pominięte, a nie usunięte.",
       "retentionLockTitle": "Minimalny okres przechowywania jest aktywny",
+      "runningDesc": "Bieżące zadanie musi się zakończyć, zanim będzie można rozpocząć nowe. Poczekaj na nie lub anuluj je na karcie postępu albo w historii usuwania. Nic z tego żądania nie zostało zaplanowane.",
+      "runningTitle": "Inne usuwanie jest już w toku",
       "scopeLabel": "Wszystkie pasujące wiadomości",
       "selectAllMatching": "Zaznacz wszystkie {{formatted}} pasujących wyników",
       "selectAllMatchingShort": "Zaznacz wszystkie ({{formatted}})",

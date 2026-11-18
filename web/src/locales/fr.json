@@ -2358,6 +2358,8 @@
       "progress": "{{processed}} sur {{total}} supprimés",
       "retentionLockDesc": "{{count}} compte(s) de la portée ont un verrouillage de rétention minimale. Les messages plus récents que la fenêtre seront ignorés, pas supprimés.",
       "retentionLockTitle": "La rétention minimale est active",
+      "runningDesc": "La tâche en cours doit se terminer avant qu'une nouvelle puisse démarrer. Attendez-la ou annulez-la depuis la carte de progression ou l'historique des suppressions. Rien de cette demande n'a été programmé.",
+      "runningTitle": "Une autre suppression est déjà en cours",
       "scopeLabel": "Tous les messages correspondants",
       "selectAllMatching": "Sélectionner les {{formatted}} résultats correspondants",
       "selectAllMatchingShort": "Tout sélectionner ({{formatted}})",

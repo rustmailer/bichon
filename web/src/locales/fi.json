@@ -2358,6 +2358,8 @@
       "progress": "{{processed}} / {{total}} poistettu",
       "retentionLockDesc": "{{count}} tiliä/tekstiä laajuudessa on vähimmäissäilytyksen lukitus. Lukitusikkunaa nuoremmat viestit ohitetaan, ei poisteta.",
       "retentionLockTitle": "Vähimmäissäilytys on käytössä",
+      "runningDesc": "Käynnissä olevan tehtävän on valmistuttava ennen kuin uusi voi alkaa. Odota sitä tai peruuta se edistymiskortista tai poistohistoriasta. Tästä pyynnöstä ei ole aikataulutettu mitään.",
+      "runningTitle": "Toinen poisto on jo käynnissä",
       "scopeLabel": "Kaikki täsmäävät viestit",
       "selectAllMatching": "Valitse kaikki {{formatted}} täsmäävää tulosta",
       "selectAllMatchingShort": "Valitse kaikki {{formatted}}",

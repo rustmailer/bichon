@@ -2358,6 +2358,8 @@
       "progress": "已删除 {{processed}} / {{total}}",
       "retentionLockDesc": "范围内的 {{count}} 个账户启用了最低保留锁定。早于锁定窗口的邮件将被跳过，而非删除。",
       "retentionLockTitle": "最低保留已启用",
+      "runningDesc": "正在运行的任务结束后才能开始新的删除。可以等待它完成，或在进度卡片、删除历史中取消它。本次请求没有安排任何删除。",
+      "runningTitle": "已有删除任务在运行",
       "scopeLabel": "所有匹配的邮件",
       "selectAllMatching": "选择全部 {{formatted}} 条匹配结果",
       "selectAllMatchingShort": "全选 {{formatted}} 封",

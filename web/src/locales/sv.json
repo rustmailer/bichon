@@ -2358,6 +2358,8 @@
       "progress": "{{processed}} av {{total}} raderade",
       "retentionLockDesc": "{{count}} konto(n) i omfånget har ett minsta bevarandelås. Meddelanden som är nyare än fönstret hoppas över, inte raderas.",
       "retentionLockTitle": "Minsta bevarande är aktivt",
+      "runningDesc": "Det pågående jobbet måste bli klart innan ett nytt kan starta. Vänta på det eller avbryt det via förloppskortet eller raderingshistoriken. Inget från den här begäran har schemalagts.",
+      "runningTitle": "En annan radering pågår redan",
       "scopeLabel": "Alla matchande meddelanden",
       "selectAllMatching": "Markera alla {{formatted}} matchande resultat",
       "selectAllMatchingShort": "Markera alla {{formatted}}",

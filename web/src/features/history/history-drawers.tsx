@@ -38,6 +38,7 @@ import {
 import { toast } from '@/hooks/use-toast'
 import { RepairHistoryPanel } from '@/features/repair/repair-history-drawer'
 import { isActive, jobLabel, statusVariant } from '@/features/search/batch-delete-status'
+import { errorMessage } from '@/lib/error'
 
 interface HistoryDrawerProps {
   open: boolean
@@ -153,7 +154,7 @@ function DeletionHistoryPanel({ enabled }: { enabled: boolean }) {
     onError: (error: Error) => {
       toast({
         title: t('search.delete.errorTitle'),
-        description: `${error.message}`,
+        description: errorMessage(error),
         variant: 'destructive',
       })
     },

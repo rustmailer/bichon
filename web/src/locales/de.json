@@ -2358,6 +2358,8 @@
       "progress": "{{processed}} von {{total}} gelöscht",
       "retentionLockDesc": "Für {{count}} Konto/Konten im Geltungsbereich gilt eine Mindestaufbewahrung. Jüngere Nachrichten werden übersprungen, nicht gelöscht.",
       "retentionLockTitle": "Mindestaufbewahrung ist aktiv",
+      "runningDesc": "Der laufende Auftrag muss abgeschlossen sein, bevor ein neuer starten kann. Warten Sie darauf oder brechen Sie ihn über die Fortschrittskarte oder den Löschverlauf ab. Aus dieser Anfrage wurde nichts eingeplant.",
+      "runningTitle": "Es läuft bereits eine Löschung",
       "scopeLabel": "Alle passenden Nachrichten",
       "selectAllMatching": "Alle {{formatted}} passenden Ergebnisse auswählen",
       "selectAllMatchingShort": "Alle {{formatted}} auswählen",

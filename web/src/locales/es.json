@@ -2358,6 +2358,8 @@
       "progress": "{{processed}} de {{total}} eliminados",
       "retentionLockDesc": "{{count}} cuenta(s) del ámbito tienen bloqueo de retención mínima. Los mensajes más recientes que la ventana se omitirán, no se eliminarán.",
       "retentionLockTitle": "La retención mínima está activa",
+      "runningDesc": "La tarea en curso debe terminar antes de que pueda empezar otra. Espera a que finalice o cancélala desde la tarjeta de progreso o el historial de eliminaciones. No se ha programado nada de esta solicitud.",
+      "runningTitle": "Ya hay otra eliminación en curso",
       "scopeLabel": "Todos los mensajes coincidentes",
       "selectAllMatching": "Seleccionar los {{formatted}} resultados coincidentes",
       "selectAllMatchingShort": "Seleccionar {{formatted}}",

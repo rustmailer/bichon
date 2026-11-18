@@ -24,12 +24,16 @@ import { ConfirmDialog } from '@/components/confirm-dialog'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { delete_messages } from '@/api/mailbox/envelope/api'
 import {
+  BatchDeleteJob,
   create_batch_delete,
+  list_batch_deletes,
   preview_batch_delete,
 } from '@/api/batch-delete/api'
 import { OP_MESSAGE_DELETE } from '@/api/approvals/api'
 import { useGatedOp } from '@/features/approvals/use-gated-op'
+import { isActive } from './batch-delete-status'
 import { useSearchContext } from './context'
+import { errorMessage, isTooManyRequests } from '@/lib/error'
 import { mapToRecordOfArrays } from '@/lib/utils'
 import { useTranslation } from 'react-i18next'
 
@@ -70,6 +74,29 @@ export function EnvelopeDeleteDialog({ open, onOpenChange }: Props) {
     retry: false,
   })
 
+  // The server runs one batch deletion at a time. Reflecting that here means
+  // the operator learns about a running job before confirming instead of
+  // meeting a bare 429 afterwards. The query key is shared with the
+  // running-job card, so this reads the same cache rather than keeping a
+  // second copy. The server check remains the authority — another user's job
+  // can start between this question and the answer.
+  const jobsQuery = useQuery({
+    queryKey: ['batch-delete-jobs'],
+    queryFn: list_batch_deletes,
+    enabled: open && scopeMode,
+    // The dialog is also used on the mailbox page, where the running-job card
+    // is not mounted. Poll while a job is in flight so the block lifts by
+    // itself once it finishes instead of stranding a disabled button.
+    refetchInterval: (query) => {
+      const data = query.state.data as BatchDeleteJob[] | undefined
+      return data?.some(isActive) ? 1500 : false
+    },
+  })
+  const runningJob = (jobsQuery.data ?? []).find(isActive)
+  // Submitting for approval is not blocked: the deletion starts only when a
+  // second person approves it, and that approval may well wait for this job.
+  const blockedByRunningJob = scopeMode && !gated && !!runningJob
+
   const deleteMutation = useMutation({
     mutationFn: ({ payload }: { payload: Record<number, string[]> }) =>
       delete_messages(payload),
@@ -95,7 +122,7 @@ export function EnvelopeDeleteDialog({ open, onOpenChange }: Props) {
     onError: (error: Error) => {
       toast({
         title: t('search.delete.errorTitle'),
-        description: `${error.message}`,
+        description: errorMessage(error),
         variant: 'destructive',
       })
     },
@@ -124,9 +151,26 @@ export function EnvelopeDeleteDialog({ open, onOpenChange }: Props) {
       })
     },
     onError: (error: Error) => {
+      // A 429 here means another deletion is running, not that this one
+      // failed: the running job is untouched and nothing was queued. Saying
+      // "Delete failed" would misdescribe both.
+      if (isTooManyRequests(error)) {
+        queryClient.invalidateQueries({ queryKey: ['batch-delete-jobs'] })
+        toast({
+          title: t(
+            'search.batchDelete.runningTitle',
+            'Another deletion is already running'
+          ),
+          description: t(
+            'search.batchDelete.runningDesc',
+            'The running job must finish before another can start. Wait for it, or cancel it from the progress card or the deletion history. Nothing from this request has been scheduled.'
+          ),
+        })
+        return
+      }
       toast({
         title: t('search.delete.errorTitle'),
-        description: `${error.message}`,
+        description: errorMessage(error),
         variant: 'destructive',
       })
     },
@@ -170,7 +214,11 @@ export function EnvelopeDeleteDialog({ open, onOpenChange }: Props) {
       className="max-w-xl"
       isLoading={isLoading}
       destructive
-      disabled={nothingDeletable || (scopeMode && preview.isError)}
+      disabled={
+        blockedByRunningJob ||
+        nothingDeletable ||
+        (scopeMode && preview.isError)
+      }
       title={
         <span className="text-destructive">
           <IconAlertTriangle
@@ -201,9 +249,7 @@ export function EnvelopeDeleteDialog({ open, onOpenChange }: Props) {
             <Alert variant="destructive" className="text-xs">
               <AlertTitle>{t('search.delete.errorTitle')}</AlertTitle>
               <AlertDescription className="text-xs">
-                {preview.error instanceof Error
-                  ? preview.error.message
-                  : String(preview.error)}
+                {errorMessage(preview.error)}
               </AlertDescription>
             </Alert>
           )}
@@ -265,6 +311,23 @@ export function EnvelopeDeleteDialog({ open, onOpenChange }: Props) {
                 {t(
                   'search.batchDelete.heldWarning',
                   'Accounts under legal hold are in scope; the server will refuse this deletion.'
+                )}
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {blockedByRunningJob && (
+            <Alert className="text-xs">
+              <AlertTitle>
+                {t(
+                  'search.batchDelete.runningTitle',
+                  'Another deletion is already running'
+                )}
+              </AlertTitle>
+              <AlertDescription className="text-xs">
+                {t(
+                  'search.batchDelete.runningDesc',
+                  'The running job must finish before another can start. Wait for it, or cancel it from the progress card or the deletion history. Nothing from this request has been scheduled.'
                 )}
               </AlertDescription>
             </Alert>

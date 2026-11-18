@@ -2358,6 +2358,8 @@
       "progress": "{{total}}개 중 {{processed}}개 삭제됨",
       "retentionLockDesc": "범위 내 {{count}}개 계정에 최소 보존 잠금이 있습니다. 잠금 기간보다 최신 메시지는 삭제되지 않고 건너뜁니다.",
       "retentionLockTitle": "최소 보존이 활성화되어 있습니다",
+      "runningDesc": "실행 중인 작업이 끝나야 새 작업을 시작할 수 있습니다. 완료될 때까지 기다리거나 진행 카드 또는 삭제 기록에서 취소하세요. 이 요청으로 예약된 삭제는 없습니다.",
+      "runningTitle": "다른 삭제가 이미 실행 중입니다",
       "scopeLabel": "일치하는 모든 메시지",
       "selectAllMatching": "일치하는 결과 {{formatted}}개 모두 선택",
       "selectAllMatchingShort": "전체 {{formatted}}개 선택",

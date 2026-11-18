@@ -2358,6 +2358,8 @@
       "progress": "{{processed}} av {{total}} slettet",
       "retentionLockDesc": "{{count}} konto(er) i omfanget har en minste oppbevaringslås. Meldinger som er nyere enn vinduet hoppes over, ikke slettes.",
       "retentionLockTitle": "Minste oppbevaring er aktiv",
+      "runningDesc": "Den pågående jobben må fullføres før en ny kan starte. Vent på den, eller avbryt den fra fremdriftskortet eller slettehistorikken. Ingenting fra denne forespørselen er planlagt.",
+      "runningTitle": "En annen sletting kjører allerede",
       "scopeLabel": "Alle samsvarende meldinger",
       "selectAllMatching": "Velg alle {{formatted}} samsvarende resultater",
       "selectAllMatchingShort": "Velg alle {{formatted}}",

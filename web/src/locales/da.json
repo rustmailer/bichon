@@ -2358,6 +2358,8 @@
       "progress": "{{processed}} af {{total}} slettet",
       "retentionLockDesc": "{{count}} konto/konti i omfanget har en minimumsopbevaringslås. Meddelelser, der er nyere end låsevinduet, springes over i stedet for at blive slettet.",
       "retentionLockTitle": "Minimumsopbevaring er aktiv",
+      "runningDesc": "Den kørende opgave skal være færdig, før en ny kan starte. Vent på den, eller annuller den fra statuskortet eller slettehistorikken. Intet fra denne anmodning er blevet planlagt.",
+      "runningTitle": "Der er allerede en anden sletning i gang",
       "scopeLabel": "Alle matchende meddelelser",
       "selectAllMatching": "Vælg alle {{formatted}} matchende resultater",
       "selectAllMatchingShort": "Vælg alle {{formatted}}",

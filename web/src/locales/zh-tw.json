@@ -2358,6 +2358,8 @@
       "progress": "已刪除 {{processed}} / {{total}}",
       "retentionLockDesc": "範圍內的 {{count}} 個帳戶啟用了最低保留鎖定。早於鎖定視窗的郵件將被跳過，而非刪除。",
       "retentionLockTitle": "最低保留已啟用",
+      "runningDesc": "正在執行的任務結束後才能開始新的刪除。可以等待它完成，或在進度卡片、刪除歷史中取消它。本次請求沒有安排任何刪除。",
+      "runningTitle": "已有刪除任務在執行",
       "scopeLabel": "所有符合的郵件",
       "selectAllMatching": "選取全部 {{formatted}} 筆符合結果",
       "selectAllMatchingShort": "全選 {{formatted}} 封",

@@ -2358,6 +2358,8 @@
       "progress": "Smazáno {{processed}} z {{total}}",
       "retentionLockDesc": "Pro {{count}} účet/účtů v rozsahu platí zámek minimálního uchování. Zprávy mladší než okno zámku budou přeskočeny, nikoli smazány.",
       "retentionLockTitle": "Minimální doba uchování je aktivní",
+      "runningDesc": "Probíhající úloha musí skončit, než může začít nová. Počkejte na ni, nebo ji zrušte na kartě průběhu či v historii mazání. Z tohoto požadavku nebylo nic naplánováno.",
+      "runningTitle": "Jiné mazání již probíhá",
       "scopeLabel": "Všechny odpovídající zprávy",
       "selectAllMatching": "Vybrat všech {{formatted}} odpovídajících výsledků",
       "selectAllMatchingShort": "Vybrat vše ({{formatted}})",
