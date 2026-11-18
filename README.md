@@ -135,3 +135,13 @@ Contributions of all kinds are welcome. Read the [Contributing guide](https://bi
 
 Bichon is licensed under the [GNU Affero General Public License v3.0](LICENSE).
 Copyright &copy; 2025–2026 [rustmailer.com](https://rustmailer.com)
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=rustmailer/bichon&type=Date)](https://star-history.com/#rustmailer/bichon&Date)
+
+## Contributors
+
+Thanks to everyone who has contributed to Bichon.
+
+[![Contributors](https://contrib.rocks/image?repo=rustmailer/bichon&max=100)](https://github.com/rustmailer/bichon/graphs/contributors)
