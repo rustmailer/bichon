@@ -39,13 +39,7 @@ import { buildTree, type ExtendedTreeItemProps } from '@/lib/build-tree'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Input } from '@/components/ui/input'
 import { usePendingApprovals } from '@/features/approvals/use-pending-approvals'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { AccountPicker } from './account-picker'
 import { cn } from '@/lib/utils'
 
 interface Props {
@@ -194,27 +188,12 @@ export function FolderTree({
           <Folders className="h-3.5 w-3.5" />
           {t('mailboxView.folders')}
         </div>
-        <Select
-          value={accountId !== undefined ? String(accountId) : undefined}
-          onValueChange={(value) => onSelectAccount(Number(value))}
-        >
-          <SelectTrigger className="h-8 text-xs">
-            <SelectValue placeholder={t('mailboxView.selectAccount')} />
-          </SelectTrigger>
-          <SelectContent>
-            {accounts.map((account) => (
-              <SelectItem
-                key={account.id}
-                value={String(account.id)}
-                className="text-xs"
-              >
-                <span className="block max-w-[230px] truncate">
-                  {account.name || account.email}
-                </span>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <AccountPicker
+          accounts={accounts}
+          value={accountId}
+          onChange={onSelectAccount}
+          className="h-8 w-full text-xs font-normal"
+        />
         <div className="relative">
           <Search className="absolute left-2 top-2 h-3.5 w-3.5 text-muted-foreground" />
           <Input

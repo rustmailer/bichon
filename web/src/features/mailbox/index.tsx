@@ -34,13 +34,6 @@ import { FixedHeader } from '@/components/layout/fixed-header'
 import { Main } from '@/components/layout/main'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import SearchProvider, {
   SearchDialogType,
   SelectAllScope,
@@ -52,6 +45,7 @@ import { MailDisplayDrawer } from '@/features/search/mail-display-dialog'
 import { RestoreMessageDialog } from '@/features/search/restore-message-dialog'
 import { RepairMessageDialog } from '@/features/repair/repair-message-dialog'
 
+import { AccountPicker } from './account-picker'
 import { FolderTree } from './folder-tree'
 import { MessageList } from './message-list'
 import { MessagePagination } from './message-pagination'
@@ -417,29 +411,14 @@ export default function MailboxView() {
                   <div className="flex min-w-0 items-center justify-between gap-2 overflow-hidden">
                     <div className="flex min-w-0 items-center gap-2">
                       {!canShowSidebar && (
-                        <Select
-                          value={
-                            activeAccountId !== undefined
-                              ? String(activeAccountId)
-                              : undefined
-                          }
-                          onValueChange={(value) => selectAccount(Number(value))}
-                        >
-                          <SelectTrigger className="h-7 w-[180px] text-xs">
-                            <SelectValue placeholder={t('mailboxView.selectAccount')} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {accounts.map((account) => (
-                              <SelectItem
-                                key={account.id}
-                                value={String(account.id)}
-                                className="text-xs"
-                              >
-                                {account.name || account.email}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <div className="w-[180px] shrink-0">
+                          <AccountPicker
+                            accounts={accounts}
+                            value={activeAccountId}
+                            onChange={selectAccount}
+                            className="h-7 w-full text-xs font-normal"
+                          />
+                        </div>
                       )}
                       <span className="truncate text-xs font-medium">
                         {folderName}
