@@ -763,10 +763,8 @@ fn generate_synthetic_uidvalidity(mailbox_name: &str) -> u32 {
     (hasher.finish() as u32).wrapping_add(1) // Avoid 0, which might be reserved
 }
 
-/// Retry fetching UIDVALIDITY via STATUS command when the initial listing returned None.
-/// A None UIDVALIDITY while other STATUS fields (MESSAGES, UNSEEN, UIDNEXT) are present
-/// can be caused by transient network issues corrupting just the UIDVALIDITY portion of
-/// the response. Retrying avoids unnecessarily triggering a full reconcile.
+/// Retry reading UIDVALIDITY when the initial listing returned None, using the
+/// same STATUS/EXAMINE compatibility handling as mailbox discovery.
 async fn fetch_uid_validity_with_retry(
     account_id: u64,
     mailbox_name: &str,
@@ -778,14 +776,9 @@ async fn fetch_uid_validity_with_retry(
         let mailbox_name = mailbox_name.clone();
         async move {
             let mut session = ImapExecutor::create_connection(account_id).await?;
-            let result = session
-                .status(&mailbox_name, "(UIDVALIDITY)")
+            let result = ImapExecutor::mailbox_metadata(&mut session, &mailbox_name)
                 .await
-                .map(|r| r.uid_validity)
-                .map_err(|e| {
-                    let msg = format!("STATUS failed during UIDVALIDITY retry: {:#?}", e);
-                    raise_error!(msg, ErrorCode::InternalError)
-                });
+                .map(|r| r.uid_validity);
             session.logout().await.ok();
             result
         }

@@ -24,7 +24,7 @@ use crate::error::code::ErrorCode;
 use crate::imap::session::SessionStream;
 use crate::raise_error;
 use crate::{error::BichonResult, imap::manager::ImapConnectionManager};
-use async_imap::types::Name;
+use async_imap::types::{Mailbox as ImapMailbox, Name};
 use async_imap::Session;
 use futures::TryStreamExt;
 use mail_parser::MessageParser;
@@ -259,6 +259,54 @@ pub struct BatchFetchOutcome {
 pub struct ImapExecutor;
 
 impl ImapExecutor {
+    /// Read mailbox metadata without modifying messages. Some servers (notably
+    /// Tencent Enterprise Mail) reply to STATUS using a different mailbox alias
+    /// than LIST. async-imap discards that response and returns default metadata,
+    /// so an apparent empty mailbox with missing identifiers needs verification.
+    pub async fn mailbox_metadata(
+        session: &mut Session<Box<dyn SessionStream>>,
+        mailbox_name: &str,
+    ) -> BichonResult<ImapMailbox> {
+        let status = session
+            .status(mailbox_name, "(MESSAGES UNSEEN UIDNEXT UIDVALIDITY)")
+            .await
+            .map_err(|e| {
+                raise_error!(
+                    format!("STATUS failed for mailbox {mailbox_name:?}: {e:#?}"),
+                    classify_imap_error(&e)
+                )
+            })?;
+
+        if status.uid_validity.is_some_and(|uid| uid != 0)
+            && status.uid_next.is_some_and(|uid| uid != 0)
+        {
+            return Ok(status);
+        }
+
+        let mut examined = session.examine(mailbox_name).await.map_err(|e| {
+            raise_error!(
+                format!("EXAMINE failed for mailbox {mailbox_name:?}: {e:#?}"),
+                classify_imap_error(&e)
+            )
+        })?;
+        if !examined.uid_validity.is_some_and(|uid| uid != 0) {
+            return Err(raise_error!(
+                format!(
+                    "Cannot read trustworthy metadata for mailbox {mailbox_name:?}: \
+                     EXAMINE returned no valid UIDVALIDITY after an incomplete STATUS response"
+                ),
+                ErrorCode::ImapUnexpectedResult
+            ));
+        }
+
+        // EXAMINE's UNSEEN is the first unseen sequence number, not a count.
+        // Keep the STATUS count when available; otherwise leave it unknown.
+        examined.unseen = status.unseen;
+        // UIDNEXT can remain absent: sync already supports servers without it.
+        examined.uid_next = examined.uid_next.filter(|&uid| uid != 0);
+        Ok(examined)
+    }
+
     pub async fn list_all_mailboxes(
         session: &mut Session<Box<dyn SessionStream>>,
     ) -> BichonResult<Vec<Name>> {

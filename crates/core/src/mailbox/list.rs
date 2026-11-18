@@ -157,15 +157,7 @@ async fn fetch_remote_with_progress(account_id: u64) -> BichonResult<Vec<MailBox
 
         mailbox.account_id = account_id;
         mailbox.id = create_hash(account_id, &mailbox.name);
-        // Use STATUS instead of EXAMINE: gets MESSAGES/UNSEEN/UIDNEXT/UIDVALIDITY
-        // without selecting the mailbox, avoiding context switches.
-        let mx = session
-            .status(
-                mailbox_name.as_str(),
-                "(MESSAGES UNSEEN UIDNEXT UIDVALIDITY)",
-            )
-            .await
-            .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::ImapCommandFailed))?;
+        let mx = ImapExecutor::mailbox_metadata(&mut session, &mailbox_name).await?;
         mailbox.exists = mx.exists;
         mailbox.unseen = mx.unseen;
         mailbox.uid_next = mx.uid_next;
@@ -210,15 +202,7 @@ pub async fn convert_names_to_mailboxes(
 
         mailbox.account_id = account_id;
         mailbox.id = create_hash(account_id, &mailbox.name);
-        // Use STATUS instead of EXAMINE: gets MESSAGES/UNSEEN/UIDNEXT/UIDVALIDITY
-        // without selecting the mailbox, avoiding context switches.
-        let mx = session
-            .status(
-                mailbox_name.as_str(),
-                "(MESSAGES UNSEEN UIDNEXT UIDVALIDITY)",
-            )
-            .await
-            .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::ImapCommandFailed))?;
+        let mx = ImapExecutor::mailbox_metadata(session, &mailbox_name).await?;
         mailbox.exists = mx.exists;
         mailbox.unseen = mx.unseen;
         mailbox.uid_next = mx.uid_next;
@@ -228,4 +212,202 @@ pub async fn convert_names_to_mailboxes(
     }
 
     Ok(mailboxes)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::imap::mock_server::{
+        examine_response, status_response, MockImapServer, MockImapServerHandle,
+    };
+    use std::time::Duration;
+    use tokio_io_timeout::TimeoutStream;
+
+    async fn session(handle: &MockImapServerHandle) -> Session<Box<dyn SessionStream>> {
+        let tcp = tokio::net::TcpStream::connect((handle.host(), handle.port()))
+            .await
+            .unwrap();
+        let mut timeout_stream = TimeoutStream::new(tcp);
+        timeout_stream.set_read_timeout(Some(Duration::from_secs(5)));
+        let stream: Box<dyn SessionStream> = Box::new(Box::pin(timeout_stream));
+        let mut client = async_imap::Client::new(stream);
+        client.read_response().await.unwrap();
+        client
+            .login("user", "pass")
+            .await
+            .map_err(|(e, _)| panic!("Login failed: {e:?}"))
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn metadata_complete_status_keeps_the_fast_path_including_empty_folders() {
+        for messages in [0, 134] {
+            let handle = MockImapServer::new()
+                .respond("LOGIN", "{TAG} OK logged in\r\n")
+                .respond(
+                    "STATUS",
+                    status_response("INBOX", messages, 0, 135, Some(42)),
+                )
+                .respond("EXAMINE", "{TAG} BAD unexpected EXAMINE\r\n")
+                .start()
+                .await;
+            let mut session = session(&handle).await;
+            let metadata = ImapExecutor::mailbox_metadata(&mut session, "INBOX")
+                .await
+                .unwrap();
+            assert_eq!(metadata.exists, messages);
+            assert_eq!(metadata.uid_validity, Some(42));
+            assert_eq!(metadata.uid_next, Some(135));
+            assert_eq!(metadata.unseen, Some(0));
+            session.logout().await.unwrap();
+        }
+    }
+
+    #[tokio::test]
+    async fn metadata_alias_response_recovers_sent_mail_and_preserves_folder_identity() {
+        let handle = MockImapServer::new()
+            .respond("LOGIN", "{TAG} OK logged in\r\n")
+            .respond(
+                "LIST",
+                "* LIST (\\HasNoChildren) \"/\" \"Sent Messages\"\r\n{TAG} OK listed\r\n",
+            )
+            // Tencent lists the English name but STATUS echoes its Chinese alias.
+            .respond(
+                "STATUS",
+                status_response("&XfJT0ZABkK5O9g-", 134, 0, 135, Some(1593526449)),
+            )
+            .respond(
+                "EXAMINE",
+                examine_response("Sent Messages", 134, 1593526449, 135),
+            )
+            .start()
+            .await;
+        let mut session = session(&handle).await;
+        let names = ImapExecutor::list_all_mailboxes(&mut session)
+            .await
+            .unwrap();
+        let mailboxes = convert_names_to_mailboxes(7, &mut session, names.iter())
+            .await
+            .unwrap();
+        assert_eq!(mailboxes.len(), 1);
+        let mailbox = &mailboxes[0];
+        assert_eq!(mailbox.name, "Sent Messages");
+        assert_eq!(mailbox.id, create_hash(7, "Sent Messages"));
+        assert_eq!(mailbox.account_id, 7);
+        assert_eq!(mailbox.exists, 134);
+        assert_eq!(mailbox.uid_validity, Some(1593526449));
+        assert_eq!(mailbox.uid_next, Some(135));
+        assert_eq!(mailbox.unseen, None);
+        session.logout().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn metadata_examine_does_not_use_an_unseen_sequence_number_as_a_count() {
+        for count in [None, Some(3)] {
+            let unseen = count.map(|n| format!(" UNSEEN {n}")).unwrap_or_default();
+            let handle = MockImapServer::new()
+                .respond("LOGIN", "{TAG} OK logged in\r\n")
+                .respond(
+                    "STATUS",
+                    format!(
+                        "* STATUS INBOX (MESSAGES 134 UIDNEXT 135{unseen})\r\n\
+                         {{TAG}} OK status\r\n"
+                    ),
+                )
+                .respond(
+                    "EXAMINE",
+                    format!(
+                        "* 134 EXISTS\r\n* OK [UIDVALIDITY 42]\r\n\
+                         * OK [UIDNEXT 135]\r\n* OK [UNSEEN 17]\r\n\
+                         {{TAG}} OK [READ-ONLY] examined\r\n"
+                    ),
+                )
+                .start()
+                .await;
+            let mut session = session(&handle).await;
+            let metadata = ImapExecutor::mailbox_metadata(&mut session, "INBOX")
+                .await
+                .unwrap();
+            assert_eq!(metadata.exists, 134);
+            assert_eq!(metadata.uid_validity, Some(42));
+            assert_eq!(metadata.unseen, count);
+            session.logout().await.unwrap();
+        }
+    }
+
+    #[tokio::test]
+    async fn metadata_examine_treats_missing_and_zero_uidnext_as_unknown() {
+        for uid_next in ["", "* OK [UIDNEXT 0]\r\n"] {
+            let handle = MockImapServer::new()
+                .respond("LOGIN", "{TAG} OK logged in\r\n")
+                .respond(
+                    "STATUS",
+                    "* STATUS INBOX (MESSAGES 134 UIDVALIDITY 42)\r\n{TAG} OK status\r\n",
+                )
+                .respond(
+                    "EXAMINE",
+                    format!(
+                        "* 134 EXISTS\r\n* OK [UIDVALIDITY 42]\r\n{uid_next}\
+                         {{TAG}} OK [READ-ONLY] examined\r\n"
+                    ),
+                )
+                .start()
+                .await;
+            let mut session = session(&handle).await;
+            let metadata = ImapExecutor::mailbox_metadata(&mut session, "INBOX")
+                .await
+                .unwrap();
+            assert_eq!(metadata.exists, 134);
+            assert_eq!(metadata.uid_validity, Some(42));
+            assert_eq!(metadata.uid_next, None, "EXAMINE response: {uid_next:?}");
+            session.logout().await.unwrap();
+        }
+    }
+
+    #[tokio::test]
+    async fn metadata_failed_or_incomplete_examine_does_not_become_an_empty_mailbox() {
+        for response in [
+            "{TAG} NO cannot examine mailbox\r\n",
+            "* 134 EXISTS\r\n{TAG} OK [READ-ONLY] examined\r\n",
+            "* 134 EXISTS\r\n* OK [UIDVALIDITY 0]\r\n{TAG} OK [READ-ONLY] examined\r\n",
+        ] {
+            let handle = MockImapServer::new()
+                .respond("LOGIN", "{TAG} OK logged in\r\n")
+                .respond(
+                    "LIST",
+                    "* LIST (\\HasNoChildren) \"/\" \"Sent Messages\"\r\n{TAG} OK listed\r\n",
+                )
+                .respond(
+                    "STATUS",
+                    status_response("&XfJT0ZABkK5O9g-", 134, 0, 135, Some(42)),
+                )
+                .respond("EXAMINE", response)
+                .start()
+                .await;
+            let mut session = session(&handle).await;
+            let names = ImapExecutor::list_all_mailboxes(&mut session)
+                .await
+                .unwrap();
+            assert!(convert_names_to_mailboxes(7, &mut session, names.iter())
+                .await
+                .is_err());
+            session.logout().await.unwrap();
+        }
+    }
+
+    #[tokio::test]
+    async fn metadata_status_throttling_is_not_hidden_by_examine() {
+        let handle = MockImapServer::new()
+            .respond("LOGIN", "{TAG} OK logged in\r\n")
+            .respond("STATUS", "{TAG} NO [LIMIT] Too many connections\r\n")
+            .respond("EXAMINE", examine_response("INBOX", 134, 42, 135))
+            .start()
+            .await;
+        let mut session = session(&handle).await;
+        let error = ImapExecutor::mailbox_metadata(&mut session, "INBOX")
+            .await
+            .unwrap_err();
+        assert_eq!(error.code(), ErrorCode::ImapServerThrottled);
+        session.logout().await.unwrap();
+    }
 }
