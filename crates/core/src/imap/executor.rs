@@ -301,8 +301,9 @@ impl ImapExecutor {
 
         // EXAMINE's UNSEEN is the first unseen sequence number, not a count.
         // Keep the STATUS count when available; otherwise leave it unknown.
-        // UIDNEXT can remain absent: sync already supports servers without it.
         examined.unseen = status.unseen;
+        // UIDNEXT can remain absent: sync already supports servers without it.
+        examined.uid_next = examined.uid_next.filter(|&uid| uid != 0);
         Ok(examined)
     }
 

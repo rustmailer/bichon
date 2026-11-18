@@ -336,27 +336,32 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn metadata_missing_uidnext_uses_examine_but_does_not_require_the_optimization() {
-        let handle = MockImapServer::new()
-            .respond("LOGIN", "{TAG} OK logged in\r\n")
-            .respond(
-                "STATUS",
-                "* STATUS INBOX (MESSAGES 134 UIDVALIDITY 42)\r\n{TAG} OK status\r\n",
-            )
-            .respond(
-                "EXAMINE",
-                "* 134 EXISTS\r\n* OK [UIDVALIDITY 42]\r\n{TAG} OK [READ-ONLY] examined\r\n",
-            )
-            .start()
-            .await;
-        let mut session = session(&handle).await;
-        let metadata = ImapExecutor::mailbox_metadata(&mut session, "INBOX")
-            .await
-            .unwrap();
-        assert_eq!(metadata.exists, 134);
-        assert_eq!(metadata.uid_validity, Some(42));
-        assert_eq!(metadata.uid_next, None);
-        session.logout().await.unwrap();
+    async fn metadata_examine_treats_missing_and_zero_uidnext_as_unknown() {
+        for uid_next in ["", "* OK [UIDNEXT 0]\r\n"] {
+            let handle = MockImapServer::new()
+                .respond("LOGIN", "{TAG} OK logged in\r\n")
+                .respond(
+                    "STATUS",
+                    "* STATUS INBOX (MESSAGES 134 UIDVALIDITY 42)\r\n{TAG} OK status\r\n",
+                )
+                .respond(
+                    "EXAMINE",
+                    format!(
+                        "* 134 EXISTS\r\n* OK [UIDVALIDITY 42]\r\n{uid_next}\
+                         {{TAG}} OK [READ-ONLY] examined\r\n"
+                    ),
+                )
+                .start()
+                .await;
+            let mut session = session(&handle).await;
+            let metadata = ImapExecutor::mailbox_metadata(&mut session, "INBOX")
+                .await
+                .unwrap();
+            assert_eq!(metadata.exists, 134);
+            assert_eq!(metadata.uid_validity, Some(42));
+            assert_eq!(metadata.uid_next, None, "EXAMINE response: {uid_next:?}");
+            session.logout().await.unwrap();
+        }
     }
 
     #[tokio::test]
