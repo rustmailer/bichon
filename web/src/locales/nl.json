@@ -95,7 +95,7 @@
     "addAccount": "Account Toevoegen",
     "addNewEmailAccountHere": "Voeg hier een nieuw e-mailaccount toe. ",
     "allMailFolderSelected": "Let Op: 'Alle Mail' Map Geselecteerd",
-    "allMailFolderSelectedDesc": "Het selecteren van mappen met het 'Alle Mail'-kenmerk zal waarschijnlijk leiden tot dubbele berichten die al zijn gesynchroniseerd vanuit mappen zoals Postvak In en Verzonden. Dit kan aanzienlijk meer opslagruimte in beslag nemen.",
+    "allMailFolderSelectedDesc": "Het selecteren van mappen met het 'Alle Mail'-kenmerk dupliceert berichten die al zijn gesynchroniseerd vanuit mappen zoals Postvak In en Verzonden: elk bericht verschijnt één keer per map en tellingen bevatten beide vermeldingen. Berichttekst en bijlagen worden nog steeds maar één keer opgeslagen.",
     "allMailSkipped": "Standaardmappen geselecteerd. 'Alle Mail' is overgeslagen om duplicaten te voorkomen.",
     "areYouSureYouWantTo": "Weet je zeker dat je dit account wilt {{action}}?",
     "auth": "Authenticatie",

@@ -95,7 +95,7 @@
     "addAccount": "Konto hinzufügen",
     "addNewEmailAccountHere": "Fügen Sie hier ein neues E-Mail-Konto hinzu. ",
     "allMailFolderSelected": "Warnung: 'Alle E-Mails'-Ordner ausgewählt",
-    "allMailFolderSelectedDesc": "Die Auswahl von Ordnern mit dem Attribut 'Alle E-Mails' führt wahrscheinlich zur Duplizierung von Nachrichten, die bereits aus Ordnern wie Posteingang und Gesendet synchronisiert wurden. Dies könnte erheblich mehr Speicherplatz verbrauchen.",
+    "allMailFolderSelectedDesc": "Die Auswahl von Ordnern mit dem Attribut 'Alle E-Mails' dupliziert Nachrichten, die bereits aus Ordnern wie Posteingang und Gesendet synchronisiert wurden: Jede Nachricht wird einmal pro Ordner aufgeführt, und Zählungen enthalten beide Einträge. Nachrichtentexte und Anhänge werden weiterhin nur einmal gespeichert.",
     "allMailSkipped": "Standardordner ausgewählt. 'Alle E-Mails' wurde übersprungen, um Duplikate zu vermeiden.",
     "areYouSureYouWantTo": "Möchten Sie dieses Konto wirklich {{action}}?",
     "auth": "Authentifizierung",

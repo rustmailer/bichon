@@ -95,7 +95,7 @@
     "addAccount": "新增帳號",
     "addNewEmailAccountHere": "在此新增電子郵件帳號。",
     "allMailFolderSelected": "注意：「所有郵件」資料夾已選擇",
-    "allMailFolderSelectedDesc": "選擇具有「所有郵件」屬性的資料夾可能會導致已從收件匣或寄件備份等資料夾同步的郵件重複。這可能會大幅增加您的儲存用量。",
+    "allMailFolderSelectedDesc": "選擇具有「所有郵件」屬性的資料夾會複製已從收件匣、寄件備份等資料夾同步的郵件：每封郵件會在每個資料夾中各列出一筆記錄，統計也會包含這兩筆記錄。郵件本文與附件仍然只儲存一份。",
     "allMailSkipped": "標準資料夾已選擇，為避免重複已跳過「所有郵件」。",
     "areYouSureYouWantTo": "你確定要{{action}}此帳戶嗎？",
     "auth": "驗證",

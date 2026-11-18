@@ -95,7 +95,7 @@
     "addAccount": "Legg til konto",
     "addNewEmailAccountHere": "Legg til ny e-postkonto her. ",
     "allMailFolderSelected": "OBS: Mappen \"All e-post\" er valgt",
-    "allMailFolderSelectedDesc": "Å velge mapper med attributtet \"All e-post\" (All Mail) vil sannsynligvis føre til duplisering av meldinger som allerede er synkronisert fra mapper som Innboks og Sendt. Dette kan forbruke betydelig mer lagringsplass.",
+    "allMailFolderSelectedDesc": "Å velge mapper med attributtet \"All e-post\" dupliserer meldinger som allerede er synkronisert fra mapper som Innboks og Sendt: hver melding vises én gang per mappe, og tellere inkluderer begge oppføringene. Meldingstekst og vedlegg lagres fortsatt bare én gang.",
     "allMailSkipped": "Valgte standardmapper. 'All e-post' ble hoppet over for å unngå duplikater.",
     "areYouSureYouWantTo": "Er du sikker på at du vil {{action}} denne kontoen?",
     "auth": "Autentisering",

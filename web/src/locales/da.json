@@ -95,7 +95,7 @@
     "addAccount": "Tilføj konto",
     "addNewEmailAccountHere": "Tilføj ny e-mailkonto her. ",
     "allMailFolderSelected": "Bemærk: Mappen \"Al mail\" er valgt",
-    "allMailFolderSelectedDesc": "Valg af mapper med attributtet \"Al mail\" vil sandsynligvis resultere i duplikerede meddelelser, der allerede er synkroniseret fra mapper som Indbakke og Sendt. Dette kan optage betydeligt mere lagerplads.",
+    "allMailFolderSelectedDesc": "Valg af mapper med attributten \"Al mail\" duplikerer meddelelser, der allerede er synkroniseret fra mapper som Indbakke og Sendt: hver meddelelse vises én gang pr. mappe, og tællere inkluderer begge poster. Meddelelsestekst og vedhæftede filer gemmes stadig kun én gang.",
     "allMailSkipped": "Valgte standardmapper. \"Al mail\" blev sprunget over for at undgå dubletter.",
     "areYouSureYouWantTo": "Er du sikker på, at du vil {{action}} denne konto?",
     "auth": "Godkendelse",

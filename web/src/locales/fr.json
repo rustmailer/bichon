@@ -95,7 +95,7 @@
     "addAccount": "Ajouter un Compte",
     "addNewEmailAccountHere": "Ajoutez un nouveau compte e-mail ici. ",
     "allMailFolderSelected": "Attention : Dossier 'Tous les messages' sélectionné",
-    "allMailFolderSelectedDesc": "La sélection de dossiers avec l'attribut 'Tous les messages' entraînera probablement la duplication des messages déjà synchronisés à partir de dossiers tels que Boîte de réception et Éléments envoyés. Cela peut consommer beaucoup plus d'espace de stockage.",
+    "allMailFolderSelectedDesc": "La sélection de dossiers avec l'attribut 'Tous les messages' duplique les messages déjà synchronisés depuis des dossiers comme Boîte de réception et Éléments envoyés : chaque message apparaît une fois par dossier et les compteurs incluent les deux entrées. Le corps des messages et les pièces jointes ne sont toujours stockés qu'une seule fois.",
     "allMailSkipped": "Dossiers par défaut sélectionnés. 'Tous les messages' a été ignoré pour éviter les doublons.",
     "areYouSureYouWantTo": "Êtes-vous sûr de vouloir {{action}} ce compte ?",
     "auth": "Auth.",

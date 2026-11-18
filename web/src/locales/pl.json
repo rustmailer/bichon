@@ -95,7 +95,7 @@
     "addAccount": "Dodaj konto. ",
     "addNewEmailAccountHere": "Dodaj nowe konto email tutaj. ",
     "allMailFolderSelected": "Uwaga: folder \"Wszystkie wiadomości\" izostał zaznaczony",
-    "allMailFolderSelectedDesc": "Wybierając foldery z atrybutem \"Wszystkie wiadomości\" prawdopodobnie spowoduje to duplikowanie się wiadomości już zsynchronizowanych z folderów takich jak Skrzynka odbiorcza i Wysłane. Może to zająć znacznie więcej miejsca",
+    "allMailFolderSelectedDesc": "Wybór folderów z atrybutem \"Wszystkie wiadomości\" duplikuje wiadomości już zsynchronizowane z folderów takich jak Skrzynka odbiorcza i Wysłane: każda wiadomość jest wymieniona raz na folder, a liczniki uwzględniają oba wpisy. Treść wiadomości i załączniki są nadal przechowywane tylko raz.",
     "allMailSkipped": "Wybrane foldery standardowe. Pominięto 'Wszystkie wiadomości', aby uniknąć duplikatów.",
     "areYouSureYouWantTo": "Czy na pewno chcesz {{action}} dla tego konta?",
     "auth": "Auth",

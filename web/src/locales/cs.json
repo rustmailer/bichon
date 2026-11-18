@@ -95,7 +95,7 @@
     "addAccount": "Přidat účet",
     "addNewEmailAccountHere": "Zde přidáte nový e-mailový účet. ",
     "allMailFolderSelected": "Pozor: vybrána složka „Všechny zprávy“",
-    "allMailFolderSelectedDesc": "Výběr složek s atributem „Všechny zprávy“ (All Mail) pravděpodobně povede k duplikaci zpráv, které již byly synchronizovány ze složek jako Doručená pošta a Odeslaná pošta. To může zabrat výrazně více úložného prostoru.",
+    "allMailFolderSelectedDesc": "Výběr složek s atributem „Všechny zprávy“ duplikuje zprávy, které již byly synchronizovány ze složek, jako jsou Doručená pošta a Odeslaná pošta: každá zpráva je uvedena jednou na složku a počítadla zahrnují oba záznamy. Těla zpráv a přílohy se stále ukládají pouze jednou.",
     "allMailSkipped": "Vybrány standardní složky. Složka „Všechny zprávy“ byla vynechána, aby nevznikaly duplikáty.",
     "areYouSureYouWantTo": "Opravdu chcete tento účet {{action}}?",
     "auth": "Ověření",

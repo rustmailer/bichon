@@ -95,7 +95,7 @@
     "addAccount": "添加账户",
     "addNewEmailAccountHere": "在此添加新邮件账户。",
     "allMailFolderSelected": "提示：已选择\"所有邮件\"文件夹",
-    "allMailFolderSelectedDesc": "选择具有\"所有邮件\"属性的文件夹可能会导致重复已从收件箱和已发送等文件夹同步的消息。这可能会消耗更多的存储空间。",
+    "allMailFolderSelectedDesc": "选择具有“所有邮件”属性的文件夹会复制已从收件箱、已发送等文件夹同步的邮件：每封邮件会在每个文件夹中各列出一条记录，统计也会包含这两条记录。邮件正文和附件仍然只存储一份。",
     "allMailSkipped": "已选择标准文件夹。已跳过'所有邮件'以避免重复。",
     "areYouSureYouWantTo": "你确定要{{action}}此账户吗？",
     "auth": "认证",

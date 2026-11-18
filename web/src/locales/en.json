@@ -95,7 +95,7 @@
     "addAccount": "Add Account",
     "addNewEmailAccountHere": "Add new email account here. ",
     "allMailFolderSelected": "Heads Up: \"All Mail\" Folder Selected",
-    "allMailFolderSelectedDesc": "Selecting folders with the \"All Mail\" attribute will likely lead to duplicating messages already synced from folders like Inbox and Sent. This may consume significantly more storage space.",
+    "allMailFolderSelectedDesc": "Selecting folders with the \"All Mail\" attribute duplicates messages already synced from folders like Inbox and Sent: each message is listed once per folder, and message counts include both entries. Message bodies and attachments are still stored only once.",
     "allMailSkipped": "Selected standard folders. 'All Mail' was skipped to avoid duplicates.",
     "areYouSureYouWantTo": "Are you sure you want to {{action}} this account?",
     "auth": "Auth",

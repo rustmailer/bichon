@@ -95,7 +95,7 @@
     "addAccount": "Aggiungi Account",
     "addNewEmailAccountHere": "Aggiungi un nuovo account email qui. ",
     "allMailFolderSelected": "Attenzione: Cartella 'Tutta la Posta' Selezionata",
-    "allMailFolderSelectedDesc": "La selezione di cartelle con l'attributo 'Tutta la Posta' probabilmente causerà la duplicazione dei messaggi già sincronizzati da cartelle come Posta in arrivo e Posta inviata. Questo può consumare significativamente più spazio di archiviazione.",
+    "allMailFolderSelectedDesc": "La selezione di cartelle con l'attributo 'Tutta la Posta' duplica i messaggi già sincronizzati da cartelle come Posta in arrivo e Posta inviata: ogni messaggio viene elencato una volta per cartella e i conteggi includono entrambe le voci. Il corpo dei messaggi e gli allegati vengono comunque memorizzati una sola volta.",
     "allMailSkipped": "Cartelle predefinite selezionate. 'Tutta la Posta' è stata saltata per evitare duplicati.",
     "areYouSureYouWantTo": "Sei sicuro di voler {{action}} questo account?",
     "auth": "Autenticazione",

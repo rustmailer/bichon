@@ -95,7 +95,7 @@
     "addAccount": "Lägg till konto",
     "addNewEmailAccountHere": "Lägg till nytt e-postkonto här. ",
     "allMailFolderSelected": "Observera: Mappen \"All e-post\" vald",
-    "allMailFolderSelectedDesc": "Att välja mappar med attributet \"All e-post\" (All Mail) leder sannolikt till dubbletter av meddelanden som redan synkroniserats från mappar som Inkorg och Skickat. Detta kan ta upp betydligt mer lagringsutrymme.",
+    "allMailFolderSelectedDesc": "Att välja mappar med attributet \"All e-post\" duplicerar meddelanden som redan har synkroniserats från mappar som Inkorg och Skickat: varje meddelande listas en gång per mapp och räknare inkluderar båda posterna. Meddelandetexter och bilagor lagras fortfarande bara en gång.",
     "allMailSkipped": "Valde standardmappar. \"All e-post\" hoppades över för att undvika dubbletter.",
     "areYouSureYouWantTo": "Är du säker på att du vill {{action}} detta konto?",
     "auth": "Auth",

@@ -95,7 +95,7 @@
     "addAccount": "Lisää tili",
     "addNewEmailAccountHere": "Lisää uusi sähköpostitili täällä. ",
     "allMailFolderSelected": "Varoitus: 'Kaikki sähköpostit' -kansio valittu",
-    "allMailFolderSelectedDesc": "Kansioiden valitseminen, joilla on 'Kaikki sähköpostit' -attribuutti, johtaa todennäköisesti jo synkronoitujen viestien kahdentumiseen kansioista, kuten Saapuneet ja Lähetetyt. Tämä voi kuluttaa huomattavasti enemmän tallennustilaa.",
+    "allMailFolderSelectedDesc": "Kansioiden valitseminen, joilla on 'Kaikki sähköpostit' -attribuutti, kopioi viestit, jotka on jo synkronoitu kansioista, kuten Saapuneet ja Lähetetyt: jokainen viesti luetellaan kerran kansiota kohden ja laskurit sisältävät molemmat merkinnät. Viestien runko ja liitteet tallennetaan edelleen vain kerran.",
     "allMailSkipped": "Oletuskansiot valittu. 'Kaikki sähköpostit' ohitettiin päällekkäisyyksien välttämiseksi.",
     "areYouSureYouWantTo": "Haluatko varmasti {{action}} tämän tilin?",
     "auth": "Todennus",

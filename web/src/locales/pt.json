@@ -95,7 +95,7 @@
     "addAccount": "Adicionar Conta",
     "addNewEmailAccountHere": "Adicione uma nova conta de email aqui.",
     "allMailFolderSelected": "Atenção: A pasta 'Todos os Emails' está selecionada",
-    "allMailFolderSelectedDesc": "Selecionar uma pasta com o atributo 'Todos os Emails' pode duplicar mensagens já sincronizadas de pastas como Caixa de Entrada ou Itens Enviados. Isso pode consumir significativamente o seu armazenamento.",
+    "allMailFolderSelectedDesc": "Selecionar pastas com o atributo 'Todos os Emails' duplica as mensagens já sincronizadas de pastas como Caixa de Entrada e Itens Enviados: cada mensagem é listada uma vez por pasta e as contagens incluem ambas as entradas. O corpo das mensagens e os anexos continuam armazenados apenas uma vez.",
     "allMailSkipped": "Pastas padrão selecionadas. 'Todos os Emails' foi ignorado para evitar duplicação.",
     "areYouSureYouWantTo": "Tem certeza de que deseja {{action}} esta conta?",
     "auth": "Autenticação",

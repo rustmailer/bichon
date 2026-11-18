@@ -95,7 +95,7 @@
     "addAccount": "Añadir cuenta",
     "addNewEmailAccountHere": "Añade una nueva cuenta de correo electrónico aquí. ",
     "allMailFolderSelected": "Advertencia: Carpeta 'Todo el correo' seleccionada",
-    "allMailFolderSelectedDesc": "Seleccionar carpetas con el atributo 'Todo el correo' probablemente resultará en la duplicación de mensajes ya sincronizados de carpetas como Bandeja de entrada y Enviados. Esto podría consumir significativamente más espacio de almacenamiento.",
+    "allMailFolderSelectedDesc": "Seleccionar carpetas con el atributo 'Todo el correo' duplica los mensajes ya sincronizados desde carpetas como Bandeja de entrada y Enviados: cada mensaje aparece una vez por carpeta y los recuentos incluyen ambas entradas. El cuerpo de los mensajes y los archivos adjuntos siguen almacenándose una sola vez.",
     "allMailSkipped": "Carpetas predeterminadas seleccionadas. 'Todo el correo' omitido para evitar duplicados.",
     "areYouSureYouWantTo": "¿Está seguro de que desea {{action}} esta cuenta?",
     "auth": "Autenticación",
