@@ -39,97 +39,126 @@ async function reachTwoFactorStep() {
     fireEvent.submit(container.querySelector('form')!)
 
     await waitFor(() =>
-        expect(container.querySelectorAll('input[maxlength="1"]')).toHaveLength(6)
+        expect(container.querySelector('input[name^="otp-"]')).toBeInTheDocument()
     )
+    const codeInput = container.querySelector<HTMLInputElement>('input[name^="otp-"]')!
     const boxes = Array.from(
-        container.querySelectorAll<HTMLInputElement>('input[maxlength="1"]')
+        container.querySelectorAll<HTMLElement>('[data-otp-digit]')
     )
-    return { boxes, container, user }
+    return { boxes, codeInput, container, user }
 }
+
+const shown = (boxes: HTMLElement[]) =>
+    boxes.map((box) => box.textContent).join('')
 
 beforeEach(() => {
     vi.clearAllMocks()
 })
 
 describe('UserAuthForm two-factor step', () => {
-    // A lone text input kept getting the saved credential dumped into it, even
-    // with `autocomplete="one-time-code"`. One box per digit is not a shape
-    // password managers fill.
-    it('splits the code into six single-digit boxes', async () => {
-        const { boxes, container } = await reachTwoFactorStep()
+    // Managers fill form fields on load, and an OTP field is recognisable by
+    // its attributes. None of those attributes are advertised here, and the
+    // field is read-only until a real interaction.
+    it('does not advertise itself as a verification-code field', async () => {
+        const { boxes, codeInput, container } = await reachTwoFactorStep()
 
-        for (const box of boxes) {
-            expect(box).toHaveAttribute('inputmode', 'numeric')
-            expect(box).toHaveAttribute('pattern', '[0-9]*')
-            expect(box).toHaveAttribute('maxlength', '1')
-        }
-        expect(boxes[0]).toHaveAttribute('autocomplete', 'one-time-code')
-        // Opt-outs for the common password managers; `autocomplete` alone is
-        // not honoured by all of them.
-        expect(boxes[0]).toHaveAttribute('data-lpignore', 'true')
-        expect(boxes[0]).toHaveAttribute('data-1p-ignore', 'true')
-        expect(boxes[0]).toHaveAttribute('data-bwignore', 'true')
+        expect(boxes).toHaveLength(6)
+        expect(codeInput).not.toHaveAttribute('inputmode')
+        expect(codeInput).not.toHaveAttribute('pattern')
+        expect(codeInput).not.toHaveAttribute('maxlength')
+        expect(codeInput).toHaveAttribute('autocomplete', 'off')
+        expect(codeInput).toHaveAttribute('readonly')
+        // Randomised name: managers key on names like "code"/"otp".
+        expect(codeInput.getAttribute('name')).toMatch(/^otp-/)
+        // Opt-outs for the common managers.
+        expect(codeInput).toHaveAttribute('data-lpignore', 'true')
+        expect(codeInput).toHaveAttribute('data-1p-ignore', 'true')
+        expect(codeInput).toHaveAttribute('data-bwignore', 'true')
         // The shadcn-style 3 + 3 grouping.
         expect(container.querySelector('[role="separator"]')).toBeInTheDocument()
     })
 
-    // A manager that still targets the first box dumps the saved credential
-    // there. A password is not six digits, so the whole value is discarded.
-    it('ignores an autofilled credential', async () => {
-        const { boxes } = await reachTwoFactorStep()
+    // With the sign-in fields gone, a lone input inside the login form reads
+    // as the tail of that form; the TOTP step is rendered outside one.
+    it('is not inside a form', async () => {
+        const { codeInput } = await reachTwoFactorStep()
 
-        fireEvent.input(boxes[0], { target: { value: 'Tr0ub4dor&3!xY' } })
-
-        expect(boxes.map((box) => box.value).join('')).toBe('')
+        expect(codeInput.closest('form')).toBeNull()
     })
 
-    // A real six-digit value — pasted, or filled by the OS OTP suggestion —
-    // still lands in the boxes.
-    it('accepts a full six-digit value', async () => {
-        const { boxes } = await reachTwoFactorStep()
+    it('unlocks only after the user touches the field', async () => {
+        const { codeInput } = await reachTwoFactorStep()
 
-        fireEvent.input(boxes[0], { target: { value: '123456' } })
+        expect(codeInput).toHaveAttribute('readonly')
 
-        expect(boxes.map((box) => box.value).join('')).toBe('123456')
+        fireEvent.pointerDown(codeInput)
+
+        await waitFor(() => expect(codeInput).not.toHaveAttribute('readonly'))
     })
 
-    it('advances to the next box while typing', async () => {
-        const { boxes, user } = await reachTwoFactorStep()
+    // A fill that still targets the field before the user touches it is
+    // reverted instead of being shown as if the user had typed it.
+    it('ignores a fill delivered before the user touches the field', async () => {
+        const { boxes, codeInput } = await reachTwoFactorStep()
 
-        await user.type(boxes[0], '9')
+        fireEvent.input(codeInput, { target: { value: '123456' } })
 
-        expect(boxes[0].value).toBe('9')
-        expect(document.activeElement).toBe(boxes[1])
+        expect(codeInput.value).toBe('')
+        expect(shown(boxes)).toBe('')
     })
 
-    // The boxes keep their positions: digits typed after a gap must not slide
-    // to the left when the compact code is sent back down.
-    it('keeps a digit in the box it was typed into', async () => {
-        const { boxes, user } = await reachTwoFactorStep()
+    it('shows typed digits in the boxes', async () => {
+        const { boxes, codeInput, user } = await reachTwoFactorStep()
 
-        await user.click(boxes[3])
-        await user.type(boxes[3], '5')
+        await user.type(codeInput, '123')
 
-        expect(boxes[3].value).toBe('5')
-        expect(boxes[0].value).toBe('')
+        expect(shown(boxes)).toBe('123')
+    })
+
+    it('drops non-digit characters', async () => {
+        const { boxes, codeInput, user } = await reachTwoFactorStep()
+
+        await user.type(codeInput, '1a2b3')
+
+        expect(codeInput.value).toBe('123')
+        expect(shown(boxes)).toBe('123')
+    })
+
+    it('accepts a pasted code', async () => {
+        const { boxes, codeInput } = await reachTwoFactorStep()
+
+        fireEvent.paste(codeInput, {
+            clipboardData: { getData: () => '123456' },
+        })
+
+        expect(shown(boxes)).toBe('123456')
+    })
+
+    it('removes the last digit on backspace', async () => {
+        const { boxes, codeInput, user } = await reachTwoFactorStep()
+
+        await user.type(codeInput, '12')
+        await user.keyboard('{Backspace}')
+
+        expect(shown(boxes)).toBe('1')
     })
 
     it('does not verify until all six digits are present', async () => {
-        const { boxes, user } = await reachTwoFactorStep()
+        const { codeInput, user } = await reachTwoFactorStep()
         const { mfaVerify } = await import('@/api/users/api')
 
-        await user.type(boxes[0], '12345')
+        await user.type(codeInput, '12345')
 
         expect(mfaVerify).not.toHaveBeenCalled()
     })
 
-    // Filling the sixth box is the whole interaction; making the user click
+    // Filling the sixth digit is the whole interaction; making the user click
     // Verify afterwards was pointless.
     it('verifies automatically on the sixth digit', async () => {
-        const { boxes, user } = await reachTwoFactorStep()
+        const { codeInput, user } = await reachTwoFactorStep()
         const { mfaVerify } = await import('@/api/users/api')
 
-        await user.type(boxes[0], '123456')
+        await user.type(codeInput, '123456')
 
         await waitFor(() =>
             expect(mfaVerify).toHaveBeenCalledWith('challenge-1', '123456')

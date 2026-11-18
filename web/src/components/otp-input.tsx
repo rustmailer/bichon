@@ -33,14 +33,24 @@ type OtpInputProps = Omit<
 }
 
 /**
- * A one-time-code input rendered as one box per digit.
+ * One-time-code input: six display-only boxes and one hidden text field for
+ * the keyboard (a mobile soft keyboard needs a real input).
  *
- * The single-input version was attacked by password managers even with
- * `autocomplete="one-time-code"`: a lone text field in a login form still looks
- * like a credential box to them. One-character boxes are not a credential
- * shape, so a manager can at most touch one of them, and a value that is not
- * exactly `length` digits is discarded as noise instead of being spread across
- * the boxes.
+ * The field is deliberately disguised so password managers do not identify it
+ * as a verification-code box on page load:
+ *
+ * - no `inputMode`, `pattern`, `maxLength` or "code" aria-label — those are
+ *   exactly what managers use to recognise an OTP field;
+ * - `readOnly` on mount, unlocked by a real pointer/key/paste interaction (the
+ *   login form autofocuses the field, so unlocking on `focus` alone would
+ *   reopen the hole);
+ * - `autocomplete="off"`, a random `name` per mount, and the manager opt-out
+ *   attributes;
+ * - the MFA step is rendered outside any `<form>` (see user-auth-form), so a
+ *   manager cannot read it as the tail of the sign-in form.
+ *
+ * The visible boxes are plain elements fed by state, so even if a manager
+ * writes the field, nothing shows unless a real interaction is in progress.
  */
 const OtpInput = React.forwardRef<HTMLInputElement, OtpInputProps>(
   (
@@ -58,20 +68,34 @@ const OtpInput = React.forwardRef<HTMLInputElement, OtpInputProps>(
     },
     ref
   ) => {
-    const inputs = React.useRef<(HTMLInputElement | null)[]>([])
+    const inputRef = React.useRef<HTMLInputElement | null>(null)
+
+    // A random field name per mount: managers key on names like "code"/"otp".
+    const fieldName = React.useMemo(
+      () => `otp-${Math.random().toString(36).slice(2)}`,
+      []
+    )
 
     const split = React.useCallback(
       (raw: string) => {
-        const digits = (raw ?? '').replace(/\D/g, '')
+        const digits = (raw ?? '').replace(/\D/g, '').slice(0, length)
         return Array.from({ length }, (_, i) => digits[i] ?? '')
       },
       [length]
     )
 
-    // The boxes keep their positions when the user leaves a gap (typing into
-    // box 3 first must not shift that digit to box 1), so the displayed digits
-    // are local state. The parent still receives the compact code.
     const [digits, setDigits] = React.useState<string[]>(() => split(value))
+    const [focused, setFocused] = React.useState(false)
+
+    // Locked on mount. A manager that fills on load targets an editable
+    // field; this one is read-only until the user actually touches it.
+    const [locked, setLocked] = React.useState(true)
+    const lockedRef = React.useRef(true)
+    const unlock = React.useCallback(() => {
+      if (!lockedRef.current) return
+      lockedRef.current = false
+      setLocked(false)
+    }, [])
 
     React.useEffect(() => {
       const incoming = split(value)
@@ -80,87 +104,64 @@ const OtpInput = React.forwardRef<HTMLInputElement, OtpInputProps>(
       )
     }, [value, split])
 
-    const focusAt = (index: number) => {
-      const target = inputs.current[Math.min(Math.max(index, 0), length - 1)]
-      target?.focus()
-      target?.select()
-    }
-
-    const commit = (next: string[]) => {
-      setDigits(next)
-      onChange(next.join(''))
-    }
-
     React.useEffect(() => {
-      if (autoFocus) inputs.current[0]?.focus()
+      if (autoFocus) inputRef.current?.focus()
     }, [autoFocus])
 
-    const handleChange = (index: number, raw: string) => {
-      const cleaned = raw.replace(/\D/g, '')
-      if (raw.length > 1) {
-        // A paste or a password manager. Only a complete code is meaningful;
-        // anything else is noise, so the boxes are left untouched.
-        if (cleaned.length === length) {
-          commit(split(cleaned))
-          focusAt(length - 1)
-        }
-        return
-      }
-      if (!cleaned) {
-        const next = [...digits]
-        next[index] = ''
-        commit(next)
-        return
-      }
-      const next = [...digits]
-      next[index] = cleaned
-      commit(next)
-      if (index < length - 1) focusAt(index + 1)
+    // Keep the caret at the end: the field is one continuous code.
+    React.useEffect(() => {
+      if (!focused) return
+      const input = inputRef.current
+      if (!input) return
+      const end = input.value.length
+      input.setSelectionRange(end, end)
+    }, [digits, focused])
+
+    const code = digits.join('')
+
+    const applyCode = (raw: string) => {
+      const next = raw.replace(/\D/g, '').slice(0, length)
+      setDigits(split(next))
+      onChange(next)
     }
 
-    const handleKeyDown = (
-      index: number,
-      e: React.KeyboardEvent<HTMLInputElement>
-    ) => {
-      if (e.key === 'Backspace') {
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      // A change before the user touched the field is a fill, not typing.
+      if (lockedRef.current) {
+        e.target.value = code
+        return
+      }
+      const next = e.target.value.replace(/\D/g, '').slice(0, length)
+      if (e.target.value !== next) e.target.value = next
+      applyCode(next)
+    }
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (!lockedRef.current) return
+      unlock()
+      // The read-only attribute swallowed this keystroke; commit it so the
+      // first digit typed into an autofocused field is not lost.
+      if (/^[0-9]$/.test(e.key)) {
         e.preventDefault()
-        const next = [...digits]
-        if (next[index]) {
-          next[index] = ''
-          commit(next)
-        } else if (index > 0) {
-          next[index - 1] = ''
-          commit(next)
-          focusAt(index - 1)
-        }
-      } else if (e.key === 'Delete') {
-        e.preventDefault()
-        const next = [...digits]
-        next[index] = ''
-        commit(next)
-      } else if (e.key === 'ArrowLeft') {
-        e.preventDefault()
-        focusAt(index - 1)
-      } else if (e.key === 'ArrowRight') {
-        e.preventDefault()
-        focusAt(index + 1)
+        applyCode(code + e.key)
       }
     }
 
-    const handlePaste = (
-      index: number,
-      e: React.ClipboardEvent<HTMLInputElement>
-    ) => {
+    const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
       const pasted = e.clipboardData.getData('text').replace(/\D/g, '')
       if (!pasted) return
       e.preventDefault()
-      const next = [...digits]
-      const chars = pasted.slice(0, length - index).split('')
-      chars.forEach((digit, offset) => {
-        next[index + offset] = digit
-      })
-      commit(next)
-      focusAt(index + chars.length - 1)
+      unlock()
+      applyCode(pasted)
+    }
+
+    // The box the user is "in": the next empty one, clamped to the last.
+    const caretIndex = Math.min(code.length, length - 1)
+
+    const setRefs = (el: HTMLInputElement | null) => {
+      inputRef.current = el
+      if (typeof ref === 'function') ref(el)
+      else if (ref) ref.current = el
     }
 
     // Two groups split down the middle (six digits → 3 + 3), with a dash in
@@ -176,56 +177,70 @@ const OtpInput = React.forwardRef<HTMLInputElement, OtpInputProps>(
         role='group'
         aria-label={ariaLabel}
         dir='ltr'
-        className={cn('flex items-center gap-2', className)}
+        className={cn('relative', disabled && 'opacity-50')}
       >
-        {groups.map((group, groupIndex) => (
-          <React.Fragment key={groupIndex}>
-            {groupIndex > 0 && (
-              <div role='separator' className='px-0.5 text-muted-foreground'>
-                <Minus size={14} />
+        <div
+          className={cn('flex items-center gap-2', className)}
+          aria-hidden='true'
+        >
+          {groups.map((group, groupIndex) => (
+            <React.Fragment key={groupIndex}>
+              {groupIndex > 0 && (
+                <div role='separator' className='px-0.5 text-muted-foreground'>
+                  <Minus size={14} />
+                </div>
+              )}
+              <div className='flex items-center'>
+                {group.map((digit, offset) => {
+                  const index = groupIndex * half + offset
+                  const current = focused && index === caretIndex
+                  return (
+                    <div
+                      key={index}
+                      data-otp-digit=''
+                      className={cn(
+                        'relative flex h-10 w-10 items-center justify-center border-y border-r border-input text-base transition-all first:rounded-l-md first:border-l last:rounded-r-md md:text-lg',
+                        current && 'z-10 border-ring ring-1 ring-ring'
+                      )}
+                    >
+                      {digit}
+                    </div>
+                  )
+                })}
               </div>
-            )}
-            <div className='flex items-center'>
-              {group.map((digit, offset) => {
-                const index = groupIndex * half + offset
-                return (
-                  <input
-                    key={index}
-                    id={index === 0 ? id : undefined}
-                    ref={(el) => {
-                      inputs.current[index] = el
-                      if (index === 0) {
-                        if (typeof ref === 'function') ref(el)
-                        else if (ref) ref.current = el
-                      }
-                    }}
-                    type='text'
-                    inputMode='numeric'
-                    pattern='[0-9]*'
-                    autoComplete={index === 0 ? 'one-time-code' : 'off'}
-                    aria-label={`${ariaLabel ?? 'One-time code'}, digit ${index + 1}`}
-                    aria-describedby={ariaDescribedBy}
-                    maxLength={1}
-                    value={digit}
-                    disabled={disabled}
-                    spellCheck={false}
-                    autoCapitalize='off'
-                    autoCorrect='off'
-                    onChange={(e) => handleChange(index, e.target.value)}
-                    onKeyDown={(e) => handleKeyDown(index, e)}
-                    onPaste={(e) => handlePaste(index, e)}
-                    onFocus={(e) => e.currentTarget.select()}
-                    data-lpignore='true'
-                    data-1p-ignore='true'
-                    data-bwignore='true'
-                    data-form-type='other'
-                    className='relative h-10 w-10 border-y border-r border-input bg-transparent text-center text-base transition-all first:rounded-l-md first:border-l last:rounded-r-md focus-visible:z-10 focus-visible:border-ring focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 md:text-lg'
-                  />
-                )
-              })}
-            </div>
-          </React.Fragment>
-        ))}
+            </React.Fragment>
+          ))}
+        </div>
+
+        {/* The only editable element. No inputMode/pattern/maxLength: the
+            mode and length are enforced here, not advertised to managers. */}
+        <input
+          ref={setRefs}
+          id={id}
+          name={fieldName}
+          type='text'
+          autoComplete='off'
+          value={code}
+          disabled={disabled}
+          readOnly={locked}
+          aria-label={ariaLabel ?? 'Verification digits'}
+          aria-describedby={ariaDescribedBy}
+          spellCheck={false}
+          autoCapitalize='off'
+          autoCorrect='off'
+          data-lpignore='true'
+          data-1p-ignore='true'
+          data-bwignore='true'
+          data-form-type='other'
+          onChange={handleChange}
+          onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
+          onPointerDown={unlock}
+          onTouchStart={unlock}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          className='absolute inset-0 h-full w-full cursor-text bg-transparent text-transparent caret-transparent opacity-0 outline-none disabled:cursor-not-allowed'
+        />
       </div>
     )
   }
