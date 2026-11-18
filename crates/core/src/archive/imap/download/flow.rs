@@ -227,11 +227,45 @@ pub enum FetchDirection {
     Before,
 }
 
+/// Drops the UIDs that are already archived for this mailbox.
+///
+/// The full-download paths enumerate the whole (date-filtered) mailbox. When a
+/// part of it is already archived — the download state was lost, the index was
+/// restored, or the previous round stored the bodies but stopped before the
+/// watermark was written — re-downloading those bodies only for the
+/// content-hash dedup to discard them wastes the server's quota, and on a
+/// throttled server it is exactly what triggers the next throttle. The caller
+/// keeps the *unfiltered* maximum as the watermark: everything enumerated was
+/// covered, whether it had to be downloaded or was already present.
+///
+/// `skip_archived` is only passed for folders whose local `uid_validity`
+/// matches the server's, because after a UIDVALIDITY change the archived
+/// `uid` values belong to the previous generation and comparing them would
+/// skip genuinely missing mail.
+pub(crate) fn drop_archived_uids(
+    account_id: u64,
+    mailbox_id: u64,
+    uids: Vec<u32>,
+) -> BichonResult<Vec<u32>> {
+    let (Some(&first), Some(&last)) = (uids.first(), uids.last()) else {
+        return Ok(uids);
+    };
+    let archived = ENVELOPE_MANAGER.get_uids_in_range(account_id, mailbox_id, first, last)?;
+    if archived.is_empty() {
+        return Ok(uids);
+    }
+    Ok(uids
+        .into_iter()
+        .filter(|uid| !archived.contains(uid))
+        .collect())
+}
+
 pub async fn fetch_and_save_by_date(
     account: &AccountModel,
     date: &str,
     mailbox: &MailBox,
     direction: FetchDirection,
+    skip_archived: bool,
     token: CancellationToken,
 ) -> BichonResult<Option<u32>> {
     let account_id = account.id;
@@ -311,7 +345,25 @@ pub async fn fetch_and_save_by_date(
         return Ok(None);
     }
 
+    // The watermark covers the whole enumerated window, so take it before the
+    // archived-UID filter below can shrink the list.
     let max_uid = uid_vec.last().copied();
+    let uid_vec = if skip_archived {
+        drop_archived_uids(account_id, mailbox.id, uid_vec)?
+    } else {
+        uid_vec
+    };
+    if uid_vec.is_empty() {
+        DownloadState::update_folder_progress(
+            account_id,
+            mailbox.name.clone(),
+            0,
+            0,
+            FolderStatus::Success,
+            Some("Nothing to download: the window is already archived.".into()),
+        )?;
+        return Ok(max_uid);
+    }
     let planned = uid_vec.len() as u64;
     let uid_batches = generate_uid_sequence_hashset(
         uid_vec,
@@ -436,6 +488,13 @@ pub async fn fetch_and_save_by_date(
                     FolderStatus::Downloading,
                     None,
                 )?;
+                // Resume cursor: the batches come from a UID-sorted list, so
+                // the batch maximum is a contiguous cursor. A round interrupted
+                // after this point (throttling, network, user stop) resumes at
+                // the next batch instead of re-downloading the whole range.
+                // The watermark only ever moves forward, so a stale in-memory
+                // snapshot of the mailbox cannot undo this.
+                MailBox::advance_watermark(mailbox.id, batch.2)?;
             }
             Err(e) => {
                 let err_msg = format!("Batch {} failed: {:#?}", index, e);
@@ -493,6 +552,7 @@ pub async fn fetch_and_save_by_date(
 pub async fn fetch_and_save_full_mailbox(
     account: &AccountModel,
     mailbox: &MailBox,
+    skip_archived: bool,
     token: CancellationToken,
 ) -> BichonResult<Option<u32>> {
     let mailbox_id = mailbox.id;
@@ -551,11 +611,20 @@ pub async fn fetch_and_save_full_mailbox(
     // them back.
     let uid_list = tombstones::filter_uids(account.id, mailbox.id, mailbox.uid_validity, uid_list)?;
 
+    // The watermark must cover everything enumerated, so take it before the
+    // archived-UID filter below can shrink the list.
+    let max_uid = uid_list.last().copied();
+    let enumerated = uid_list.len() as u64;
+    let uid_list = if skip_archived {
+        drop_archived_uids(account_id, mailbox_id, uid_list)?
+    } else {
+        uid_list
+    };
     let planned = uid_list.len() as u64;
     if planned == 0 {
         info!(
-            "Mailbox '{}' is empty, no emails to download.",
-            mailbox.name
+            "Mailbox '{}': nothing to download ({} enumerated, all archived or skipped).",
+            mailbox.name, enumerated
         );
         DownloadState::update_folder_progress(
             account_id,
@@ -563,13 +632,12 @@ pub async fn fetch_and_save_full_mailbox(
             0,
             0,
             FolderStatus::Success,
-            None,
+            Some("Nothing to download: the mailbox is empty or already archived.".into()),
         )?;
         session.logout().await.ok();
-        return Ok(None);
+        return Ok(max_uid);
     }
 
-    let max_uid = *uid_list.last().unwrap();
     let page_size = account.download_batch_size.unwrap_or(DEFAULT_BATCH_SIZE) as usize;
     let uid_batches = generate_uid_sequence_hashset(uid_list, page_size);
     let total_batches = uid_batches.len();
@@ -700,6 +768,13 @@ pub async fn fetch_and_save_full_mailbox(
                     FolderStatus::Downloading,
                     None,
                 )?;
+                // Resume cursor: the batches come from a UID-sorted list, so
+                // the batch maximum is a contiguous cursor. A round interrupted
+                // after this point (throttling, network, user stop) resumes at
+                // the next batch instead of re-downloading the whole range.
+                // The watermark only ever moves forward, so a stale in-memory
+                // snapshot of the mailbox cannot undo this.
+                MailBox::advance_watermark(mailbox.id, batch.2)?;
             }
             Err(e) => {
                 let err_msg = format!("Batch {} failed: {:#?}", index, e);
@@ -748,7 +823,7 @@ pub async fn fetch_and_save_full_mailbox(
     if has_error_or_cancel {
         Ok(None)
     } else {
-        Ok(Some(max_uid))
+        Ok(max_uid)
     }
 }
 
@@ -1317,9 +1392,15 @@ pub async fn reconcile_mailboxes(
 
                 match result {
                     Ok(new_highest_uid) => {
-                        let mut updated = mailbox.clone();
-                        updated.highest_uid = new_highest_uid;
-                        MailBox::batch_upsert(&[updated])?;
+                        // `None` means the download broke mid-way (or the
+                        // folder is empty). Writing it would clear the batch
+                        // checkpoints the download persisted, so the next round
+                        // would restart from the top of the folder (#377).
+                        if let Some(uid) = new_highest_uid {
+                            let mut updated = mailbox.clone();
+                            updated.highest_uid = Some(uid);
+                            MailBox::batch_upsert(&[updated])?;
+                        }
                         summary.synced_folders += 1;
                     }
                     Err(err) => {
@@ -1437,6 +1518,7 @@ async fn perform_incremental_sync(
                                     date_since.since_date()?.as_str(),
                                     remote_mailbox,
                                     FetchDirection::Since,
+                                    true,
                                     token,
                                 )
                                 .await?
@@ -1448,13 +1530,19 @@ async fn perform_incremental_sync(
                                         &r.calculate_date()?,
                                         remote_mailbox,
                                         FetchDirection::Before,
+                                        true,
                                         token,
                                     )
                                     .await?
                                 }
                                 None => {
-                                    fetch_and_save_full_mailbox(account, remote_mailbox, token)
-                                        .await?
+                                    fetch_and_save_full_mailbox(
+                                        account,
+                                        remote_mailbox,
+                                        true,
+                                        token,
+                                    )
+                                    .await?
                                 }
                             },
                         };

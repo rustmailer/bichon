@@ -140,6 +140,30 @@ impl MailBox {
         batch_upsert_impl(DB_MANAGER.db(), mailboxes.to_vec())
     }
 
+    /// Advance the incremental-sync watermark after a fully processed download
+    /// batch; the watermark never moves backwards.
+    ///
+    /// The download batches are generated from a UID-sorted list, so every UID
+    /// of a later batch is greater than every UID of an earlier one. The batch
+    /// maximum is therefore a safe contiguous cursor: everything at or below it
+    /// was enumerated and processed in this attempt (archived, deduped,
+    /// filtered by archive rules or parse-skipped) — the same set the
+    /// folder-completion watermark covers. Persisting it per batch is what lets
+    /// a throttled, interrupted or stopped round resume at the last completed
+    /// batch instead of re-downloading the whole range.
+    ///
+    /// The row is read fresh on every call: callers hold a snapshot taken at
+    /// the start of the round, and writing that snapshot back would undo the
+    /// progress an earlier batch already persisted.
+    pub fn advance_watermark(mailbox_id: u64, uid: u32) -> BichonResult<()> {
+        let mut mailbox = Self::get(mailbox_id)?;
+        if mailbox.highest_uid.is_some_and(|current| current >= uid) {
+            return Ok(());
+        }
+        mailbox.highest_uid = Some(uid);
+        Self::batch_upsert(&[mailbox])
+    }
+
     pub fn clean(account_id: u64) -> BichonResult<()> {
         let mailboxes =
             filter_impl::<MailBox, _>(DB_MANAGER.db(), move |m| m.account_id == account_id)?;
@@ -216,5 +240,78 @@ impl From<&NameAttribute<'_>> for Attribute {
             }
             _ => Attribute::new(AttributeEnum::Unknown, None),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Once;
+
+    // The helpers read the process-global DB, so seed the same shared test
+    // root the other DB-backed tests use. Assertions are scoped to the
+    // mailbox ids each test creates.
+    static TEST_ENV: Once = Once::new();
+
+    fn init_test_env() {
+        TEST_ENV.call_once(|| {
+            let root = crate::test_support::unique_test_root("bichon-core-test");
+            std::env::set_var("BICHON_ROOT_DIR", &root);
+            std::env::set_var("BICHON_ENCRYPT_PASSWORD", "test-password");
+            let _ = &*crate::settings::cli::SETTINGS;
+            let _ = &*crate::database::manager::DB_MANAGER;
+        });
+    }
+
+    fn mailbox(id: u64, highest_uid: Option<u32>) -> MailBox {
+        MailBox {
+            id,
+            account_id: 9_410_000,
+            name: format!("watermark-{id}"),
+            exists: 42,
+            uid_validity: Some(7),
+            highest_uid,
+            ..Default::default()
+        }
+    }
+
+    /// The per-batch cursor must never move backwards: a retried batch, an
+    /// out-of-order write or a stale snapshot must not make the next round
+    /// re-fetch (or skip) mail.
+    #[tokio::test]
+    async fn advance_watermark_only_moves_forward() {
+        init_test_env();
+        let id = 9_410_001;
+        MailBox::batch_insert(&[mailbox(id, None)]).unwrap();
+
+        MailBox::advance_watermark(id, 30).unwrap();
+        assert_eq!(MailBox::get(id).unwrap().highest_uid, Some(30));
+
+        MailBox::advance_watermark(id, 12).unwrap();
+        assert_eq!(
+            MailBox::get(id).unwrap().highest_uid,
+            Some(30),
+            "an earlier batch must not regress the cursor"
+        );
+
+        MailBox::advance_watermark(id, 60).unwrap();
+        assert_eq!(MailBox::get(id).unwrap().highest_uid, Some(60));
+    }
+
+    /// The helper re-reads the row before writing, so it preserves the fields
+    /// a round-start snapshot does not carry (or carries stale).
+    #[tokio::test]
+    async fn advance_watermark_preserves_the_rest_of_the_row() {
+        init_test_env();
+        let id = 9_410_002;
+        MailBox::batch_insert(&[mailbox(id, Some(100))]).unwrap();
+
+        MailBox::advance_watermark(id, 130).unwrap();
+
+        let after = MailBox::get(id).unwrap();
+        assert_eq!(after.highest_uid, Some(130));
+        assert_eq!(after.uid_validity, Some(7));
+        assert_eq!(after.exists, 42);
+        assert_eq!(after.name, format!("watermark-{id}"));
     }
 }

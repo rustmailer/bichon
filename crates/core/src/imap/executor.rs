@@ -590,6 +590,12 @@ impl ImapExecutor {
                 FolderStatus::Downloading,
                 None,
             )?;
+            // Resume cursor: this batch is fully processed, and every UID of a
+            // later batch is greater than this batch's maximum (the list was
+            // sorted before batching). Persisting it here means a throttled or
+            // broken round resumes at the last completed batch instead of
+            // re-downloading the whole range.
+            MailBox::advance_watermark(mailbox.id, batch.2)?;
         }
 
         DownloadState::update_folder_progress(
@@ -1034,6 +1040,10 @@ impl ImapExecutor {
                         FolderStatus::Downloading,
                         None,
                     )?;
+                    // Resume cursor, as in `fetch_new_mail_with_before`: the
+                    // batch is fully processed and no later batch contains a
+                    // smaller UID, so an interrupted round resumes here.
+                    MailBox::advance_watermark(mailbox.id, batch.2)?;
                     tracing::debug!(
                         "[account {}][mailbox {}] fetch_new_mail: batch {}/{} done ({} processed)",
                         account.id,
@@ -1726,11 +1736,19 @@ pub fn compress_uid_list(nums: Vec<u32>) -> String {
 }
 
 /// Splits a sorted list of unique UIDs into compressed sequence-set batches.
-/// Returns `Vec<(sequence_set_string, batch_count)>`.
+/// Returns `Vec<(sequence_set_string, batch_count, highest_uid_in_batch)>`.
+///
+/// The input MUST be sorted ascending — every caller sorts the UID list before
+/// calling. The chunks are slices of that one ascending list, so every UID of a
+/// later batch is greater than every UID of an earlier one. That is what makes
+/// the batch maximum a safe resume cursor: after a fully processed batch the
+/// download loops persist it as the folder's watermark
+/// (`MailBox::advance_watermark`), so an interrupted round resumes at the last
+/// completed batch instead of re-downloading the whole range.
 pub fn generate_uid_sequence_hashset(
     unique_nums: Vec<u32>,
     chunk_size: usize,
-) -> Vec<(String, u64)> {
+) -> Vec<(String, u64, u32)> {
     assert!(!unique_nums.is_empty());
 
     let mut result = Vec::new();
@@ -1738,8 +1756,10 @@ pub fn generate_uid_sequence_hashset(
 
     for chunk in nums.chunks(chunk_size) {
         let size = chunk.len() as u64;
+        // Never empty: `chunks` only yields non-empty slices.
+        let highest_uid = *chunk.last().expect("chunk is non-empty");
         let compressed = compress_uid_list(chunk.to_vec());
-        result.push((compressed, size));
+        result.push((compressed, size, highest_uid));
     }
 
     result
@@ -1981,6 +2001,7 @@ mod test {
         assert_eq!(batches.len(), 1);
         assert_eq!(batches[0].0, "1:3");
         assert_eq!(batches[0].1, 3);
+        assert_eq!(batches[0].2, 3);
     }
 
     #[test]
@@ -1989,10 +2010,32 @@ mod test {
         assert_eq!(batches.len(), 3);
         assert_eq!(batches[0].0, "1:2");
         assert_eq!(batches[0].1, 2);
+        assert_eq!(batches[0].2, 2);
         assert_eq!(batches[1].0, "3:4");
         assert_eq!(batches[1].1, 2);
+        assert_eq!(batches[1].2, 4);
         assert_eq!(batches[2].0, "5");
         assert_eq!(batches[2].1, 1);
+        assert_eq!(batches[2].2, 5);
+    }
+
+    /// The download loops persist each batch's maximum UID as the folder's
+    /// resume cursor, which is only sound because the list is sorted before
+    /// batching: every UID of a later batch is greater than every UID of an
+    /// earlier one. A batch maximum is therefore a contiguous cursor.
+    #[test]
+    fn batch_maxima_are_strictly_ascending() {
+        // Gaps mirror expunged/oversized UIDs, which are excluded before
+        // batching and must not influence the ordering.
+        let batches = generate_uid_sequence_hashset(vec![2, 5, 9, 10, 11, 40, 41], 3);
+        assert_eq!(batches.len(), 3);
+        let maxima: Vec<u32> = batches.iter().map(|b| b.2).collect();
+        assert_eq!(maxima, vec![9, 40, 41]);
+        assert!(
+            maxima.windows(2).all(|w| w[0] < w[1]),
+            "batch maxima must be strictly ascending: {maxima:?}"
+        );
+        assert_eq!(batches[1].0, "10:11,40");
     }
 
     // ── filter_before_date ─────────────────────────────────────────

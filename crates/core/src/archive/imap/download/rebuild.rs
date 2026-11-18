@@ -32,25 +32,68 @@ use crate::{
     raise_error,
     store::tantivy::{attachment::ATTACHMENT_MANAGER, envelope::ENVELOPE_MANAGER},
 };
+use std::collections::HashMap;
 
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
+
+/// The account's mailbox rows as they are before the remote listing overwrites
+/// them, keyed by name.
+fn existing_rows(account_id: u64) -> BichonResult<HashMap<String, MailBox>> {
+    Ok(MailBox::list_all(account_id)?
+        .into_iter()
+        .map(|mailbox| (mailbox.name.clone(), mailbox))
+        .collect())
+}
+
+/// Whether the local archive of this folder belongs to the same UIDVALIDITY
+/// generation as the server's, i.e. whether its `uid` values can be compared
+/// with the server's. After a UIDVALIDITY change the old numbers mean nothing.
+fn same_generation(previous: &HashMap<String, MailBox>, remote: &MailBox) -> bool {
+    previous
+        .get(&remote.name)
+        .is_some_and(|old| old.uid_validity == remote.uid_validity)
+}
+
+/// Remote rows with the watermarks this account already had. This path runs
+/// whenever the download state is missing (fresh data dir, restore, wiped
+/// state); a blind insert would reset every `highest_uid` to `None` and make
+/// the full enumeration re-download an archive that is already complete.
+fn preserve_watermarks(
+    remote_mailboxes: &[MailBox],
+    previous: &HashMap<String, MailBox>,
+) -> Vec<MailBox> {
+    remote_mailboxes
+        .iter()
+        .map(|mailbox| {
+            let mut row = mailbox.clone();
+            if same_generation(previous, mailbox) {
+                row.highest_uid = previous
+                    .get(&mailbox.name)
+                    .and_then(|old| old.highest_uid);
+            }
+            row
+        })
+        .collect()
+}
 
 pub async fn rebuild_cache(
     account: &AccountModel,
     remote_mailboxes: &[MailBox],
     token: CancellationToken,
 ) -> BichonResult<()> {
-    MailBox::batch_insert(remote_mailboxes)?;
+    let previous = existing_rows(account.id)?;
+    let mailboxes = preserve_watermarks(remote_mailboxes, &previous);
+    MailBox::batch_insert(&mailboxes)?;
     DownloadState::init_folder_details(
         account.id,
-        remote_mailboxes.iter().map(|m| m.name.clone()).collect(),
+        mailboxes.iter().map(|m| m.name.clone()).collect(),
     )?;
 
     let mut has_error = false;
     let mut last_err = None;
 
-    for mailbox in remote_mailboxes {
+    for mailbox in &mailboxes {
         if token.is_cancelled() {
             DownloadState::update_session_status(
                 account.id,
@@ -74,6 +117,7 @@ pub async fn rebuild_cache(
             )?;
             continue;
         }
+        let skip_archived = same_generation(&previous, mailbox);
         let account = account.clone();
         let mailbox = mailbox.clone();
 
@@ -88,7 +132,7 @@ pub async fn rebuild_cache(
             }
         };
 
-        match fetch_and_save_full_mailbox(&account, &mailbox, token.clone()).await {
+        match fetch_and_save_full_mailbox(&account, &mailbox, skip_archived, token.clone()).await {
             Ok(new_highest_uid) => {
                 // Only persist a watermark when the folder actually
                 // completed: Ok(None) means the download broke mid-way (or
@@ -127,16 +171,18 @@ pub async fn rebuild_cache_by_date(
     direction: FetchDirection,
     token: CancellationToken,
 ) -> BichonResult<()> {
-    MailBox::batch_insert(remote_mailboxes)?;
+    let previous = existing_rows(account.id)?;
+    let mailboxes = preserve_watermarks(remote_mailboxes, &previous);
+    MailBox::batch_insert(&mailboxes)?;
     DownloadState::init_folder_details(
         account.id,
-        remote_mailboxes.iter().map(|m| m.name.clone()).collect(),
+        mailboxes.iter().map(|m| m.name.clone()).collect(),
     )?;
 
     let mut has_error = false;
     let mut last_err = None;
 
-    for mailbox in remote_mailboxes {
+    for mailbox in &mailboxes {
         if token.is_cancelled() {
             DownloadState::update_session_status(
                 account.id,
@@ -161,6 +207,7 @@ pub async fn rebuild_cache_by_date(
             )?;
             continue;
         }
+        let skip_archived = same_generation(&previous, mailbox);
         let account = account.clone();
         let mailbox = mailbox.clone();
         let date = date.to_string();
@@ -176,8 +223,15 @@ pub async fn rebuild_cache_by_date(
                 continue;
             }
         };
-        match fetch_and_save_by_date(&account, date.as_str(), &mailbox, direction, token.clone())
-            .await
+        match fetch_and_save_by_date(
+            &account,
+            date.as_str(),
+            &mailbox,
+            direction,
+            skip_archived,
+            token.clone(),
+        )
+        .await
         {
             Ok(new_highest_uid) => {
                 // Only persist a watermark when the folder actually
@@ -240,7 +294,9 @@ pub async fn rebuild_mailbox_cache(
         return Ok(None);
     }
 
-    let result = fetch_and_save_full_mailbox(account, remote_mailbox, token).await?;
+    // This is a rebuild of one mailbox: the local envelopes were just deleted,
+    // so there is nothing archived to skip.
+    let result = fetch_and_save_full_mailbox(account, remote_mailbox, false, token).await?;
     Ok(result)
 }
 
@@ -275,6 +331,67 @@ pub async fn rebuild_mailbox_cache_by_date(
         return Ok(None);
     }
 
-    let result = fetch_and_save_by_date(account, date, remote, direction, token).await?;
+    // This is a rebuild of one mailbox: the local envelopes were just deleted,
+    // so there is nothing archived to skip.
+    let result = fetch_and_save_by_date(account, date, remote, direction, false, token).await?;
     Ok(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn row(name: &str, uid_validity: Option<u32>, highest_uid: Option<u32>) -> MailBox {
+        MailBox {
+            id: 1,
+            account_id: 1,
+            name: name.to_string(),
+            uid_validity,
+            highest_uid,
+            ..Default::default()
+        }
+    }
+
+    fn previous(rows: Vec<MailBox>) -> HashMap<String, MailBox> {
+        rows.into_iter()
+            .map(|mailbox| (mailbox.name.clone(), mailbox))
+            .collect()
+    }
+
+    /// Losing the download state (fresh data dir, restore) must not make the
+    /// next round re-download an archive that is already complete. The
+    /// watermark is kept and the full enumeration skips archived UIDs.
+    #[test]
+    fn watermarks_survive_a_state_loss_when_the_generation_is_unchanged() {
+        let previous = previous(vec![row("INBOX", Some(1), Some(180))]);
+        let remote = vec![row("INBOX", Some(1), None)];
+
+        let rows = preserve_watermarks(&remote, &previous);
+
+        assert_eq!(rows[0].highest_uid, Some(180));
+        assert!(same_generation(&previous, &rows[0]));
+    }
+
+    /// After a UIDVALIDITY change the archived `uid` values belong to the old
+    /// generation: keeping the watermark or skipping by UID would skip
+    /// genuinely missing mail.
+    #[test]
+    fn a_uidvalidity_change_discards_the_old_watermark_and_skipping() {
+        let previous = previous(vec![row("INBOX", Some(1), Some(180))]);
+        let remote = vec![row("INBOX", Some(2), None)];
+
+        let rows = preserve_watermarks(&remote, &previous);
+
+        assert_eq!(rows[0].highest_uid, None);
+        assert!(!same_generation(&previous, &rows[0]));
+    }
+
+    /// A folder the account never synced has nothing to preserve or skip.
+    #[test]
+    fn a_new_folder_starts_without_a_watermark() {
+        let rows = preserve_watermarks(&[row("New", Some(5), None)], &HashMap::new());
+
+        assert_eq!(rows[0].highest_uid, None);
+        assert!(!same_generation(&HashMap::new(), &rows[0]));
+    }
 }

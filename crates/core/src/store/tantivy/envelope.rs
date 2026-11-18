@@ -1601,6 +1601,64 @@ impl IndexManager {
         Ok(result)
     }
 
+    /// UIDs archived for `mailbox_id` that fall inside `[from, to]`.
+    ///
+    /// The full-download paths enumerate the whole (date-filtered) mailbox.
+    /// When part of it is already archived — a lost download state, a restore,
+    /// a round that was interrupted after the bodies were stored but before
+    /// the watermark was written — they can ask which UIDs are already present
+    /// and skip re-downloading those bodies, which the content-hash dedup would
+    /// discard anyway. The range query is bounded by the documents in the UID
+    /// interval, not by the mailbox size.
+    pub fn get_uids_in_range(
+        &self,
+        account_id: u64,
+        mailbox_id: u64,
+        from: u32,
+        to: u32,
+    ) -> BichonResult<HashSet<u32>> {
+        let mut uids = HashSet::new();
+        if from > to {
+            return Ok(uids);
+        }
+        let fields = SchemaTools::email_fields();
+        let range = RangeQuery::new(
+            Bound::Included(Term::from_field_u64(fields.f_uid, from as u64)),
+            Bound::Included(Term::from_field_u64(fields.f_uid, to as u64)),
+        );
+        let query = BooleanQuery::new(vec![
+            (
+                Occur::Must,
+                self.mailbox_query(account_id, mailbox_id),
+            ),
+            (Occur::Must, Box::new(range)),
+        ]);
+
+        let searcher = self.create_searcher()?;
+        let docs = searcher
+            .search(&query, &DocSetCollector)
+            .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;
+        for address in docs {
+            let doc = searcher
+                .doc::<TantivyDocument>(address)
+                .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;
+            if let Some(uid) = doc.get_first(fields.f_uid).and_then(|v| v.as_u64()) {
+                if uid >= from as u64 && uid <= to as u64 {
+                    uids.insert(uid as u32);
+                }
+            }
+        }
+        tracing::debug!(
+            "[account {}][mailbox {}] get_uids_in_range({}, {}) = {} archived",
+            account_id,
+            mailbox_id,
+            from,
+            to,
+            uids.len()
+        );
+        Ok(uids)
+    }
+
     pub fn get_account_stats(&self, account_id: u64) -> BichonResult<AccountStats> {
         let searcher = self.create_searcher()?;
         let query = self.account_query(account_id);
