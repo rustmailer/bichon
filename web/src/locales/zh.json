@@ -2744,7 +2744,7 @@
       "errInvalidUrl": "服务器地址无效",
       "errTimeout": "目录服务未及时响应",
       "errTls": "TLS 握手失败——请检查证书和 StartTLS 设置",
-      "inactiveHint": "配置已完整，但 LDAP 登录尚未生效——请启用它，或确认当前许可证是 Enterprise。",
+      "inactiveHint": "配置已完整，但 LDAP 登录尚未生效——请启用它，或确认当前许可证是 Pro 或 Enterprise。",
       "invalidFilter": "过滤器必须包含 {username}",
       "invalidTimeout": "请输入 1 到 300 秒之间的超时时间",
       "invalidUrl": "请使用 ldap:// 或 ldaps:// 地址",

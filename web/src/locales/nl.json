@@ -2744,7 +2744,7 @@
       "errInvalidUrl": "De server-URL is ongeldig",
       "errTimeout": "De directory antwoordde niet op tijd",
       "errTls": "De TLS-handshake is mislukt — controleer het certificaat en de StartTLS-instelling",
-      "inactiveHint": "De configuratie is compleet, maar LDAP-aanmelding is nog niet actief — schakel het in of controleer of de huidige licentie Enterprise is.",
+      "inactiveHint": "De configuratie is compleet, maar LDAP-aanmelding is nog niet actief — schakel het in of controleer of de huidige licentie Pro of Enterprise is.",
       "invalidFilter": "Het filter moet {username} bevatten",
       "invalidTimeout": "Voer een time-out tussen 1 en 300 seconden in",
       "invalidUrl": "Gebruik een ldap://- of ldaps://-URL",

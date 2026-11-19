@@ -2744,7 +2744,7 @@
       "errInvalidUrl": "伺服器位址無效",
       "errTimeout": "目錄服務未及時回應",
       "errTls": "TLS 握手失敗——請檢查憑證和 StartTLS 設定",
-      "inactiveHint": "設定已完整，但 LDAP 登入尚未生效——請啟用它，或確認目前授權為 Enterprise。",
+      "inactiveHint": "設定已完整，但 LDAP 登入尚未生效——請啟用它，或確認目前授權為 Pro 或 Enterprise。",
       "invalidFilter": "篩選器必須包含 {username}",
       "invalidTimeout": "請輸入 1 到 300 秒之間的逾時時間",
       "invalidUrl": "請使用 ldap:// 或 ldaps:// 位址",

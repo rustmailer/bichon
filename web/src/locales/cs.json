@@ -2744,7 +2744,7 @@
       "errInvalidUrl": "Adresa serveru není platná",
       "errTimeout": "Adresář včas neodpověděl",
       "errTls": "TLS handshake selhal — zkontrolujte certifikát a nastavení StartTLS",
-      "inactiveHint": "Konfigurace je úplná, ale přihlašování přes LDAP zatím není aktivní — zapněte je nebo zkontrolujte, že licence je Enterprise.",
+      "inactiveHint": "Konfigurace je úplná, ale přihlašování přes LDAP zatím není aktivní — zapněte je nebo zkontrolujte, že licence je Pro nebo Enterprise.",
       "invalidFilter": "Filtr musí obsahovat {username}",
       "invalidTimeout": "Zadejte časový limit mezi 1 a 300 sekundami",
       "invalidUrl": "Použijte adresu ldap:// nebo ldaps://",

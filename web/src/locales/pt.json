@@ -2744,7 +2744,7 @@
       "errInvalidUrl": "A URL do servidor é inválida",
       "errTimeout": "O diretório não respondeu a tempo",
       "errTls": "O handshake TLS falhou — verifique o certificado e a configuração StartTLS",
-      "inactiveHint": "A configuração está completa, mas o login LDAP ainda não está ativo — ative-o ou verifique se a licença atual é Enterprise.",
+      "inactiveHint": "A configuração está completa, mas o login LDAP ainda não está ativo — ative-o ou verifique se a licença atual é Pro ou Enterprise.",
       "invalidFilter": "O filtro deve conter {username}",
       "invalidTimeout": "Informe um tempo limite entre 1 e 300 segundos",
       "invalidUrl": "Use uma URL ldap:// ou ldaps://",

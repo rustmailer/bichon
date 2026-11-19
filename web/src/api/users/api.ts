@@ -155,7 +155,7 @@ export const login = async (data: Record<string, any>) => {
     return response.data;
 };
 
-// Enterprise: synchronous LDAP/AD bind. Returns the same LoginResult shape as
+// Pro/Enterprise: synchronous LDAP/AD bind. Returns the same LoginResult shape as
 // `login`, so the form reuses its existing token + MFA handling unchanged.
 export const ldapLogin = async (data: { username: string; password: string }) => {
     const response = await axiosInstance.post<LoginResult>(`api/auth/ldap/login`, data);

@@ -2744,7 +2744,7 @@
       "errInvalidUrl": "L'URL du serveur n'est pas valide",
       "errTimeout": "L'annuaire n'a pas répondu à temps",
       "errTls": "La poignée de main TLS a échoué — vérifiez le certificat et le réglage StartTLS",
-      "inactiveHint": "La configuration est complète, mais la connexion LDAP n'est pas encore active — activez-la ou vérifiez que la licence actuelle est Enterprise.",
+      "inactiveHint": "La configuration est complète, mais la connexion LDAP n'est pas encore active — activez-la ou vérifiez que la licence actuelle est Pro ou Enterprise.",
       "invalidFilter": "Le filtre doit contenir {username}",
       "invalidTimeout": "Saisissez un délai entre 1 et 300 secondes",
       "invalidUrl": "Utilisez une URL ldap:// ou ldaps://",

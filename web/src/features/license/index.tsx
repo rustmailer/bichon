@@ -88,7 +88,7 @@ export default function LicensePage() {
       setLicenseText('')
       queryClient.invalidateQueries({ queryKey: ['license-status'] })
       // The sidebar and every edition gate read `/features` (cached for the
-      // life of the page). Without this, Enterprise items — LDAP, SIEM,
+      // life of the page). Without this, paid items — LDAP, SIEM,
       // compliance — stay hidden until a full reload after an upgrade.
       queryClient.invalidateQueries({ queryKey: ['edition'] })
     },

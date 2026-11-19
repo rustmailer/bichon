@@ -2744,7 +2744,7 @@
       "errInvalidUrl": "Palvelimen URL ei kelpaa",
       "errTimeout": "Hakemisto ei vastannut ajoissa",
       "errTls": "TLS-kättely epäonnistui — tarkista varmenne ja StartTLS-asetus",
-      "inactiveHint": "Määritys on valmis, mutta LDAP-kirjautuminen ei ole vielä käytössä — ota se käyttöön tai varmista, että lisenssi on Enterprise.",
+      "inactiveHint": "Määritys on valmis, mutta LDAP-kirjautuminen ei ole vielä käytössä — ota se käyttöön tai varmista, että lisenssi on Pro tai Enterprise.",
       "invalidFilter": "Suodattimen on sisällettävä {username}",
       "invalidTimeout": "Anna aikakatkaisu välillä 1–300 sekuntia",
       "invalidUrl": "Käytä ldap://- tai ldaps://-osoitetta",

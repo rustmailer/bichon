@@ -2744,7 +2744,7 @@
       "errInvalidUrl": "서버 URL이 올바르지 않습니다",
       "errTimeout": "디렉터리가 제시간에 응답하지 않았습니다",
       "errTls": "TLS 핸드셰이크에 실패했습니다. 인증서와 StartTLS 설정을 확인하십시오",
-      "inactiveHint": "구성이 완료되었지만 LDAP 로그인이 아직 활성화되지 않았습니다. 활성화하거나 현재 라이선스가 Enterprise인지 확인하십시오.",
+      "inactiveHint": "구성이 완료되었지만 LDAP 로그인이 아직 활성화되지 않았습니다. 활성화하거나 현재 라이선스가 Pro 또는 Enterprise인지 확인하십시오.",
       "invalidFilter": "필터에 {username}이 포함되어야 합니다",
       "invalidTimeout": "1~300초 사이의 시간 제한을 입력하십시오",
       "invalidUrl": "ldap:// 또는 ldaps:// URL을 사용하십시오",

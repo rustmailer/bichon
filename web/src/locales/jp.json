@@ -2744,7 +2744,7 @@
       "errInvalidUrl": "サーバー URL が無効です",
       "errTimeout": "ディレクトリが時間内に応答しませんでした",
       "errTls": "TLS ハンドシェイクに失敗しました。証明書と StartTLS 設定を確認してください",
-      "inactiveHint": "設定は完了していますが、LDAP サインインはまだ有効ではありません。有効にするか、現在のライセンスが Enterprise か確認してください。",
+      "inactiveHint": "設定は完了していますが、LDAP サインインはまだ有効ではありません。有効にするか、現在のライセンスが Pro または Enterprise か確認してください。",
       "invalidFilter": "フィルターに {username} を含める必要があります",
       "invalidTimeout": "1～300 秒のタイムアウトを入力してください",
       "invalidUrl": "ldap:// または ldaps:// の URL を使用してください",

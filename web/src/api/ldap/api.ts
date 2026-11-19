@@ -1,6 +1,6 @@
 import axiosInstance from '@/api/axiosInstance'
 
-// LDAP/AD configuration (Enterprise). Mirrors the scrubbed `LdapConfigView`
+// LDAP/AD configuration (Pro and Enterprise). Mirrors the scrubbed `LdapConfigView`
 // returned by GET /api/v1/ldap — the bind password never leaves the server.
 
 export interface LdapConfigView {

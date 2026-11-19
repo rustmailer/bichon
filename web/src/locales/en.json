@@ -2744,7 +2744,7 @@
       "errInvalidUrl": "The server URL is invalid",
       "errTimeout": "The directory did not answer in time",
       "errTls": "The TLS handshake failed — check the certificate and the StartTLS setting",
-      "inactiveHint": "The configuration is complete but LDAP sign-in is not active yet — enable it, or check that the current license is Enterprise.",
+      "inactiveHint": "The configuration is complete but LDAP sign-in is not active yet — enable it, or check that the current license is Pro or Enterprise.",
       "invalidFilter": "The filter must contain {username}",
       "invalidTimeout": "Enter a timeout between 1 and 300 seconds",
       "invalidUrl": "Use an ldap:// or ldaps:// URL",

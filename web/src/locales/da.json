@@ -2744,7 +2744,7 @@
       "errInvalidUrl": "Serveradressen er ugyldig",
       "errTimeout": "Katalogtjenesten svarede ikke i tide",
       "errTls": "TLS-handshaket mislykkedes — kontroller certifikatet og StartTLS-indstillingen",
-      "inactiveHint": "Konfigurationen er komplet, men LDAP-login er ikke aktiv endnu — aktivér den, eller kontroller at licensen er Enterprise.",
+      "inactiveHint": "Konfigurationen er komplet, men LDAP-login er ikke aktiv endnu — aktivér den, eller kontroller at licensen er Pro eller Enterprise.",
       "invalidFilter": "Filteret skal indeholde {username}",
       "invalidTimeout": "Angiv en timeout mellem 1 og 300 sekunder",
       "invalidUrl": "Brug en ldap://- eller ldaps://-adresse",

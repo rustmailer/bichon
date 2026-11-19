@@ -2744,7 +2744,7 @@
       "errInvalidUrl": "Adres serwera jest nieprawidłowy",
       "errTimeout": "Katalog nie odpowiedział na czas",
       "errTls": "Uzgadnianie TLS nie powiodło się — sprawdź certyfikat i ustawienie StartTLS",
-      "inactiveHint": "Konfiguracja jest kompletna, ale logowanie LDAP nie jest jeszcze aktywne — włącz je lub sprawdź, czy licencja to Enterprise.",
+      "inactiveHint": "Konfiguracja jest kompletna, ale logowanie LDAP nie jest jeszcze aktywne — włącz je lub sprawdź, czy licencja to Pro lub Enterprise.",
       "invalidFilter": "Filtr musi zawierać {username}",
       "invalidTimeout": "Podaj limit czasu od 1 do 300 sekund",
       "invalidUrl": "Użyj adresu ldap:// lub ldaps://",

@@ -166,7 +166,7 @@ export function UserAuthForm({ className, ...props }: UserAuthFormProps) {
     )
   }, [t])
 
-  // Enterprise LDAP: the form authenticates against the directory (default
+  // Pro LDAP: the form authenticates against the directory (default
   // when enabled); a link lets the user fall back to their local account.
   const [loginMode, setLoginMode] = useState<'local' | 'ldap'>(
     ldapEnabled ? 'ldap' : 'local',
@@ -403,7 +403,7 @@ export function UserAuthForm({ className, ...props }: UserAuthFormProps) {
                 </>
               )}
 
-              {/* `ldapEnabled` already means "Enterprise + flag set" — the
+              {/* `ldapEnabled` already means "Pro/Enterprise + flag set" — the
                   server folds the license into it so the form can never
                   offer a mode the login endpoint would refuse. */}
               {ldapEnabled && (

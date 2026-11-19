@@ -82,7 +82,7 @@ function valuesFromConfig(cfg: LdapConfigView): LdapFormValues {
 
 export function LdapSettings() {
   const { t } = useTranslation()
-  const { isEnterprise, isLoading: editionLoading } = useEdition()
+  const { isPro, isLoading: editionLoading } = useEdition()
   const { canGlobal, isLoading: userLoading } = useCurrentUser()
   const queryClient = useQueryClient()
 
@@ -99,7 +99,7 @@ export function LdapSettings() {
   )
 
   const canManage =
-    isEnterprise && (canGlobal('system:root') || canGlobal('user:manage'))
+    isPro && (canGlobal('system:root') || canGlobal('user:manage'))
 
   const passwordAvailable = Boolean(current?.bind_password_set) && !clearSecret
   const passwordAvailableRef = useRef(passwordAvailable)
@@ -612,7 +612,7 @@ export function LdapSettings() {
             <p className='text-sm text-muted-foreground'>
               {t(
                 'settings.ldap.inactiveHint',
-                'The configuration is complete but LDAP sign-in is not active yet — enable it, or check that the current license is Enterprise.',
+                'The configuration is complete but LDAP sign-in is not active yet — enable it, or check that the current license is Pro or Enterprise.',
               )}
             </p>
           )}

@@ -580,18 +580,18 @@ pub enum Event {
         leaf_count: u64,
         tsa_url: Option<String>,
     },
-    /// A user signed in with an LDAP/AD bind (Enterprise).
+    /// A user signed in with an LDAP/AD bind (Pro and Enterprise).
     LdapLogin {
         user: String,
         ip: Option<IpAddr>,
     },
-    /// An LDAP/AD bind-based sign-in attempt failed (Enterprise).
+    /// An LDAP/AD bind-based sign-in attempt failed (Pro and Enterprise).
     LdapLoginFailed {
         username: String,
         ip: Option<IpAddr>,
         reason: String,
     },
-    /// Enterprise: an admin changed the LDAP/AD configuration from the WebUI.
+    /// Pro/Enterprise: an admin changed the LDAP/AD configuration from the WebUI.
     /// The service-account password is never part of the event.
     LdapConfigUpdated { user: String },
     /// The SIEM webhook forwarder gave up on a batch after exhausting its
