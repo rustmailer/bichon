@@ -2715,7 +2715,7 @@
       "description": "Accept the copy of every message your mail system delivers to a journal address — before it reaches the recipient. This is the only way to archive a message an employee receives and deletes between two syncs. Deliveries arrive without SMTP authentication, so only the source network is accepted, and only over TLS.",
       "enabled": "Journaling enabled",
       "enabledHint": "When off, the SMTP server behaves exactly as it did before: no peer is treated as a journal source.",
-      "forbidden": "SMTP journaling requires the Pro or Enterprise edition and the system:root permission.",
+      "forbidden": "SMTP journaling requires the Enterprise edition and the system:root permission.",
       "loadFailed": "Failed to load the SMTP journaling configuration",
       "save": "Save journaling",
       "saveFailed": "Failed to save the SMTP journaling configuration",

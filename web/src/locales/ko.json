@@ -2715,7 +2715,7 @@
       "description": "메일 시스템이 저널 주소로 전달하는 모든 메시지의 사본을 수신자에게 도달하기 전에 받습니다. 직원이 수신한 뒤 두 번의 동기화 사이에 삭제한 메시지를 아카이브할 수 있는 유일한 방법입니다. 전달은 SMTP 인증 없이 이루어지므로, TLS를 통한 지정된 원본 네트워크에서만 수락합니다.",
       "enabled": "저널링 사용",
       "enabledHint": "꺼져 있으면 SMTP 서버는 이전과 완전히 동일하게 동작하며, 어떤 발신자도 저널 소스로 취급되지 않습니다.",
-      "forbidden": "SMTP 저널링에는 Pro 또는 Enterprise 에디션과 system:root 권한이 필요합니다.",
+      "forbidden": "SMTP 저널링에는 Enterprise 에디션과 system:root 권한이 필요합니다.",
       "loadFailed": "SMTP 저널링 구성을 불러오지 못했습니다",
       "save": "저널링 저장",
       "saveFailed": "SMTP 저널링 설정을 저장하지 못했습니다",

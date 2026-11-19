@@ -2715,7 +2715,7 @@
       "description": "Přijímat kopii každé zprávy, kterou váš poštovní systém doručí na žurnálovou adresu — dříve, než dorazí k příjemci. Jen tak lze archivovat zprávu, kterou zaměstnanec přijme a smaže mezi dvěma synchronizacemi. Doručení přicházejí bez ověření SMTP, proto se přijímá pouze ze zdrojové sítě a pouze přes TLS.",
       "enabled": "Žurnálování zapnuto",
       "enabledHint": "Pokud je vypnuto, server SMTP se chová přesně jako dříve: žádný protějšek se nepovažuje za zdroj žurnálu.",
-      "forbidden": "Žurnálování SMTP vyžaduje edici Pro nebo Enterprise a oprávnění system:root.",
+      "forbidden": "SMTP journaling vyžaduje edici Enterprise a oprávnění system:root.",
       "loadFailed": "Konfiguraci žurnálování SMTP se nepodařilo načíst",
       "save": "Uložit žurnálování",
       "saveFailed": "Konfiguraci žurnálování SMTP se nepodařilo uložit",

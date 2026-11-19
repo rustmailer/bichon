@@ -2715,7 +2715,7 @@
       "description": "Przyjmuj kopię każdej wiadomości, którą system pocztowy dostarcza na adres journaling — zanim dotrze ona do odbiorcy. To jedyny sposób na zarchiwizowanie wiadomości, którą pracownik otrzymuje i usuwa między dwiema synchronizacjami. Dostawy przychodzą bez uwierzytelniania SMTP, więc akceptowana jest wyłącznie sieć źródłowa i tylko przez TLS.",
       "enabled": "Journaling włączony",
       "enabledHint": "Wyłączone: serwer SMTP zachowuje się dokładnie jak wcześniej — żadne źródło nie jest traktowane jako journaling.",
-      "forbidden": "Journaling SMTP wymaga edycji Pro lub Enterprise oraz uprawnienia system:root.",
+      "forbidden": "Dziennikowanie SMTP wymaga edycji Enterprise i uprawnienia system:root.",
       "loadFailed": "Nie udało się wczytać konfiguracji journalingu SMTP",
       "save": "Zapisz journaling",
       "saveFailed": "Nie udało się zapisać konfiguracji journaling SMTP",

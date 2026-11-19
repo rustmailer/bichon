@@ -2715,7 +2715,7 @@
       "description": "接收邮件系统投递到日记地址的每一封邮件副本——在送达收件人之前。这是唯一能归档“员工收信后在两次同步之间删除”的邮件的方式。投递不经过 SMTP 认证，因此只接受来自指定源网段的连接，且必须使用 TLS。",
       "enabled": "启用日记转发",
       "enabledHint": "关闭时，SMTP 服务行为与之前完全一致：不会把任何来源当作日记投递。",
-      "forbidden": "SMTP Journaling 需要 Pro 或企业版以及 system:root 权限。",
+      "forbidden": "SMTP 归档需要企业版以及 system:root 权限。",
       "loadFailed": "加载 SMTP Journaling 配置失败",
       "save": "保存日记配置",
       "saveFailed": "SMTP 日记配置保存失败",

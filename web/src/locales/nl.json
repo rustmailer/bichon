@@ -2715,7 +2715,7 @@
       "description": "Accepteer de kopie van elk bericht dat uw e-mailsysteem aan een journaladres aflevert — voordat het de ontvanger bereikt. Dit is de enige manier om een bericht te archiveren dat een medewerker ontvangt en tussen twee synchronisaties verwijdert. Leveringen komen zonder SMTP-authenticatie binnen, dus alleen het bronnetwerk wordt geaccepteerd, en alleen via TLS.",
       "enabled": "Journaling ingeschakeld",
       "enabledHint": "Uit: de SMTP-server gedraagt zich precies als voorheen — geen enkele bron wordt als journal behandeld.",
-      "forbidden": "SMTP-journaling vereist de Pro- of Enterprise-editie en de machtiging system:root.",
+      "forbidden": "SMTP-journaling vereist de Enterprise-editie en de machtiging system:root.",
       "loadFailed": "SMTP-journaling-configuratie laden mislukt",
       "save": "Journaling opslaan",
       "saveFailed": "Opslaan van de SMTP-journalingconfiguratie mislukt",

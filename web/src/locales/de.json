@@ -2715,7 +2715,7 @@
       "description": "Nimmt die Kopie jeder Nachricht an, die Ihr Mailsystem an eine Journal-Adresse zustellt — bevor sie den Empfänger erreicht. Nur so wird eine Nachricht archiviert, die ein Beschäftigter zwischen zwei Abgleichen empfängt und löscht. Zustellungen erfolgen ohne SMTP-Authentifizierung; deshalb wird ausschließlich das Quellnetz und ausschließlich TLS akzeptiert.",
       "enabled": "Journaling aktiviert",
       "enabledHint": "Wenn aus: Der SMTP-Server verhält sich exakt wie zuvor — kein Absender wird als Journal-Quelle behandelt.",
-      "forbidden": "SMTP-Journaling erfordert die Pro- oder Enterprise-Edition und die Berechtigung system:root.",
+      "forbidden": "SMTP-Journaling erfordert die Enterprise-Edition und die Berechtigung system:root.",
       "loadFailed": "SMTP-Journaling-Konfiguration konnte nicht geladen werden",
       "save": "Journaling speichern",
       "saveFailed": "SMTP-Journaling-Konfiguration konnte nicht gespeichert werden",

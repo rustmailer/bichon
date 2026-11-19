@@ -2715,7 +2715,7 @@
       "description": "接收郵件系統投遞到日誌地址的每一封郵件副本——在送達收件人之前。這是唯一能封存「員工收信後在兩次同步之間刪除」的郵件的方式。投遞不經過 SMTP 認證，因此只接受來自指定來源網段的連線，且必須使用 TLS。",
       "enabled": "啟用日誌轉送",
       "enabledHint": "關閉時，SMTP 服務行為與之前完全一致：不會把任何來源當作日誌投遞。",
-      "forbidden": "SMTP Journaling 需要 Pro 或 Enterprise 版本以及 system:root 權限。",
+      "forbidden": "SMTP 歸檔需要企業版以及 system:root 權限。",
       "loadFailed": "載入 SMTP Journaling 設定失敗",
       "save": "儲存日誌設定",
       "saveFailed": "SMTP 日誌設定儲存失敗",

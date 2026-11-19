@@ -2715,7 +2715,7 @@
       "description": "Modtag kopien af hver meddelelse, som dit mailsystem leverer til en journaladresse — før den når modtageren. Det er den eneste måde at arkivere en meddelelse, som en medarbejder modtager og sletter mellem to synkroniseringer. Leverancer ankommer uden SMTP-godkendelse, så kun kildenettet accepteres, og kun via TLS.",
       "enabled": "Journalføring aktiveret",
       "enabledHint": "Fra: SMTP-serveren opfører sig nøjagtigt som før — ingen afsender behandles som journal-kilde.",
-      "forbidden": "SMTP-journalføring kræver Pro- eller Enterprise-udgaven og tilladelsen system:root.",
+      "forbidden": "SMTP-journaling kræver Enterprise-udgaven og tilladelsen system:root.",
       "loadFailed": "Kunne ikke indlæse SMTP-journalføringskonfiguration",
       "save": "Gem journalføring",
       "saveFailed": "SMTP-journalføringskonfigurationen kunne ikke gemmes",

@@ -2715,7 +2715,7 @@
       "description": "Accepte la copie de chaque message que votre système de messagerie remet à une adresse de journalisation — avant qu'il n'atteigne le destinataire. C'est le seul moyen d'archiver un message qu'un employé reçoit et supprime entre deux synchronisations. Les remises arrivent sans authentification SMTP : seul le réseau source est accepté, et uniquement en TLS.",
       "enabled": "Journalisation activée",
       "enabledHint": "Désactivé, le serveur SMTP se comporte exactement comme avant : aucune source n'est traitée comme un journal.",
-      "forbidden": "La journalisation SMTP nécessite l'édition Pro ou Enterprise et la permission system:root.",
+      "forbidden": "Le journaling SMTP nécessite l'édition Enterprise et l'autorisation system:root.",
       "loadFailed": "Échec du chargement de la configuration de journalisation SMTP",
       "save": "Enregistrer la journalisation",
       "saveFailed": "Échec de l'enregistrement de la configuration de journalisation SMTP",

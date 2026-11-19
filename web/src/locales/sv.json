@@ -2715,7 +2715,7 @@
       "description": "Ta emot kopian av varje meddelande som ditt mailsystem levererar till en journaladress — innan det når mottagaren. Det är det enda sättet att arkivera ett meddelande som en anställd tar emot och raderar mellan två synkroniseringar. Leveranser kommer utan SMTP-autentisering, så endast källnätverket accepteras, och endast via TLS.",
       "enabled": "Journalföring aktiverad",
       "enabledHint": "Av: SMTP-servern beter sig exakt som tidigare — ingen avsändare behandlas som journalkälla.",
-      "forbidden": "SMTP-journalföring kräver Pro- eller Enterprise-utgåvan och behörigheten system:root.",
+      "forbidden": "SMTP-journaling kräver Enterprise-utgåvan och behörigheten system:root.",
       "loadFailed": "Det gick inte att läsa in SMTP-journalföringskonfigurationen",
       "save": "Spara journalföring",
       "saveFailed": "Det gick inte att spara SMTP-journalföringskonfigurationen",

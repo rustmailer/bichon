@@ -2715,7 +2715,7 @@
       "description": "Accetta la copia di ogni messaggio che il sistema di posta consegna a un indirizzo di journaling, prima che raggiunga il destinatario. È l'unico modo per archiviare un messaggio che un dipendente riceve ed elimina tra due sincronizzazioni. Le consegne arrivano senza autenticazione SMTP: sono accettate solo dalla rete di origine e solo su TLS.",
       "enabled": "Journaling attivo",
       "enabledHint": "Disattivato, il server SMTP si comporta esattamente come prima: nessuna sorgente è trattata come journal.",
-      "forbidden": "Il journaling SMTP richiede l'edizione Pro o Enterprise e il permesso system:root.",
+      "forbidden": "Il journaling SMTP richiede l'edizione Enterprise e l'autorizzazione system:root.",
       "loadFailed": "Impossibile caricare la configurazione di journaling SMTP",
       "save": "Salva journaling",
       "saveFailed": "Salvataggio della configurazione del journaling SMTP non riuscito",

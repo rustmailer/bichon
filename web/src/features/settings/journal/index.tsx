@@ -39,7 +39,7 @@ import { useToast } from '@/hooks/use-toast'
 export function JournalSettings() {
   const { t } = useTranslation()
   const { toast } = useToast()
-  const { isPro, isEnterprise } = useEdition()
+  const { isEnterprise } = useEdition()
   const { canGlobal } = useCurrentUser()
 
   const [loading, setLoading] = useState(true)
@@ -51,10 +51,15 @@ export function JournalSettings() {
   // visible before saving rather than silently dropped.
   const [cidrs, setCidrs] = useState('')
 
-  const canManage =
-    (isPro || isEnterprise) && canGlobal('system:root')
+  const canManage = isEnterprise && canGlobal('system:root')
 
   useEffect(() => {
+    // Journaling is Enterprise-only. A direct URL visit on a Pro license must
+    // show the permission notice, not fire a request that is guaranteed a 403.
+    if (!canManage) {
+      setLoading(false)
+      return
+    }
     let mounted = true
     getJournalConfig()
       .then((cfg) => {
@@ -80,7 +85,7 @@ export function JournalSettings() {
     return () => {
       mounted = false
     }
-  }, [t, toast])
+  }, [canManage, t, toast])
 
   const handleSave = async () => {
     setSaving(true)
@@ -127,7 +132,7 @@ export function JournalSettings() {
       <div className='w-full p-6 text-muted-foreground'>
         {t(
           'settings.journal.forbidden',
-          'SMTP journaling requires the Pro or Enterprise edition and the system:root permission.',
+          'SMTP journaling requires the Enterprise edition and the system:root permission.',
         )}
       </div>
     )

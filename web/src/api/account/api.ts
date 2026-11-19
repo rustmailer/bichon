@@ -29,7 +29,7 @@ export interface MinimalAccount {
     /** Storage type: `View` is a read-only filtered view and holds no mail of
      *  its own; `NoSync` with a `kind` is the journal archive. */
     account_type: AccountType;
-    /** Special role (Pro/Enterprise): present only on the journal archive. */
+    /** Special role (Enterprise journaling): present only on the journal archive. */
     kind?: 'journal';
 }
 
@@ -224,7 +224,7 @@ export interface AccountModel {
     hold_reason?: string | null;
     hold_placed_by?: number | null;
     hold_placed_at?: number | null;
-    /** Special role (Pro/Enterprise). `null`/absent = ordinary account. */
+    /** Special role (Enterprise journaling). `null`/absent = ordinary account. */
     kind?: AccountKind | null;
     /** Sources and per-source filters of a `View` account. */
     view?: ViewConfig | null;

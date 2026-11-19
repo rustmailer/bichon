@@ -107,7 +107,7 @@ export default function Settings() {
       href: '/settings/journal',
       icon: <Inbox size={18} />,
       group: groups.integrations,
-      visible: (isPro || isEnterprise) && canGlobal('system:root'),
+      visible: isEnterprise && canGlobal('system:root'),
     },
     {
       title: t('settings.sidebar.proxy'),

@@ -20,13 +20,13 @@
 //
 // Community edition: NoopHandler — journaling is not available and the SMTP
 // server behaves exactly as it did before this module existed.
-// Pro/Enterprise: an implementation that accepts deliveries from allow-listed
+// Enterprise: an implementation that accepts deliveries from allow-listed
 // peers into a dedicated journal account.
 //
 // **Why an extension point rather than a community feature.** Journaling is a
 // compliance capability: it decides what mail is *provably complete*, and it
 // must be configured by a compliance administrator, audited, and kept separate
-// from the IMAP-synced mailboxes. All of that belongs to the Pro/Enterprise
+// from the IMAP-synced mailboxes. All of that belongs to the Enterprise
 // layer; the community SMTP server only needs to ask three questions (is this
 // peer allowed / is this the journal target / archive these bytes) and must
 // keep its old behaviour byte for byte when the answers are "no".
@@ -58,7 +58,7 @@ pub struct JournalIngest {
     pub duplicate: bool,
 }
 
-/// The Pro/Enterprise implementation of journal-based ingestion.
+/// The Enterprise implementation of journal-based ingestion.
 pub trait JournalHandler: Send + Sync {
     /// Whether journaling is configured. False means the SMTP server must not
     /// consult any other method here — in particular it must not start
@@ -120,7 +120,7 @@ impl JournalHandler for NoopHandler {
 static HANDLER: LazyLock<RwLock<Arc<dyn JournalHandler>>> =
     LazyLock::new(|| RwLock::new(Arc::new(NoopHandler)));
 
-/// Called by Pro/Enterprise at startup to replace the noop default.
+/// Called by the commercial server at startup to replace the noop default.
 ///
 /// An `Arc` rather than a boxed reference because [`ingest`] must keep the
 /// handler alive across an `await` without holding the lock — a read guard is

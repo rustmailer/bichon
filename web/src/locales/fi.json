@@ -2715,7 +2715,7 @@
       "description": "Vastaanota kopio jokaisesta viestistä, jonka sähköpostijärjestelmäsi toimittaa journal-osoitteeseen — ennen kuin se saavuttaa vastaanottajan. Tämä on ainoa tapa arkistoida viesti, jonka työntekijä vastaanottaa ja poistaa kahden synkronoinnin välissä. Toimitukset saapuvat ilman SMTP-todennusta, joten vain lähiverkko hyväksytään ja vain TLS:n yli.",
       "enabled": "Journalointi käytössä",
       "enabledHint": "Pois: SMTP-palvelin toimii täsmälleen kuten ennenkin — mitään lähettäjää ei käsitellä journal-lähteenä.",
-      "forbidden": "SMTP-journalointi vaatii Pro- tai Enterprise-version ja system:root-oikeuden.",
+      "forbidden": "SMTP-journalointi edellyttää Enterprise-versiota ja system:root-käyttöoikeutta.",
       "loadFailed": "SMTP-journaloinnin määrityksen lataaminen epäonnistui",
       "save": "Tallenna journalointi",
       "saveFailed": "SMTP-journaloinnin asetusten tallennus epäonnistui",
