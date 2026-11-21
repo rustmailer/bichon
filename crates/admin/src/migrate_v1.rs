@@ -329,7 +329,7 @@ pub fn handle_migrate_v1(theme: &ColorfulTheme) {
          Do not delete anything until you have verified the new server works correctly.",
             email_count,
             attach_count,
-            "https://github.com/rustmailer/bichon/wiki/Bichon-v2.x-Migration-Guide"
+            "https://bichon.rustmailer.com/docs/migration/migrate-v1"
         ))
         .green()
         .bold()

@@ -210,7 +210,7 @@ fn render_page(edition: &str, heading: &str, steps: &[String]) -> String {
             {steps}
     </ol>
     <p class="footer">Version {version} &middot;
-       Documentation: https://github.com/rustmailer/bichon/wiki</p>
+       Documentation: https://bichon.rustmailer.com/docs</p>
   </main>
 </body>
 </html>

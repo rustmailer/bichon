@@ -89,7 +89,7 @@ pub async fn run() -> BichonResult<()> {
             error!("Available migration options:");
             error!("  - Legacy v0.3.7 → v2.x (via v1.x)");
             error!("  - v1.x (Fjall) → v2.x (bichon-blob)");
-            error!("Documentation: https://github.com/rustmailer/bichon/wiki");
+            error!("Documentation: https://bichon.rustmailer.com/docs/migration");
             // Do NOT exit here: under Docker an exited container cannot be
             // `docker exec`-ed into, which is the only practical way to run
             // the interactive bichon-admin migration. Stay in maintenance
@@ -104,7 +104,7 @@ pub async fn run() -> BichonResult<()> {
                     "Other installs: run `./bichon-admin` from the install directory.".to_string(),
                     "Both migrations are non-destructive: legacy files are never modified.".to_string(),
                     "After the migration completes, restart the service (e.g. `docker restart <bichon-container>`).".to_string(),
-                    "Documentation: https://github.com/rustmailer/bichon/wiki".to_string(),
+                    "Documentation: https://bichon.rustmailer.com/docs/migration".to_string(),
                 ],
             )
             .await;
