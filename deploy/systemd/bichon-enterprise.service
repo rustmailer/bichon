@@ -1,0 +1,118 @@
+# Bichon — Enterprise Edition (bichon-enterprise)
+#
+# Same layout as the Community unit, with the Enterprise server binary. Assumed:
+#
+#   /opt/bichon/bichon-enterprise    server binary, Enterprise edition
+#   /opt/bichon/bichon-cli           optional HTTP client (works against any edition)
+#   /opt/bichon/bichon-admin         Pro/Enterprise admin tool (restore, drill, audit replay)
+#   /etc/bichon/bichon.env           configuration, same keys as env/bichon.env
+#   /var/lib/bichon                  data root (created by systemd)
+#
+# One-time setup:
+#
+#   useradd --system --home-dir /var/lib/bichon --shell /usr/sbin/nologin bichon
+#   install -d -o root -g root -m 0755 /opt/bichon
+#   # copy the binaries into /opt/bichon, then:
+#   install -d -o root -g bichon -m 0750 /etc/bichon
+#   install -m 0640 -o root -g bichon env/bichon.env /etc/bichon/bichon.env
+#   install -m 0644 bichon-enterprise.service /etc/systemd/system/bichon-enterprise.service
+#   systemctl daemon-reload && systemctl enable --now bichon-enterprise
+#
+# License: the Enterprise build starts in a 30-day trial (compliance suite
+# included) without one. Install the license either through the WebUI
+# (Settings → License) or by placing the file in the data root before the
+# first start:
+#
+#   install -m 0600 -o bichon -g bichon license.txt /var/lib/bichon/license.txt
+#
+# The server persists the validated license and its state next to it
+# (license-state.json); both live in BICHON_ROOT_DIR and are covered by backups.
+#
+# Edition-specific listeners, all disabled by default, set in the env file:
+#
+#   BICHON_ENABLE_IMAP=true   IMAP on 10143, IMAPS on 10993
+#   BICHON_ENABLE_MCP=true    MCP server for AI assistants
+#
+# Edit /etc/bichon/bichon.env before the first start. Two settings matter:
+#
+#   BICHON_ROOT_DIR=/var/lib/bichon
+#       The sample env/bichon.env uses /data/bichon-data, which is the Docker
+#       layout. Either change it to /var/lib/bichon here, or keep it and add
+#       ReadWritePaths=/data/bichon-data below — ProtectSystem=strict makes
+#       everything outside the data root read-only.
+#
+#   BICHON_ENCRYPT_PASSWORD_FILE=/etc/bichon/encrypt-password
+#       Never run production on the built-in default password. The file must
+#       be readable by the bichon group (mode 0640).
+#
+# Offline operations (restore, migration, reindex, audit replay) require the
+# server to be stopped, because they open the data root directly:
+#
+#   systemctl stop bichon-enterprise && /opt/bichon/bichon-admin
+#
+# Note the Enterprise admin binary and the Community one share the name
+# bichon-admin; install only the one that matches the edition on the host.
+
+[Unit]
+Description=Bichon Email Archiving (Enterprise Edition)
+Documentation=https://bichon.rustmailer.com/docs
+After=network-online.target
+Wants=network-online.target
+# All editions share the same data root; running two at once corrupts it.
+Conflicts=bichon.service bichon-pro.service
+
+[Service]
+Type=simple
+User=bichon
+Group=bichon
+SyslogIdentifier=bichon-enterprise
+WorkingDirectory=/opt/bichon
+
+EnvironmentFile=/etc/bichon/bichon.env
+
+ExecStart=/opt/bichon/bichon-enterprise
+
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=30s
+KillSignal=SIGTERM
+
+# systemd creates the data root with the right ownership and keeps it writable
+# even under ProtectSystem=strict.
+StateDirectory=bichon
+StateDirectoryMode=0750
+UMask=0027
+
+# Anything the server must write outside the data root belongs here: local
+# backup targets, a custom BICHON_INDEX_DIR / BICHON_DATA_DIR, certificates you
+# rotate in place. One line per path, comma-separated.
+#ReadWritePaths=/mnt/backup
+
+LimitNOFILE=65536
+LimitCORE=0
+
+# Hardening. The service needs no privileges: HTTP 15630, SMTP 2525, IMAP 10143
+# and IMAPS 10993 are all above 1024. If you enable SMTP on port 25, add:
+#   AmbientCapabilities=CAP_NET_BIND_SERVICE
+#   CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictNamespaces=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+RemoveIPC=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+[Install]
+WantedBy=multi-user.target

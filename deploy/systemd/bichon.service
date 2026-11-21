@@ -1,0 +1,103 @@
+# Bichon — Community Edition (bichon-server)
+#
+# Assumed layout:
+#
+#   /opt/bichon/bichon-server        server binary (from the release archive)
+#   /opt/bichon/bichon-cli           optional HTTP client
+#   /opt/bichon/bichon-admin         offline migration / restore tool
+#   /etc/bichon/bichon.env           configuration, same keys as env/bichon.env
+#   /var/lib/bichon                  data root (created by systemd)
+#
+# One-time setup:
+#
+#   useradd --system --home-dir /var/lib/bichon --shell /usr/sbin/nologin bichon
+#   install -d -o root -g root -m 0755 /opt/bichon
+#   # copy the binaries into /opt/bichon, then:
+#   install -d -o root -g bichon -m 0750 /etc/bichon
+#   install -m 0640 -o root -g bichon env/bichon.env /etc/bichon/bichon.env
+#   install -m 0644 bichon.service /etc/systemd/system/bichon.service
+#   systemctl daemon-reload && systemctl enable --now bichon
+#
+# Edit /etc/bichon/bichon.env before the first start. Two settings matter:
+#
+#   BICHON_ROOT_DIR=/var/lib/bichon
+#       The sample env/bichon.env uses /data/bichon-data, which is the Docker
+#       layout. Either change it to /var/lib/bichon here, or keep it and add
+#       ReadWritePaths=/data/bichon-data below — ProtectSystem=strict makes
+#       everything outside the data root read-only.
+#
+#   BICHON_ENCRYPT_PASSWORD_FILE=/etc/bichon/encrypt-password
+#       Never run production on the built-in default password. The file must
+#       be readable by the bichon group (mode 0640).
+#
+# Offline operations (migration, restore, reindex) require the server to be
+# stopped, because they open the data root directly:
+#
+#   systemctl stop bichon && /opt/bichon/bichon-admin
+#
+# Every setting below also exists as a --bichon-* CLI flag, which takes
+# precedence over the environment file (`bichon-server --help`).
+
+[Unit]
+Description=Bichon Email Archiving (Community Edition)
+Documentation=https://bichon.rustmailer.com/docs
+After=network-online.target
+Wants=network-online.target
+# All editions share the same data root; running two at once corrupts it.
+Conflicts=bichon-pro.service bichon-enterprise.service
+
+[Service]
+Type=simple
+User=bichon
+Group=bichon
+SyslogIdentifier=bichon
+WorkingDirectory=/opt/bichon
+
+EnvironmentFile=/etc/bichon/bichon.env
+
+ExecStart=/opt/bichon/bichon-server
+
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=30s
+KillSignal=SIGTERM
+
+# systemd creates the data root with the right ownership and keeps it writable
+# even under ProtectSystem=strict.
+StateDirectory=bichon
+StateDirectoryMode=0750
+UMask=0027
+
+# Anything the server must write outside the data root belongs here: local
+# backup targets, a custom BICHON_INDEX_DIR / BICHON_DATA_DIR, certificates you
+# rotate in place. One line per path, comma-separated.
+#ReadWritePaths=/mnt/backup
+
+LimitNOFILE=65536
+LimitCORE=0
+
+# Hardening. The service needs no privileges: the HTTP port (15630) and the
+# SMTP port (2525) are both above 1024. If you enable SMTP on port 25, add:
+#   AmbientCapabilities=CAP_NET_BIND_SERVICE
+#   CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictNamespaces=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+RemoveIPC=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+[Install]
+WantedBy=multi-user.target
