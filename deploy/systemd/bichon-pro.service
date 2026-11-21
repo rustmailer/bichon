@@ -18,11 +18,17 @@
 #   install -m 0644 bichon-pro.service /etc/systemd/system/bichon-pro.service
 #   systemctl daemon-reload && systemctl enable --now bichon-pro
 #
-# License: the Pro build starts in a 30-day trial without one. Install the
-# license either through the WebUI (Settings → License) or by placing the file
-# in the data root before the first start:
+# License: the Pro build starts a 30-day trial on the first launch, so the
+# service needs no license to start. Install one afterwards in the WebUI
+# (Settings → License) or via POST /api/v1/license/upload; it is validated and
+# applied immediately, without a restart.
 #
-#   # before the first start, when systemd has not created the data root yet:
+# Placing license.txt in the data root is the offline-recovery path (restored
+# data root, or WebUI unreachable), not the normal install. The license is
+# bound to the machine ID in <root>/instance-id, which is created on the first
+# start, so a fresh deployment cannot have a license before it has started
+# once. If you do place a file before systemd has created the data root:
+#
 #   install -d -o bichon -g bichon -m 0750 /var/lib/bichon
 #   install -m 0600 -o bichon -g bichon license.txt /var/lib/bichon/license.txt
 #
