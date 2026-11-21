@@ -71,8 +71,11 @@ export default function ComplianceConfigPage() {
         if (!mounted) return
         setCurrent(cfg)
         setAuditRetentionDays(cfg.audit_retention_days?.toString() ?? '')
+        // The schedule interval has no env/CLI default any more: the server
+        // falls back to 24h when nothing is stored, so the field shows that
+        // number instead of an empty box with an invisible default.
         setIntegrityScheduleHours(
-          cfg.integrity_schedule_hours?.toString() ?? ''
+          cfg.integrity_schedule_hours?.toString() ?? '24'
         )
         setIntegrityRetentionDays(
           cfg.integrity_retention_days?.toString() ?? ''
@@ -278,7 +281,7 @@ export default function ComplianceConfigPage() {
                 integrityScheduleHours,
                 setIntegrityScheduleHours,
                 'integrityScheduleHours',
-                current?.integrity_schedule_hours?.toString() ?? '',
+                current?.integrity_schedule_hours?.toString() ?? '24',
                 'integrityScheduleHoursHint',
               )}
               {numField(
