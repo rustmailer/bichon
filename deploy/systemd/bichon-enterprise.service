@@ -23,6 +23,8 @@
 # (Settings → License) or by placing the file in the data root before the
 # first start:
 #
+#   # before the first start, when systemd has not created the data root yet:
+#   install -d -o bichon -g bichon -m 0750 /var/lib/bichon
 #   install -m 0600 -o bichon -g bichon license.txt /var/lib/bichon/license.txt
 #
 # The server persists the validated license and its state next to it
@@ -59,7 +61,10 @@ Documentation=https://bichon.rustmailer.com/docs
 After=network-online.target
 Wants=network-online.target
 # All editions share the same data root; running two at once corrupts it.
+# Conflicts= stops the other edition; After= makes this unit wait until it has
+# fully exited (Conflicts= alone only sends SIGTERM and does not wait).
 Conflicts=bichon.service bichon-pro.service
+After=bichon.service bichon-pro.service
 
 [Service]
 Type=simple

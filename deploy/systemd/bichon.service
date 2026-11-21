@@ -44,7 +44,10 @@ Documentation=https://bichon.rustmailer.com/docs
 After=network-online.target
 Wants=network-online.target
 # All editions share the same data root; running two at once corrupts it.
+# Conflicts= stops the other edition; After= makes this unit wait until it has
+# fully exited (Conflicts= alone only sends SIGTERM and does not wait).
 Conflicts=bichon-pro.service bichon-enterprise.service
+After=bichon-pro.service bichon-enterprise.service
 
 [Service]
 Type=simple
