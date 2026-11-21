@@ -67,6 +67,8 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
+import { FixedHeader } from '@/components/layout/fixed-header'
+import { Main } from '@/components/layout/main'
 import { TableSkeleton } from '@/components/table-skeleton'
 import { OP_LABELS } from './op-labels'
 import { TargetDescription } from './target-description'
@@ -329,12 +331,17 @@ export default function ApprovalsPage() {
 
   if (!canView) {
     return (
-      <div className='w-full p-6 text-muted-foreground'>
-        {t(
-          'approvals.forbidden',
-          'The approval queue requires the Enterprise edition and the approval:decide or compliance:audit permission.'
-        )}
-      </div>
+      <>
+        <FixedHeader />
+        <Main>
+          <div className='w-full p-6 text-muted-foreground'>
+            {t(
+              'approvals.forbidden',
+              'The approval queue requires the Enterprise edition and the approval:decide or compliance:audit permission.'
+            )}
+          </div>
+        </Main>
+      </>
     )
   }
 
@@ -346,345 +353,364 @@ export default function ApprovalsPage() {
   const now = Date.now()
 
   return (
-    <div className='w-full space-y-6 px-4'>
-      <div className='space-y-2'>
-        <h2 className='flex items-center gap-2 text-xl font-bold'>
-          <ShieldCheck className='h-5 w-5 text-primary' />
-          {t('approvals.title', 'Approvals awaiting a second person')}
-          {rows.length > 0 && <Badge variant='secondary'>{rows.length}</Badge>}
-        </h2>
-        <p className='text-sm text-muted-foreground'>
-          {t(
-            'approvals.description',
-            'Dual control is on: these operations do not take effect until someone other than the requester approves them. Nothing has happened to their targets yet.'
-          )}
-        </p>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('approvals.pendingTitle', 'Pending requests')}</CardTitle>
-          <CardDescription>
-            {t(
-              'approvals.pendingHint',
-              'The requester cannot approve their own request — not even an administrator. The break-glass override, available to a system:root administrator after the configured wait, is the one exception.'
-            )}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {isLoading && !pending ? (
-            <TableSkeleton rows={3} />
-          ) : rows.length === 0 ? (
-            <div className='flex items-center justify-center gap-2 rounded border p-6 text-muted-foreground'>
-              <Check className='h-4 w-4' />
-              {t('approvals.noPending', 'Nothing is awaiting approval.')}
-            </div>
-          ) : (
-            <Table className='text-xs'>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{t('approvals.operation', 'Operation')}</TableHead>
-                  <TableHead>{t('approvals.target', 'Target')}</TableHead>
-                  <TableHead>{t('approvals.reason', 'Reason')}</TableHead>
-                  <TableHead>
-                    {t('approvals.requestedBy', 'Requested by')}
-                  </TableHead>
-                  <TableHead>{t('approvals.expires', 'Expires in')}</TableHead>
-                  {canDecide && (
-                    <TableHead className='text-right'>
-                      {t('approvals.actions', 'Actions')}
-                    </TableHead>
-                  )}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((req) => (
-                  <TableRow key={req.id}>
-                    <TableCell className='whitespace-nowrap font-medium'>
-                      {OP_LABELS[req.op]
-                        ? t(OP_LABELS[req.op].key, OP_LABELS[req.op].fallback)
-                        : req.op}
-                    </TableCell>
-                    <TableCell className='max-w-xs'>
-                      <TargetDescription target={req.target} />
-                    </TableCell>
-                    <TableCell className='max-w-md'>
-                      <span className='line-clamp-2 text-muted-foreground'>
-                        {req.reason || '—'}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <div>{req.requested_by_name}</div>
-                      <div className='text-muted-foreground'>
-                        {formatTime(req.requested_at)}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {req.expires_at ? (
-                        <span className='flex items-center gap-1 text-muted-foreground'>
-                          <Clock className='h-3 w-3' />
-                          {formatRemaining(req.expires_at, now)}
-                        </span>
-                      ) : (
-                        '—'
-                      )}
-                    </TableCell>
-                    {canDecide && (
-                      <TableCell className='text-right'>
-                        <div className='flex justify-end gap-2'>
-                          <Button
-                            variant='outline'
-                            size='sm'
-                            disabled={busy}
-                            onClick={() => setRejecting(req)}
-                          >
-                            <X className='mr-1 h-3.5 w-3.5' />
-                            {t('approvals.reject', 'Reject')}
-                          </Button>
-                          <Button
-                            size='sm'
-                            disabled={busy}
-                            onClick={() => setApproving(req)}
-                          >
-                            {approveMutation.isPending ? (
-                              <Loader2 className='mr-1 h-3.5 w-3.5 animate-spin' />
-                            ) : (
-                              <Check className='mr-1 h-3.5 w-3.5' />
-                            )}
-                            {t('approvals.approve', 'Approve')}
-                          </Button>
-                          {canBreakGlass && (
-                            <Button
-                              variant='destructive'
-                              size='sm'
-                              disabled={busy}
-                              title={t(
-                                'approvals.breakGlassHint',
-                                'Approve alone, without a second person. Only available after the configured wait, and recorded as a break-glass override.'
-                              )}
-                              onClick={() => setBreakingGlass(req)}
-                            >
-                              <TriangleAlert className='mr-1 h-3.5 w-3.5' />
-                              {t('approvals.breakGlass', 'Break-glass')}
-                            </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    )}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* ---- Approve ---- */}
-      <AlertDialog
-        open={approving !== null}
-        onOpenChange={(open) => !open && setApproving(null)}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {approving && OP_LABELS[approving.op]
-                ? t('approvals.approveTitle', 'Approve "{{op}}"?', {
-                    op: t(
-                      OP_LABELS[approving.op].key,
-                      OP_LABELS[approving.op].fallback
-                    ),
-                  })
-                : t('approvals.approveTitle', 'Approve this request?')}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {t(
-                'approvals.approveDesc',
-                'The operation runs immediately and is irreversible. It is recorded against your name.'
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          {approving && (
-            <div className='rounded-md border bg-muted/40 p-3'>
-              <TargetDescription target={approving.target} />
-            </div>
-          )}
+    <>
+      <FixedHeader />
+      <Main>
+        <div className='mx-auto w-full max-w-7xl space-y-6 px-4'>
           <div className='space-y-2'>
-            <Label className='text-xs'>
-              {approving?.op === OP_GDPR_ERASURE
-                ? t(
-                    'approvals.approveNoteRequired',
-                    'Note (required — state the basis)'
-                  )
-                : t('approvals.approveNote', 'Note (optional)')}
-            </Label>
-            <Textarea
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder={t(
-                'approvals.approveNotePlaceholder',
-                'e.g. Confirmed with legal'
+            <h2 className='flex items-center gap-2 text-xl font-bold'>
+              <ShieldCheck className='h-5 w-5 text-primary' />
+              {t('approvals.title', 'Approvals awaiting a second person')}
+              {rows.length > 0 && (
+                <Badge variant='secondary'>{rows.length}</Badge>
               )}
-              rows={2}
-            />
-            {/* The server refuses an unexplained erasure decision. Saying so
-                here is the difference between "the button is broken" and "I
-                have to write down why". */}
-            {approving?.op === OP_GDPR_ERASURE && (
-              <p className='text-xs text-muted-foreground'>
+            </h2>
+            <p className='text-sm text-muted-foreground'>
+              {t(
+                'approvals.description',
+                'Dual control is on: these operations do not take effect until someone other than the requester approves them. Nothing has happened to their targets yet.'
+              )}
+            </p>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>
+                {t('approvals.pendingTitle', 'Pending requests')}
+              </CardTitle>
+              <CardDescription>
                 {t(
-                  'approvals.approveNoteRequiredHint',
-                  'This is recorded as the basis on which the erasure is lawful. It cannot be left empty.'
+                  'approvals.pendingHint',
+                  'The requester cannot approve their own request — not even an administrator. The break-glass override, available to a system:root administrator after the configured wait, is the one exception.'
                 )}
-              </p>
-            )}
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={
-                approveMutation.isPending ||
-                (approving?.op === OP_GDPR_ERASURE && !note.trim())
-              }
-              onClick={() =>
-                approving &&
-                approveMutation.mutate({
-                  id: approving.id,
-                  note: note.trim() || undefined,
-                })
-              }
-            >
-              <Check className='mr-1 h-4 w-4' />
-              {approveMutation.isPending
-                ? t('approvals.approving', 'Approving…')
-                : t('approvals.confirmApprove', 'Approve and execute')}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {isLoading && !pending ? (
+                <TableSkeleton rows={3} />
+              ) : rows.length === 0 ? (
+                <div className='flex items-center justify-center gap-2 rounded border p-6 text-muted-foreground'>
+                  <Check className='h-4 w-4' />
+                  {t('approvals.noPending', 'Nothing is awaiting approval.')}
+                </div>
+              ) : (
+                <Table className='text-xs'>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>
+                        {t('approvals.operation', 'Operation')}
+                      </TableHead>
+                      <TableHead>{t('approvals.target', 'Target')}</TableHead>
+                      <TableHead>{t('approvals.reason', 'Reason')}</TableHead>
+                      <TableHead>
+                        {t('approvals.requestedBy', 'Requested by')}
+                      </TableHead>
+                      <TableHead>
+                        {t('approvals.expires', 'Expires in')}
+                      </TableHead>
+                      {canDecide && (
+                        <TableHead className='text-right'>
+                          {t('approvals.actions', 'Actions')}
+                        </TableHead>
+                      )}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {rows.map((req) => (
+                      <TableRow key={req.id}>
+                        <TableCell className='whitespace-nowrap font-medium'>
+                          {OP_LABELS[req.op]
+                            ? t(
+                                OP_LABELS[req.op].key,
+                                OP_LABELS[req.op].fallback
+                              )
+                            : req.op}
+                        </TableCell>
+                        <TableCell className='max-w-xs'>
+                          <TargetDescription target={req.target} />
+                        </TableCell>
+                        <TableCell className='max-w-md'>
+                          <span className='line-clamp-2 text-muted-foreground'>
+                            {req.reason || '—'}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <div>{req.requested_by_name}</div>
+                          <div className='text-muted-foreground'>
+                            {formatTime(req.requested_at)}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {req.expires_at ? (
+                            <span className='flex items-center gap-1 text-muted-foreground'>
+                              <Clock className='h-3 w-3' />
+                              {formatRemaining(req.expires_at, now)}
+                            </span>
+                          ) : (
+                            '—'
+                          )}
+                        </TableCell>
+                        {canDecide && (
+                          <TableCell className='text-right'>
+                            <div className='flex justify-end gap-2'>
+                              <Button
+                                variant='outline'
+                                size='sm'
+                                disabled={busy}
+                                onClick={() => setRejecting(req)}
+                              >
+                                <X className='mr-1 h-3.5 w-3.5' />
+                                {t('approvals.reject', 'Reject')}
+                              </Button>
+                              <Button
+                                size='sm'
+                                disabled={busy}
+                                onClick={() => setApproving(req)}
+                              >
+                                {approveMutation.isPending ? (
+                                  <Loader2 className='mr-1 h-3.5 w-3.5 animate-spin' />
+                                ) : (
+                                  <Check className='mr-1 h-3.5 w-3.5' />
+                                )}
+                                {t('approvals.approve', 'Approve')}
+                              </Button>
+                              {canBreakGlass && (
+                                <Button
+                                  variant='destructive'
+                                  size='sm'
+                                  disabled={busy}
+                                  title={t(
+                                    'approvals.breakGlassHint',
+                                    'Approve alone, without a second person. Only available after the configured wait, and recorded as a break-glass override.'
+                                  )}
+                                  onClick={() => setBreakingGlass(req)}
+                                >
+                                  <TriangleAlert className='mr-1 h-3.5 w-3.5' />
+                                  {t('approvals.breakGlass', 'Break-glass')}
+                                </Button>
+                              )}
+                            </div>
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
 
-      {/* ---- Reject ---- */}
-      <AlertDialog
-        open={rejecting !== null}
-        onOpenChange={(open) => !open && setRejecting(null)}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {t('approvals.rejectTitle', 'Reject this request?')}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {t(
-                'approvals.rejectDesc',
-                'Nothing happens to the target and the requester is told why. A reason is required — whoever has to act next needs to know what to fix.'
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className='space-y-2'>
-            <Label className='text-xs'>
-              {t('approvals.rejectNote', 'Reason')}
-              <span className='align-super text-xs text-red-500'>*</span>
-            </Label>
-            <Textarea
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder={t(
-                'approvals.rejectNotePlaceholder',
-                'e.g. This data is still required for case #2026-0417'
-              )}
-              rows={2}
-            />
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-            <AlertDialogAction
-              className='bg-destructive text-destructive-foreground'
-              disabled={rejectMutation.isPending || !note.trim()}
-              onClick={() =>
-                rejecting &&
-                rejectMutation.mutate({ id: rejecting.id, note: note.trim() })
-              }
-            >
-              <X className='mr-1 h-4 w-4' />
-              {rejectMutation.isPending
-                ? t('approvals.rejecting', 'Rejecting…')
-                : t('approvals.confirmReject', 'Reject request')}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* ---- Break-glass ---- */}
-      <AlertDialog
-        open={breakingGlass !== null}
-        onOpenChange={(open) => !open && setBreakingGlass(null)}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {t(
-                'approvals.breakGlassTitle',
-                'Approve alone, without a second person?'
-              )}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {t(
-                'approvals.breakGlassDesc',
-                'This waives the second signature. The operation runs immediately and is irreversible, and the audit log records it as a break-glass override — one person, acting alone. If the approver can be reached, use the normal path instead.'
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          {breakingGlass && (
-            <div className='rounded-md border bg-muted/40 p-3'>
-              <TargetDescription target={breakingGlass.target} />
-            </div>
-          )}
-          <div className='space-y-2'>
-            <Label className='text-xs'>
-              {breakingGlass?.op === OP_GDPR_ERASURE
-                ? t(
-                    'approvals.approveNoteRequired',
-                    'Note (required — state the basis)'
-                  )
-                : t(
-                    'approvals.breakGlassNote',
-                    'Reason (optional, but recorded)'
+          {/* ---- Approve ---- */}
+          <AlertDialog
+            open={approving !== null}
+            onOpenChange={(open) => !open && setApproving(null)}
+          >
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  {approving && OP_LABELS[approving.op]
+                    ? t('approvals.approveTitle', 'Approve "{{op}}"?', {
+                        op: t(
+                          OP_LABELS[approving.op].key,
+                          OP_LABELS[approving.op].fallback
+                        ),
+                      })
+                    : t('approvals.approveTitle', 'Approve this request?')}
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  {t(
+                    'approvals.approveDesc',
+                    'The operation runs immediately and is irreversible. It is recorded against your name.'
                   )}
-            </Label>
-            <Textarea
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder={t(
-                'approvals.breakGlassNotePlaceholder',
-                'e.g. Approver unreachable, release required by court deadline'
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              {approving && (
+                <div className='rounded-md border bg-muted/40 p-3'>
+                  <TargetDescription target={approving.target} />
+                </div>
               )}
-              rows={2}
-            />
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-            <AlertDialogAction
-              className='bg-destructive text-destructive-foreground'
-              disabled={
-                breakGlassMutation.isPending ||
-                (breakingGlass?.op === OP_GDPR_ERASURE && !note.trim())
-              }
-              onClick={() =>
-                breakingGlass &&
-                breakGlassMutation.mutate({
-                  id: breakingGlass.id,
-                  note: note.trim() || undefined,
-                })
-              }
-            >
-              <TriangleAlert className='mr-1 h-4 w-4' />
-              {breakGlassMutation.isPending
-                ? t('approvals.breakingGlass', 'Overriding…')
-                : t('approvals.confirmBreakGlass', 'Override and execute')}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
+              <div className='space-y-2'>
+                <Label className='text-xs'>
+                  {approving?.op === OP_GDPR_ERASURE
+                    ? t(
+                        'approvals.approveNoteRequired',
+                        'Note (required — state the basis)'
+                      )
+                    : t('approvals.approveNote', 'Note (optional)')}
+                </Label>
+                <Textarea
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  placeholder={t(
+                    'approvals.approveNotePlaceholder',
+                    'e.g. Confirmed with legal'
+                  )}
+                  rows={2}
+                />
+                {/* The server refuses an unexplained erasure decision. Saying so
+                    here is the difference between "the button is broken" and "I
+                    have to write down why". */}
+                {approving?.op === OP_GDPR_ERASURE && (
+                  <p className='text-xs text-muted-foreground'>
+                    {t(
+                      'approvals.approveNoteRequiredHint',
+                      'This is recorded as the basis on which the erasure is lawful. It cannot be left empty.'
+                    )}
+                  </p>
+                )}
+              </div>
+              <AlertDialogFooter>
+                <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+                <AlertDialogAction
+                  disabled={
+                    approveMutation.isPending ||
+                    (approving?.op === OP_GDPR_ERASURE && !note.trim())
+                  }
+                  onClick={() =>
+                    approving &&
+                    approveMutation.mutate({
+                      id: approving.id,
+                      note: note.trim() || undefined,
+                    })
+                  }
+                >
+                  <Check className='mr-1 h-4 w-4' />
+                  {approveMutation.isPending
+                    ? t('approvals.approving', 'Approving…')
+                    : t('approvals.confirmApprove', 'Approve and execute')}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
+          {/* ---- Reject ---- */}
+          <AlertDialog
+            open={rejecting !== null}
+            onOpenChange={(open) => !open && setRejecting(null)}
+          >
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  {t('approvals.rejectTitle', 'Reject this request?')}
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  {t(
+                    'approvals.rejectDesc',
+                    'Nothing happens to the target and the requester is told why. A reason is required — whoever has to act next needs to know what to fix.'
+                  )}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <div className='space-y-2'>
+                <Label className='text-xs'>
+                  {t('approvals.rejectNote', 'Reason')}
+                  <span className='align-super text-xs text-red-500'>*</span>
+                </Label>
+                <Textarea
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  placeholder={t(
+                    'approvals.rejectNotePlaceholder',
+                    'e.g. This data is still required for case #2026-0417'
+                  )}
+                  rows={2}
+                />
+              </div>
+              <AlertDialogFooter>
+                <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+                <AlertDialogAction
+                  className='bg-destructive text-destructive-foreground'
+                  disabled={rejectMutation.isPending || !note.trim()}
+                  onClick={() =>
+                    rejecting &&
+                    rejectMutation.mutate({
+                      id: rejecting.id,
+                      note: note.trim(),
+                    })
+                  }
+                >
+                  <X className='mr-1 h-4 w-4' />
+                  {rejectMutation.isPending
+                    ? t('approvals.rejecting', 'Rejecting…')
+                    : t('approvals.confirmReject', 'Reject request')}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
+          {/* ---- Break-glass ---- */}
+          <AlertDialog
+            open={breakingGlass !== null}
+            onOpenChange={(open) => !open && setBreakingGlass(null)}
+          >
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  {t(
+                    'approvals.breakGlassTitle',
+                    'Approve alone, without a second person?'
+                  )}
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  {t(
+                    'approvals.breakGlassDesc',
+                    'This waives the second signature. The operation runs immediately and is irreversible, and the audit log records it as a break-glass override — one person, acting alone. If the approver can be reached, use the normal path instead.'
+                  )}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              {breakingGlass && (
+                <div className='rounded-md border bg-muted/40 p-3'>
+                  <TargetDescription target={breakingGlass.target} />
+                </div>
+              )}
+              <div className='space-y-2'>
+                <Label className='text-xs'>
+                  {breakingGlass?.op === OP_GDPR_ERASURE
+                    ? t(
+                        'approvals.approveNoteRequired',
+                        'Note (required — state the basis)'
+                      )
+                    : t(
+                        'approvals.breakGlassNote',
+                        'Reason (optional, but recorded)'
+                      )}
+                </Label>
+                <Textarea
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  placeholder={t(
+                    'approvals.breakGlassNotePlaceholder',
+                    'e.g. Approver unreachable, release required by court deadline'
+                  )}
+                  rows={2}
+                />
+              </div>
+              <AlertDialogFooter>
+                <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+                <AlertDialogAction
+                  className='bg-destructive text-destructive-foreground'
+                  disabled={
+                    breakGlassMutation.isPending ||
+                    (breakingGlass?.op === OP_GDPR_ERASURE && !note.trim())
+                  }
+                  onClick={() =>
+                    breakingGlass &&
+                    breakGlassMutation.mutate({
+                      id: breakingGlass.id,
+                      note: note.trim() || undefined,
+                    })
+                  }
+                >
+                  <TriangleAlert className='mr-1 h-4 w-4' />
+                  {breakGlassMutation.isPending
+                    ? t('approvals.breakingGlass', 'Overriding…')
+                    : t('approvals.confirmBreakGlass', 'Override and execute')}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
+      </Main>
+    </>
   )
 }
 
