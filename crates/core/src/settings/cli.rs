@@ -150,7 +150,7 @@ pub struct Settings {
         long,
         env,
         default_value = "change-this-default-password-now",
-        help = "Set the encryption password for bichon. Alternatively, you can use --bichon-encrypt-password-file. If both are set, this parameter takes precedence over the file."
+        help = "Set the encryption password for bichon. Alternatively, you can use --bichon-encrypt-password-file. If both are set, the file takes precedence over this parameter."
     )]
     pub bichon_encrypt_password: Option<String>,
 
