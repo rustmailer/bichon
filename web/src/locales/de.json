@@ -3002,6 +3002,14 @@
     "notifications": "Systembenachrichtigungen"
   },
   "systemConfig": {
+    "runtime": {
+      "desc": "In der Datenbank gespeicherte Werte. Sie haben Vorrang vor der Startkonfiguration; Änderungen an Listenern greifen nach einem Neustart.",
+      "invalid": "Einige Werte liegen außerhalb des zulässigen Bereichs. Prüfen Sie die markierten Felder.",
+      "resetDone": "Laufzeit-Überschreibungen gelöscht",
+      "restartRequired": "Dienst neu starten, damit SMTP- und Synchronisierungseinstellungen wirksam werden.",
+      "saved": "Laufzeiteinstellungen gespeichert",
+      "title": "Laufzeiteinstellungen"
+    },
     "sections": {
       "cors": {
         "desc": "Cross-Origin-Zugriffsregeln",

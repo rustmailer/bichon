@@ -3002,6 +3002,14 @@
     "notifications": "System Notifications"
   },
   "systemConfig": {
+    "runtime": {
+      "desc": "Values stored in the database. They win over the startup configuration; listener changes apply after a restart.",
+      "invalid": "Some values are out of range. Check the highlighted fields.",
+      "resetDone": "Runtime overrides cleared",
+      "restartRequired": "Restart the service to apply the SMTP and sync settings.",
+      "saved": "Runtime settings saved",
+      "title": "Runtime settings"
+    },
     "sections": {
       "cors": {
         "desc": "Cross-origin access rules",

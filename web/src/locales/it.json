@@ -3002,6 +3002,14 @@
     "notifications": "Notifiche di sistema"
   },
   "systemConfig": {
+    "runtime": {
+      "desc": "Valori salvati nel database. Hanno la precedenza sulla configurazione di avvio; le modifiche ai listener si applicano dopo un riavvio.",
+      "invalid": "Alcuni valori sono fuori intervallo. Controlla i campi evidenziati.",
+      "resetDone": "Override di runtime cancellati",
+      "restartRequired": "Riavvia il servizio per applicare le impostazioni SMTP e di sincronizzazione.",
+      "saved": "Impostazioni di runtime salvate",
+      "title": "Impostazioni di runtime"
+    },
     "sections": {
       "cors": {
         "desc": "Regole di accesso cross-origin",

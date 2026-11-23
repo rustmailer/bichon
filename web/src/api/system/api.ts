@@ -214,3 +214,42 @@ export const get_system_configurations = async () => {
   )
   return response.data
 }
+
+export type RuntimeSettings = {
+  smtp_enabled: boolean
+  smtp_port: number
+  smtp_encryption: 'none' | 'starttls' | 'tls'
+  smtp_auth_required: boolean
+  webui_token_expiration_hours: number
+  sync_concurrency?: number | null
+  imap_timeout_seconds: number
+  web_mbox_upload_limit_mb: number
+  web_pst_upload_limit_mb: number
+}
+
+export type RuntimeSettingsResult = {
+  restart_required: boolean
+  settings: RuntimeSettings
+}
+
+export const get_runtime_settings = async () => {
+  const response = await axiosInstance.get<RuntimeSettings>(
+    `api/v1/runtime-settings`
+  )
+  return response.data
+}
+
+export const update_runtime_settings = async (settings: RuntimeSettings) => {
+  const response = await axiosInstance.post<RuntimeSettingsResult>(
+    `api/v1/runtime-settings`,
+    settings
+  )
+  return response.data
+}
+
+export const reset_runtime_settings = async () => {
+  const response = await axiosInstance.delete<RuntimeSettingsResult>(
+    `api/v1/runtime-settings`
+  )
+  return response.data
+}

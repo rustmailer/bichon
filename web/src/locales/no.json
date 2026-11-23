@@ -3002,6 +3002,14 @@
     "notifications": "Systemvarsler"
   },
   "systemConfig": {
+    "runtime": {
+      "desc": "Verdier lagret i databasen. De har forrang for oppstartskonfigurasjonen; endringer av lyttere gjelder etter en omstart.",
+      "invalid": "Noen verdier er utenfor det tillatte området. Sjekk de merkede feltene.",
+      "resetDone": "Kjøretidsoverstyringer fjernet",
+      "restartRequired": "Start tjenesten på nytt for å bruke SMTP- og synkroniseringsinnstillingene.",
+      "saved": "Kjøretidsinnstillinger lagret",
+      "title": "Kjøretidsinnstillinger"
+    },
     "sections": {
       "cors": {
         "desc": "Tilgangsregler for cross-origin",

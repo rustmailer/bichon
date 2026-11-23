@@ -17,7 +17,6 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-use crate::settings::cli::SETTINGS;
 use std::sync::{Arc, LazyLock};
 use tokio::sync::Semaphore;
 
@@ -25,8 +24,7 @@ pub mod imap;
 
 pub static SEMAPHORE: LazyLock<Arc<Semaphore>> = LazyLock::new(|| {
     Arc::new(Semaphore::new(
-        SETTINGS
-            .bichon_sync_concurrency
+        crate::settings::runtime::sync_concurrency()
             .map(|c| c as usize)
             .unwrap_or(num_cpus::get() * 2),
     ))

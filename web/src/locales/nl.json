@@ -3002,6 +3002,14 @@
     "notifications": "Systeemmeldingen"
   },
   "systemConfig": {
+    "runtime": {
+      "desc": "Waarden opgeslagen in de database. Ze gaan vóór de opstartconfiguratie; wijzigingen aan listeners gelden na een herstart.",
+      "invalid": "Sommige waarden vallen buiten het toegestane bereik. Controleer de gemarkeerde velden.",
+      "resetDone": "Runtime-overschrijvingen gewist",
+      "restartRequired": "Herstart de dienst om de SMTP- en synchronisatie-instellingen toe te passen.",
+      "saved": "Runtime-instellingen opgeslagen",
+      "title": "Runtime-instellingen"
+    },
     "sections": {
       "cors": {
         "desc": "Cross-origin toegangsregels",

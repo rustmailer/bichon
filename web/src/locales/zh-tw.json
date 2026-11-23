@@ -3002,6 +3002,14 @@
     "notifications": "系統通知"
   },
   "systemConfig": {
+    "runtime": {
+      "desc": "儲存在資料庫中的覆寫值，優先於啟動設定；監聽器相關變更重啟後生效。",
+      "invalid": "有數值超出允許範圍，請檢查標紅的欄位。",
+      "resetDone": "已清除執行時覆寫值",
+      "restartRequired": "重啟服務後 SMTP 與同步設定才會生效。",
+      "saved": "執行時設定已儲存",
+      "title": "執行時設定"
+    },
     "sections": {
       "cors": {
         "desc": "跨來源資源共用規則",

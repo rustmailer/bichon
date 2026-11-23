@@ -36,10 +36,7 @@ use bichon_core::{
     logger,
     migrate::check_data_status,
     raise_error,
-    settings::{
-        cli::SETTINGS,
-        dir::{DataDirManager, DATA_DIR_MANAGER},
-    },
+    settings::dir::{DataDirManager, DATA_DIR_MANAGER},
     store::{
         blob::BLOB_MANAGER,
         tantivy::{
@@ -165,7 +162,7 @@ pub async fn run() -> BichonResult<()> {
 
     let periodic_tasks = PeriodicTasks::setup();
     let mut smtp_service: Option<SmtpServer> = None;
-    if SETTINGS.bichon_enable_smtp {
+    if bichon_core::settings::runtime::smtp_enabled() {
         info!("SMTP service is enabled, starting...");
         match start_smtp_server().await {
             Ok(server) => {

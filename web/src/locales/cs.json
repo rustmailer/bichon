@@ -3002,6 +3002,14 @@
     "notifications": "Systémová oznámení"
   },
   "systemConfig": {
+    "runtime": {
+      "desc": "Hodnoty uložené v databázi. Mají přednost před konfigurací při spuštění; změny listenerů platí po restartu.",
+      "invalid": "Některé hodnoty jsou mimo povolený rozsah. Zkontrolujte zvýrazněná pole.",
+      "resetDone": "Přepisy za běhu vymazány",
+      "restartRequired": "Restartujte službu, aby se použila nastavení SMTP a synchronizace.",
+      "saved": "Nastavení za běhu uloženo",
+      "title": "Nastavení za běhu"
+    },
     "sections": {
       "cors": {
         "desc": "Pravidla pro přístup z jiných domén",

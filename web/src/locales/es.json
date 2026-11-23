@@ -3002,6 +3002,14 @@
     "notifications": "Notificaciones del sistema"
   },
   "systemConfig": {
+    "runtime": {
+      "desc": "Valores guardados en la base de datos. Tienen prioridad sobre la configuración de inicio; los cambios de listener se aplican tras reiniciar.",
+      "invalid": "Algunos valores están fuera de rango. Revisa los campos marcados.",
+      "resetDone": "Valores de ejecución restablecidos",
+      "restartRequired": "Reinicia el servicio para aplicar la configuración de SMTP y sincronización.",
+      "saved": "Configuración en tiempo de ejecución guardada",
+      "title": "Configuración en tiempo de ejecución"
+    },
     "sections": {
       "cors": {
         "desc": "Reglas de acceso de origen cruzado",

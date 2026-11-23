@@ -29,7 +29,7 @@ use bichon_core::{
         ImportEmls, ImportHistory, ImportProgress, ImportStatus, MAX_WEB_EML_BYTES,
     },
     raise_error,
-    settings::{cli::SETTINGS, dir::DATA_DIR_MANAGER},
+    settings::{dir::DATA_DIR_MANAGER, runtime},
     users::permissions::Permission,
 };
 use futures::StreamExt;
@@ -177,8 +177,8 @@ impl ImportApi {
         }
 
         // Check disk space (fail fast before streaming)
-        let max_mbox = SETTINGS.bichon_web_mbox_upload_limit_mb as usize * 1024 * 1024;
-        let max_pst = SETTINGS.bichon_web_pst_upload_limit_mb as usize * 1024 * 1024;
+        let max_mbox = runtime::web_mbox_upload_limit_mb() as usize * 1024 * 1024;
+        let max_pst = runtime::web_pst_upload_limit_mb() as usize * 1024 * 1024;
         let min_required = if is_mbox_ext {
             max_mbox
         } else if is_pst_ext {
@@ -230,8 +230,8 @@ impl ImportApi {
             FileFormat::Pst => "pst".to_string(),
         };
 
-        let max_mbox = SETTINGS.bichon_web_mbox_upload_limit_mb as usize * 1024 * 1024;
-        let max_pst = SETTINGS.bichon_web_pst_upload_limit_mb as usize * 1024 * 1024;
+        let max_mbox = runtime::web_mbox_upload_limit_mb() as usize * 1024 * 1024;
+        let max_pst = runtime::web_pst_upload_limit_mb() as usize * 1024 * 1024;
         let max_size = match format {
             FileFormat::Mbox => max_mbox,
             FileFormat::Pst => max_pst,
@@ -359,8 +359,8 @@ async fn stream_body_to_temp(
     is_mbox_ext: bool,
     is_pst_ext: bool,
 ) -> ApiResult<(Option<FileFormat>, usize)> {
-    let max_mbox = SETTINGS.bichon_web_mbox_upload_limit_mb as usize * 1024 * 1024;
-    let max_pst = SETTINGS.bichon_web_pst_upload_limit_mb as usize * 1024 * 1024;
+    let max_mbox = runtime::web_mbox_upload_limit_mb() as usize * 1024 * 1024;
+    let max_pst = runtime::web_pst_upload_limit_mb() as usize * 1024 * 1024;
     let max_stream = if is_mbox_ext {
         max_mbox
     } else if is_pst_ext {

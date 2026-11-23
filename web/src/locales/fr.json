@@ -3002,6 +3002,14 @@
     "notifications": "Notifications système"
   },
   "systemConfig": {
+    "runtime": {
+      "desc": "Valeurs stockées dans la base de données. Elles prévalent sur la configuration de démarrage ; les changements de listener s'appliquent après un redémarrage.",
+      "invalid": "Certaines valeurs sont hors limites. Vérifiez les champs signalés.",
+      "resetDone": "Surcharges d'exécution supprimées",
+      "restartRequired": "Redémarrez le service pour appliquer les paramètres SMTP et de synchronisation.",
+      "saved": "Paramètres d'exécution enregistrés",
+      "title": "Paramètres d'exécution"
+    },
     "sections": {
       "cors": {
         "desc": "Règles d'accès cross-origin",

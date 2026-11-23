@@ -3002,6 +3002,14 @@
     "notifications": "系统通知"
   },
   "systemConfig": {
+    "runtime": {
+      "desc": "保存在数据库中的覆盖值，优先于启动配置；监听器相关改动重启后生效。",
+      "invalid": "有数值超出允许范围，请检查标红的字段。",
+      "resetDone": "已清除运行时覆盖值",
+      "restartRequired": "重启服务后 SMTP 和同步设置才会生效。",
+      "saved": "运行时设置已保存",
+      "title": "运行时设置"
+    },
     "sections": {
       "cors": {
         "desc": "跨域访问规则",

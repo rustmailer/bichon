@@ -26,7 +26,6 @@ use crate::database::{
 use crate::error::code::ErrorCode;
 use crate::raise_error;
 use crate::common::auth::ClientContext;
-use crate::settings::cli::SETTINGS;
 use crate::token::view::AccessTokenResp;
 use crate::users::permissions::Permission;
 use crate::users::UserModel;
@@ -228,7 +227,8 @@ impl AccessTokenModel {
                 token_model.created_at
             };
             let idle = utc_now!() - last_active;
-            let max_life = SETTINGS.bichon_webui_token_expiration_hours as i64 * 60 * 60 * 1000;
+            let max_life =
+                crate::settings::runtime::webui_token_expiration_hours() as i64 * 60 * 60 * 1000;
 
             if idle > max_life {
                 return Err(raise_error!(

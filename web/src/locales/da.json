@@ -3002,6 +3002,14 @@
     "notifications": "Systemmeddelelser"
   },
   "systemConfig": {
+    "runtime": {
+      "desc": "Værdier gemt i databasen. De har forrang for opstartskonfigurationen; ændringer af lyttere træder i kraft efter en genstart.",
+      "invalid": "Nogle værdier er uden for det tilladte interval. Kontroller de markerede felter.",
+      "resetDone": "Runtime-tilsidesættelser ryddet",
+      "restartRequired": "Genstart tjenesten for at anvende SMTP- og synkroniseringsindstillingerne.",
+      "saved": "Runtime-indstillinger gemt",
+      "title": "Runtime-indstillinger"
+    },
     "sections": {
       "cors": {
         "desc": "Adgangsregler for cross-origin",

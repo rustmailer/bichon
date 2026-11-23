@@ -27,7 +27,10 @@ use bichon_core::{
     error::BichonResult,
     ext::journal,
     metrics,
-    settings::cli::{EncryptionMode, SETTINGS},
+    settings::{
+        cli::{EncryptionMode, SETTINGS},
+        runtime,
+    },
     token::AccessTokenModel,
     users::{permissions::Permission, UserModel},
 };
@@ -805,9 +808,10 @@ impl SmtpServer {
 }
 
 pub async fn start_smtp_server() -> std::io::Result<SmtpServer> {
-    let smtp_port = SETTINGS.bichon_smtp_port;
+    let smtp_port = runtime::smtp_port();
+    let smtp_encryption = runtime::smtp_encryption();
 
-    let tls_acceptor: Option<TlsAcceptor> = match SETTINGS.bichon_smtp_encryption {
+    let tls_acceptor: Option<TlsAcceptor> = match smtp_encryption {
         EncryptionMode::None => None,
         EncryptionMode::Starttls | EncryptionMode::Tls => Some(create_acceptor().await?),
     };
@@ -830,16 +834,16 @@ pub async fn start_smtp_server() -> std::io::Result<SmtpServer> {
 
     let smtp_config = SmtpConfig {
         whitelist: None,
-        tls_acceptor: match SETTINGS.bichon_smtp_encryption {
+        tls_acceptor: match smtp_encryption {
             EncryptionMode::None | EncryptionMode::Tls => None,
             EncryptionMode::Starttls => tls_acceptor.clone(),
         },
-        auth_required: SETTINGS.bichon_smtp_auth_required,
+        auth_required: runtime::smtp_auth_required(),
     };
 
     let smtp_shutdown = SIGNAL_MANAGER.subscribe();
 
-    let smtp_handle = if matches!(SETTINGS.bichon_smtp_encryption, EncryptionMode::Tls) {
+    let smtp_handle = if matches!(smtp_encryption, EncryptionMode::Tls) {
         let acceptor = tls_acceptor
             .clone()
             .expect("TLS acceptor required when tls=true");

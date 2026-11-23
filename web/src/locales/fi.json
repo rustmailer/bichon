@@ -3002,6 +3002,14 @@
     "notifications": "Järjestelmäilmoitukset"
   },
   "systemConfig": {
+    "runtime": {
+      "desc": "Tietokantaan tallennetut arvot. Ne ovat ensisijaisia käynnistysasetuksiin nähden; kuuntelijoiden muutokset tulevat voimaan uudelleenkäynnistyksen jälkeen.",
+      "invalid": "Jotkin arvot ovat sallitun alueen ulkopuolella. Tarkista merkityt kentät.",
+      "resetDone": "Ajonaikaiset ohitukset tyhjennetty",
+      "restartRequired": "Käynnistä palvelu uudelleen, jotta SMTP- ja synkronointiasetukset tulevat voimaan.",
+      "saved": "Ajonaikaiset asetukset tallennettu",
+      "title": "Ajonaikaiset asetukset"
+    },
     "sections": {
       "cors": {
         "desc": "Cross-origin-käyttösäännöt",

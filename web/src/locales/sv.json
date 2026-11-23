@@ -3002,6 +3002,14 @@
     "notifications": "Systemaviseringar"
   },
   "systemConfig": {
+    "runtime": {
+      "desc": "Värden som lagras i databasen. De har företräde framför startkonfigurationen; ändringar av lyssnare gäller efter en omstart.",
+      "invalid": "Vissa värden ligger utanför intervallet. Kontrollera de markerade fälten.",
+      "resetDone": "Körtidsöverskridanden rensade",
+      "restartRequired": "Starta om tjänsten för att tillämpa SMTP- och synkroniseringsinställningarna.",
+      "saved": "Körtidsinställningar sparade",
+      "title": "Körtidsinställningar"
+    },
     "sections": {
       "cors": {
         "desc": "Åtkomstregler för cross-origin",
