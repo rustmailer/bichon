@@ -223,6 +223,16 @@ async fn test_geo_provider(
     proxy_test_result_from_value(provider.name, &value)
 }
 
+/// Top-level keys of a JSON object, for warning messages when a provider
+/// changes its payload. Values are deliberately left out: the response can
+/// carry the caller's address.
+fn top_level_keys(value: &serde_json::Value) -> Vec<&str> {
+    value
+        .as_object()
+        .map(|obj| obj.keys().map(String::as_str).collect())
+        .unwrap_or_default()
+}
+
 fn proxy_test_result_from_value(
     provider: &str,
     value: &serde_json::Value,
@@ -261,6 +271,10 @@ fn proxy_test_result_from_value(
         "ip"
     };
     let ip = value[ip_key].as_str().ok_or_else(|| {
+        tracing::warn!(
+            "{provider} proxy check: response has no `{ip_key}` field (top-level keys: {:?})",
+            top_level_keys(value)
+        );
         raise_error!(
             format!("{provider} did not return an IP address"),
             ErrorCode::NetworkError
@@ -268,16 +282,41 @@ fn proxy_test_result_from_value(
     })?;
     if provider == "internetdata.io" {
         // Location and network come nested; city and region only on a paid key.
+        // The fallbacks below are defensive: if the payload shape changes, keep
+        // the fields we can still read and warn instead of dropping them.
         let location = &value["location"];
+        if !location.is_object() {
+            tracing::warn!(
+                "internetdata.io proxy check: response has no `location` object (top-level keys: {:?})",
+                top_level_keys(value)
+            );
+        }
+
+        let country = location["country_name"].as_str().or_else(|| {
+            tracing::warn!(
+                "internetdata.io proxy check: missing location.country_name, falling back to location.country"
+            );
+            location["country"].as_str()
+        });
+
+        let isp = value["company"]["name"].as_str().or_else(|| {
+            tracing::warn!(
+                "internetdata.io proxy check: missing company.name, falling back to asn.name"
+            );
+            value["asn"]["name"].as_str()
+        });
+        if isp.is_none() {
+            tracing::warn!(
+                "internetdata.io proxy check: response has neither company.name nor asn.name"
+            );
+        }
+
         return Ok(ProxyTestResult {
             ip: Some(ip.to_string()),
-            country: location["country_name"].as_str().map(str::to_string),
+            country: country.map(str::to_string),
             region: location["region"].as_str().map(str::to_string),
             city: location["city"].as_str().map(str::to_string),
-            isp: value["company"]["name"]
-                .as_str()
-                .or_else(|| value["asn"]["name"].as_str())
-                .map(str::to_string),
+            isp: isp.map(str::to_string),
         });
     }
 
@@ -395,6 +434,113 @@ mod tests {
         assert_eq!(result.country.as_deref(), Some("United States"));
         assert_eq!(result.region, None);
         assert_eq!(result.isp.as_deref(), Some("Google LLC"));
+    }
+
+    #[test]
+    fn proxy_test_result_internetdata_free_tier_shape() {
+        // The keyless /myip answer: country-level location only, with the
+        // network and company blocks alongside it. Extra fields must not
+        // disturb the parse.
+        let result = proxy_test_result_from_value(
+            "internetdata.io",
+            &serde_json::json!({
+                "ip": "8.8.8.8",
+                "is_bogon": false,
+                "is_tor": false,
+                "location": {
+                    "continent": "NA",
+                    "continent_name": "North America",
+                    "country": "US",
+                    "country_name": "United States",
+                    "timezone": "America/Chicago"
+                },
+                "asn": {
+                    "asn": 15169,
+                    "name": "Google LLC",
+                    "domain": "google.com",
+                    "type": "business"
+                },
+                "company": { "name": "Google LLC", "domain": "google.com" },
+                "abuse": { "email": "abuse@example.com" }
+            }),
+        )
+        .unwrap();
+        assert_eq!(result.ip.as_deref(), Some("8.8.8.8"));
+        assert_eq!(result.country.as_deref(), Some("United States"));
+        assert_eq!(result.region, None);
+        assert_eq!(result.city, None);
+        assert_eq!(result.isp.as_deref(), Some("Google LLC"));
+    }
+
+    #[test]
+    fn proxy_test_result_internetdata_falls_back_to_country_code() {
+        let result = proxy_test_result_from_value(
+            "internetdata.io",
+            &serde_json::json!({
+                "ip": "8.8.8.8",
+                "location": { "country": "US" },
+                "company": { "name": "Google LLC" }
+            }),
+        )
+        .unwrap();
+        assert_eq!(result.country.as_deref(), Some("US"));
+    }
+
+    #[test]
+    fn proxy_test_result_internetdata_falls_back_to_asn_name() {
+        let result = proxy_test_result_from_value(
+            "internetdata.io",
+            &serde_json::json!({
+                "ip": "8.8.8.8",
+                "location": { "country_name": "United States" },
+                "asn": { "asn": 15169, "name": "Google LLC" }
+            }),
+        )
+        .unwrap();
+        assert_eq!(result.isp.as_deref(), Some("Google LLC"));
+    }
+
+    #[test]
+    fn proxy_test_result_internetdata_reads_paid_location_fields() {
+        let result = proxy_test_result_from_value(
+            "internetdata.io",
+            &serde_json::json!({
+                "ip": "8.8.8.8",
+                "location": {
+                    "country_name": "United States",
+                    "region": "California",
+                    "city": "Mountain View"
+                },
+                "company": { "name": "Google LLC" }
+            }),
+        )
+        .unwrap();
+        assert_eq!(result.region.as_deref(), Some("California"));
+        assert_eq!(result.city.as_deref(), Some("Mountain View"));
+    }
+
+    #[test]
+    fn proxy_test_result_internetdata_requires_ip() {
+        let result = proxy_test_result_from_value(
+            "internetdata.io",
+            &serde_json::json!({ "location": { "country_name": "United States" } }),
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn proxy_test_result_internetdata_tolerates_non_object_payloads() {
+        for payload in [serde_json::json!("unexpected"), serde_json::json!([1, 2])] {
+            let result = proxy_test_result_from_value("internetdata.io", &payload);
+            assert!(result.is_err(), "payload should be rejected: {payload}");
+        }
+    }
+
+    #[test]
+    fn geo_providers_try_internetdata_last() {
+        let last = GEO_PROVIDERS.last().expect("at least one geo provider");
+        assert_eq!(last.name, "internetdata.io");
+        assert_eq!(last.url, "https://api.internetdata.io/myip");
     }
 
     #[test]
