@@ -44,6 +44,10 @@ const GEO_PROVIDERS: &[GeoProvider] = &[
         name: "ipapi.co",
         url: "https://ipapi.co/json/",
     },
+    GeoProvider {
+        name: "internetdata.io",
+        url: "https://api.internetdata.io/myip",
+    },
 ];
 
 struct GeoProvider {
@@ -262,6 +266,21 @@ fn proxy_test_result_from_value(
             ErrorCode::NetworkError
         )
     })?;
+    if provider == "internetdata.io" {
+        // Location and network come nested; city and region only on a paid key.
+        let location = &value["location"];
+        return Ok(ProxyTestResult {
+            ip: Some(ip.to_string()),
+            country: location["country_name"].as_str().map(str::to_string),
+            region: location["region"].as_str().map(str::to_string),
+            city: location["city"].as_str().map(str::to_string),
+            isp: value["company"]["name"]
+                .as_str()
+                .or_else(|| value["asn"]["name"].as_str())
+                .map(str::to_string),
+        });
+    }
+
     let connection = &value["connection"];
 
     Ok(ProxyTestResult {
@@ -358,6 +377,24 @@ mod tests {
     fn proxy_test_result_rejects_empty_provider_response() {
         let result = proxy_test_result_from_value("ipwho.is", &serde_json::json!({}));
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn proxy_test_result_reads_internetdata_nested_fields() {
+        let result = proxy_test_result_from_value(
+            "internetdata.io",
+            &serde_json::json!({
+                "ip": "8.8.8.8",
+                "location": { "country": "US", "country_name": "United States" },
+                "asn": { "asn": 15169, "name": "Google LLC" },
+                "company": { "name": "Google LLC", "domain": "google.com" }
+            }),
+        )
+        .unwrap();
+        assert_eq!(result.ip.as_deref(), Some("8.8.8.8"));
+        assert_eq!(result.country.as_deref(), Some("United States"));
+        assert_eq!(result.region, None);
+        assert_eq!(result.isp.as_deref(), Some("Google LLC"));
     }
 
     #[test]
