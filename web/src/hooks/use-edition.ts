@@ -10,6 +10,19 @@ export interface EditionInfo {
   approval_enabled: boolean
 }
 
+/** Product name for the running edition. A customer's configured branding
+ *  still takes precedence where it is shown. */
+export function editionBrandName(edition: EditionInfo['edition']): string {
+  switch (edition) {
+    case 'enterprise':
+      return 'Bichon Enterprise'
+    case 'pro':
+      return 'Bichon Pro'
+    default:
+      return 'Bichon'
+  }
+}
+
 async function fetchEdition(): Promise<EditionInfo> {
   const { data } = await axiosInstance.get<EditionInfo>('api/v1/features')
   return data

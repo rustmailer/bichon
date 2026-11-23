@@ -30,15 +30,15 @@ import { resolveApiUrl } from '@/api/branding/api'
 import { useBranding } from '@/hooks/use-branding'
 import { AutoFitText } from '@/components/branding/auto-fit-text'
 import { useSidebarData } from './data/sidebar-data'
-import { useEdition } from '@/hooks/use-edition'
+import { editionBrandName, useEdition } from '@/hooks/use-edition'
 import { Link } from '@tanstack/react-router';
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const sidebarData = useSidebarData();
-  const { isPro, edition, version } = useEdition();
+  const { edition, version } = useEdition();
   const { companyName, logoUrl } = useBranding();
   const logo = logoUrl ? resolveApiUrl(logoUrl) : Logo;
-  const displayName = companyName || (isPro ? 'Bichon Pro' : 'Bichon');
+  const displayName = companyName || editionBrandName(edition);
   return (
     <Sidebar collapsible='icon' variant='sidebar' {...props}>
       <SidebarHeader>

@@ -26,7 +26,7 @@ import LongText from '@/components/long-text';
 import { getToken } from '@/stores/authStore';
 import { useNavigate } from '@tanstack/react-router';
 import useMinimalAccountList from '@/hooks/use-minimal-account-list';
-import { useEdition } from '@/hooks/use-edition';
+import { editionBrandName, useEdition } from '@/hooks/use-edition';
 import {
   Tooltip as TooltipUI,
   TooltipContent,
@@ -106,8 +106,8 @@ export default function MailArchiveDashboard() {
 
 
   const stats1 = stats ?? INITIAL_DASHBOARD_STATS;
-  const { isPro } = useEdition();
-  const brandName = isPro ? 'Bichon Pro' : 'Bichon';
+  const { edition } = useEdition();
+  const brandName = editionBrandName(edition);
   const currentYear = new Date().getFullYear();
   const copyrightYears = currentYear > 2025 ? `2025-${currentYear}` : '2025';
 

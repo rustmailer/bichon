@@ -19,7 +19,7 @@
 import Logo from '@/assets/logo.svg'
 import { resolveApiUrl } from '@/api/branding/api'
 import { useBranding } from '@/hooks/use-branding'
-import { useEdition } from '@/hooks/use-edition'
+import { editionBrandName, useEdition } from '@/hooks/use-edition'
 import { useTranslation } from 'react-i18next'
 import { AuthBackground } from './auth-background'
 import { BichonMascot } from './bichon-mascot'
@@ -36,10 +36,10 @@ const COPYRIGHT_START_YEAR = 2025
 
 export function AuthLayout({ children }: AuthLayoutProps) {
   const { companyName, tagline, logoUrl } = useBranding()
-  const { isPro } = useEdition()
+  const { edition, isPro } = useEdition()
   const { t } = useTranslation()
   const logo = logoUrl ? resolveApiUrl(logoUrl) : Logo
-  const displayName = companyName || (isPro ? 'Bichon Pro' : 'Bichon')
+  const displayName = companyName || editionBrandName(edition)
   const currentYear = new Date().getFullYear()
   const copyrightYears =
     currentYear > COPYRIGHT_START_YEAR
