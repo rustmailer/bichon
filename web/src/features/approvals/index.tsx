@@ -389,7 +389,7 @@ export default function ApprovalsPage() {
               {isLoading && !pending ? (
                 <TableSkeleton rows={3} />
               ) : rows.length === 0 ? (
-                <div className='flex items-center justify-center gap-2 rounded border p-6 text-muted-foreground'>
+                <div className='flex items-center justify-center gap-2 rounded border p-6 text-xs text-muted-foreground'>
                   <Check className='h-4 w-4' />
                   {t('approvals.noPending', 'Nothing is awaiting approval.')}
                 </div>
