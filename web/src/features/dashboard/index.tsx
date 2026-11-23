@@ -11,6 +11,7 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar } from 'recharts';
 import { Mail, Users, Inbox, Zap, Paperclip } from 'lucide-react';
@@ -206,10 +207,10 @@ export default function MailArchiveDashboard() {
   return (
     <>
       <FixedHeader />
-      <Main higher>
-        <div className="flex-1 space-y-6 p-6 md:p-8">
+      <Main fixed higher>
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 pt-3 pb-0 md:px-8 xl:overflow-hidden">
           {/* Top Metrics */}
-          <div className="grid gap-4 grid-cols-1 md:grid-cols-12">
+          <div className="grid shrink-0 gap-4 grid-cols-1 md:grid-cols-12">
             <Card className="md:col-span-2 lg:col-span-2">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-xs font-bold uppercase tracking-wider">{t('dashboard.mailAccounts')}</CardTitle>
@@ -308,7 +309,7 @@ export default function MailArchiveDashboard() {
               </CardContent>
             </Card>
           </div>
-          <div className="grid grid-cols-1 lg:grid-cols-[3fr_1fr] gap-6">
+          <div className="grid shrink-0 grid-cols-1 lg:grid-cols-[3fr_1fr] gap-6">
             <Card>
               <CardHeader>
                 <CardTitle className='text-xs'>{t('dashboard.newEmails')}</CardTitle>
@@ -414,18 +415,19 @@ export default function MailArchiveDashboard() {
               </CardContent>
             </Card>
           </div>
-          <div className="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            <Card className="overflow-hidden">
+          <div className="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 xl:min-h-0 xl:flex-1">
+            <Card className="overflow-hidden xl:flex xl:flex-col xl:min-h-0">
               <CardHeader className="!px-4 !pt-4 !pb-1">
                 <CardTitle className="text-xs font-bold uppercase tracking-wider">{t('dashboard.top10Senders')}</CardTitle>
               </CardHeader>
-              <CardContent className="p-0">
+              <CardContent className="p-0 xl:min-h-0 xl:flex-1">
+                <ScrollArea className="w-full xl:h-full">
                 {hasTopSenders ? (
                   <Table className="table-fixed">
-                    <TableHeader>
+                    <TableHeader className="sticky top-0 z-10 bg-card">
                       <TableRow>
                         <TableHead className="text-xs">{t('dashboard.sender')}</TableHead>
-                        <TableHead className="w-[96px] text-right text-xs">{t('dashboard.count')}</TableHead>
+                        <TableHead className="w-[96px] text-right text-xs pr-3">{t('dashboard.count')}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -452,7 +454,7 @@ export default function MailArchiveDashboard() {
                               </div>
                             </div>
                           </TableCell>
-                          <TableCell className="text-right font-mono text-xs">{formatNumber(s.count)}</TableCell>
+                          <TableCell className="text-right font-mono text-xs pr-3">{formatNumber(s.count)}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -460,19 +462,21 @@ export default function MailArchiveDashboard() {
                 ) : (
                   <EmptyTable title={t('dashboard.noSendersData')} />
                 )}
+                </ScrollArea>
               </CardContent>
             </Card>
-            <Card className="overflow-hidden">
+            <Card className="overflow-hidden xl:flex xl:flex-col xl:min-h-0">
               <CardHeader className="!px-4 !pt-4 !pb-1">
                 <CardTitle className="text-xs font-bold uppercase tracking-wider">{t('dashboard.top10LargestEmails')}</CardTitle>
               </CardHeader>
-              <CardContent className="p-0">
+              <CardContent className="p-0 xl:min-h-0 xl:flex-1">
+                <ScrollArea className="w-full xl:h-full">
                 {hasTopEmails ? (
                   <Table className="table-fixed">
-                    <TableHeader>
+                    <TableHeader className="sticky top-0 z-10 bg-card">
                       <TableRow>
                         <TableHead className="text-xs">{t('dashboard.subject')}</TableHead>
-                        <TableHead className="w-[96px] text-right text-xs">{t('dashboard.size')}</TableHead>
+                        <TableHead className="w-[96px] text-right text-xs pr-3">{t('dashboard.size')}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -499,7 +503,7 @@ export default function MailArchiveDashboard() {
                               </div>
                             </div>
                           </TableCell>
-                          <TableCell className="text-right font-mono text-xs">{formatBytes(m.size_bytes)}</TableCell>
+                          <TableCell className="text-right font-mono text-xs pr-3">{formatBytes(m.size_bytes)}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -507,21 +511,23 @@ export default function MailArchiveDashboard() {
                 ) : (
                   <EmptyTable title={t('dashboard.noLargeEmails')} />
                 )}
+                </ScrollArea>
               </CardContent>
             </Card>
-            <Card className="overflow-hidden">
+            <Card className="overflow-hidden xl:flex xl:flex-col xl:min-h-0">
               <CardHeader className="!px-4 !pt-4 !pb-1">
                 <CardTitle className="text-xs font-bold uppercase tracking-wider">
                   {t('dashboard.top10LargestAttachments')}
                 </CardTitle>
               </CardHeader>
-              <CardContent className="p-0">
+              <CardContent className="p-0 xl:min-h-0 xl:flex-1">
+                <ScrollArea className="w-full xl:h-full">
                 {stats?.top_largest_attachments?.length ? (
                   <Table className="table-fixed">
-                    <TableHeader>
+                    <TableHeader className="sticky top-0 z-10 bg-card">
                       <TableRow>
                         <TableHead className="text-xs">{t('attachment.name')}</TableHead>
-                        <TableHead className="w-[96px] text-right text-xs">{t('dashboard.size')}</TableHead>
+                        <TableHead className="w-[96px] text-right text-xs pr-3">{t('dashboard.size')}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -551,7 +557,7 @@ export default function MailArchiveDashboard() {
                               </div>
                             </div>
                           </TableCell>
-                          <TableCell className="text-right font-mono text-xs">
+                          <TableCell className="text-right font-mono text-xs pr-3">
                             {formatBytes(a.size_bytes)}
                           </TableCell>
                         </TableRow>
@@ -561,19 +567,21 @@ export default function MailArchiveDashboard() {
                 ) : (
                   <EmptyTable title="No attachment data" />
                 )}
+                </ScrollArea>
               </CardContent>
             </Card>
-            <Card className="overflow-hidden">
+            <Card className="overflow-hidden xl:flex xl:flex-col xl:min-h-0">
               <CardHeader className="!px-4 !pt-4 !pb-1">
                 <CardTitle className="text-xs font-bold uppercase tracking-wider">{t('dashboard.top10Accounts')}</CardTitle>
               </CardHeader>
-              <CardContent className="p-0">
+              <CardContent className="p-0 xl:min-h-0 xl:flex-1">
+                <ScrollArea className="w-full xl:h-full">
                 {hasTopAccounts ? (
                   <Table className="table-fixed">
-                    <TableHeader>
+                    <TableHeader className="sticky top-0 z-10 bg-card">
                       <TableRow>
                         <TableHead className="text-xs">{t('dashboard.account')}</TableHead>
-                        <TableHead className="w-[96px] text-right text-xs">{t('dashboard.emails')}</TableHead>
+                        <TableHead className="w-[96px] text-right text-xs pr-3">{t('dashboard.emails')}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -614,7 +622,7 @@ export default function MailArchiveDashboard() {
                               </div>
                             </div>
                           </TableCell>
-                          <TableCell className="text-right font-mono text-xs">{formatNumber(acc.count)}</TableCell>
+                          <TableCell className="text-right font-mono text-xs pr-3">{formatNumber(acc.count)}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -622,13 +630,14 @@ export default function MailArchiveDashboard() {
                 ) : (
                   <EmptyTable title={t('dashboard.noAccountData')} />
                 )}
+                </ScrollArea>
               </CardContent>
             </Card>
           </div>
         </div>
       </Main>
 
-      <div className="mt-auto p-6 text-center text-xs text-muted-foreground border-t">
+      <div className="mt-auto shrink-0 px-6 py-2 text-center text-xs text-muted-foreground border-t">
         <p>
           © {copyrightYears}{" "}
           <a
