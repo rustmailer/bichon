@@ -692,7 +692,6 @@
     "volumeTrend": "Volym över tid"
   },
   "apiDocs": {
-    "choosePreferredType": "Välj föredragen typ av API-dokumentation",
     "downloadSpecYAML": "Ladda ner Spec YAML",
     "openAPIExplorer": "OpenAPI Explorer",
     "reDoc": "ReDoc",
@@ -1752,7 +1751,6 @@
     "copied": "Kopierat till urklipp",
     "copyFailed": "Det gick inte att kopiera",
     "copyMachineId": "Kopiera maskin-ID",
-    "description": "Visa dina aktuella licensdetaljer och uppdatera autentiseringsuppgifter.",
     "edition": "Utgåva",
     "features": "Funktioner",
     "forbidden": "Licenshantering är endast tillgänglig i Pro-utgåvan.",
@@ -1773,7 +1771,6 @@
     "statusTrialExpired": "Testperioden har gått ut",
     "statusUpdateExpired": "Uppdateringsperioden har gått ut",
     "statusValid": "Giltig",
-    "title": "Licenshantering",
     "trialDays": "Testdagar",
     "trialDaysRemaining": "{{days}} dagar kvar",
     "updatesUntil": "Uppdateringar till",
@@ -2613,7 +2610,6 @@
       "breakGlassHint": "Vad som händer när den godkännande inte kan nås: efter denna väntetid får en system:root-administratör godkänna en begäran ensam. Överstyrningen registreras som sådan i granskningsloggen.",
       "breakGlassMinHours": "Överstyrning tillgänglig efter (timmars väntan)",
       "breakGlassMinHoursHint": "Fördröjningen är själva kontrollen, inte ett hinder för den: den garanterar att den normala tvåpersonsvägen fick sin chans först. 0 använder standardvärdet 1 timme.",
-      "description": "Kräver två personer för oåterkalleliga åtgärder: en begär, en annan godkänner och först då sker det. Av som standard.",
       "destructiveHint": "Om du aktiverar detta kräver varje sådan borttagning en andra person — även borttagning av ett enda meddelande.",
       "enabled": "Dubbel kontroll aktiverad",
       "enabledHint": "När det är av beter sig varje åtgärd nedan precis som tidigare. Ingenting köas.",
@@ -2638,13 +2634,11 @@
       "revocationHint": "Om detta är på kan en token inte återkallas förrän en andra person godkänner det — även när en användare återkallar sin egen läckta token.",
       "save": "Spara konfiguration",
       "saveFailed": "Det gick inte att spara konfigurationen för dubbel kontroll",
-      "saved": "Konfiguration för dubbel kontroll sparad",
-      "title": "Dubbel kontroll"
+      "saved": "Konfiguration för dubbel kontroll sparad"
     },
     "authUrl": "Auth-URL",
     "branding": {
       "companyName": "Företagsnamn",
-      "description": "Anpassa logotyp, företagsnamn och slogan som visas på inloggningssidan, sidofältet och webbläsarfliken",
       "forbidden": "Varumärkesprofil kräver system:root eller user:manage behörighet",
       "loadFailed": "Misslyckades att ladda varumärkesprofil",
       "logo": "Logotyp",
@@ -2662,7 +2656,6 @@
       "saved": "Varumärkesprofil sparad",
       "tagline": "Slogan",
       "taglinePlaceholder": "t.ex. Självhostad e-postarkiveringsplattform",
-      "title": "Varumärkesprofil",
       "uploadLogo": "Ladda upp logotyp"
     },
     "changePasswordForFutureLogins": "Byt lösenord för framtida inloggningar.",
@@ -2701,10 +2694,6 @@
     "filterProxy": "Filtrera Proxy...",
     "general": "Allmänt",
     "generateNewToken": "Generera ny token, den gamla upphör att gälla omedelbart.",
-    "header": {
-      "description": "Hantera din profil och visa systemkonfigurationer.",
-      "title": "Inställningar"
-    },
     "host": "Värd",
     "id": "Id",
     "invalidPassword": "Ogiltigt lösenord",
@@ -2722,7 +2711,6 @@
       "saved": "SMTP-journalföringskonfigurationen sparad",
       "target": "Journalmåladress",
       "targetHint": "Adressen som din journalregel levererar till. När den här konfigurationen sparas skapas motsvarande arkivkonto (administratörsbehörighet krävs) — adressen behöver inte finnas som brevlåda.",
-      "title": "SMTP-journalföring",
       "tlsHint": "SMTP-lyssnaren måste vara aktiverad (BICHON_ENABLE_SMTP) och konfigurerad för STARTTLS eller TLS (BICHON_SMTP_ENCRYPTION); med kryptering avstängd avvisas alla journalleveranser."
     },
     "lastAccess": "Senaste åtkomst",
@@ -2771,7 +2759,6 @@
       "testOk": "Ansluten och bas-DN är sökbar.",
       "testing": "Testar…",
       "timeout": "Tidsgräns (sekunder)",
-      "title": "LDAP / Active Directory",
       "userFilter": "Användarsökfilter",
       "userFilterHint": "{username} ersätts med det användaren skrev. Filtret måste matcha exakt en post.",
       "usernameAttribute": "Användarnamnsattribut"
@@ -2786,7 +2773,6 @@
       "copied": "Kopierat till urklipp",
       "copy": "Kopiera",
       "copyFailed": "Misslyckades att kopiera",
-      "description": "Lägg till en engångskod från din autentiseringsapp som ett extra säkerhetslager",
       "disable": "Inaktivera tvåfaktorsautentisering",
       "disableCode": "Ange din nuvarande kod eller en återställningskod för att inaktivera",
       "disabled": "Tvåfaktorsautentisering inaktiverad",
@@ -2807,7 +2793,6 @@
       "recoveryTitle": "Återställningskoder",
       "recoveryWarning": "Spara dessa engångskoder på en säker plats. Varje kod kan användas en gång för att logga in om du förlorar åtkomst till din autentiseringsapp",
       "ssoNote": "Din organisation använder SSO. 2FA här gäller endast inloggning med lösenord; SSO-sessioner skyddas av din identitetsleverantör",
-      "title": "Tvåfaktorsautentisering",
       "useAuthenticatorCode": "Använd en autentiseringskod",
       "useRecoveryCode": "Använd en återställningskod i stället"
     },
@@ -2915,7 +2900,6 @@
       "catRepairHint": "email.repaired",
       "categories": "Händelsekategorier",
       "clearSecret": "Rensa",
-      "description": "Skickar revisionshändelser till ett externt SIEM (Splunk, Elasticsearch, QRadar…) som JSON signerat med en HMAC-SHA256-signatur.",
       "enabled": "Vidarebefordran aktiverad",
       "enabledHint": "När aktiverat skickas matchande revisionshändelser till webhook-URL:en.",
       "forbidden": "SIEM-vidarebefordran kräver Enterprise-utgåvan och behörigheten system:root eller user:manage.",
@@ -2943,7 +2927,6 @@
       "testFailed": "Testhändelsen misslyckades",
       "testMapping": "Förhandsvisa payload",
       "testOk": "Testhändelse levererad (HTTP {{status}})",
-      "title": "SIEM-webhook",
       "url": "Webhook-URL"
     },
     "sso": {
@@ -2984,8 +2967,7 @@
       "technicalDetails": "Tekniska detaljer",
       "test": "Testa anslutning",
       "testFailed": "Anslutningstestet misslyckades",
-      "testOk": "Anslutningen lyckades",
-      "title": "Single Sign-On (OIDC)"
+      "testOk": "Anslutningen lyckades"
     },
     "theRootPasswordHasBeenReset": "Root-lösenordet har återställts",
     "theRootTokenHasBeenReset": "Root-token har återställts",
@@ -3020,8 +3002,6 @@
     "notifications": "Systemaviseringar"
   },
   "systemConfig": {
-    "pageDescription": "Dessa parametrar initieras via CLI-flaggor eller miljövariabler. De är skrivskyddade.",
-    "pageTitle": "Systemkonfigurationer",
     "sections": {
       "cors": {
         "desc": "Åtkomstregler för cross-origin",

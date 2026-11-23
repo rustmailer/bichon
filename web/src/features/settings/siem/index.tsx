@@ -242,18 +242,6 @@ export function SiemSettings() {
 
   return (
     <div className='w-full max-w-7xl space-y-6 px-4'>
-      <div className='space-y-2'>
-        <h2 className='text-xl font-bold'>
-          {t('settings.siem.title', 'SIEM Webhook')}
-        </h2>
-        <p className='text-sm text-muted-foreground'>
-          {t(
-            'settings.siem.description',
-            'Forward audit events to an external SIEM (Splunk, Elasticsearch, QRadar…) as JSON signed with an HMAC-SHA256 signature.',
-          )}
-        </p>
-      </div>
-
       <div className='space-y-6 rounded-lg border p-6'>
         <div className='flex items-center justify-between'>
           <div className='space-y-1'>

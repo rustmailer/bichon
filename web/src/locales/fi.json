@@ -692,7 +692,6 @@
     "volumeTrend": "Määrä ajan mittaan"
   },
   "apiDocs": {
-    "choosePreferredType": "Valitse haluamasi API-dokumentaation tyyppi",
     "downloadSpecYAML": "Lataa YAML-määritys",
     "openAPIExplorer": "OpenAPI Explorer",
     "reDoc": "ReDoc",
@@ -1752,7 +1751,6 @@
     "copied": "Kopioitu leikepöydälle",
     "copyFailed": "Kopiointi epäonnistui",
     "copyMachineId": "Kopioi laitetunniste",
-    "description": "Tarkastele nykyisiä lisenstitietojasi ja päivitä tunnukset.",
     "edition": "Versio",
     "features": "Ominaisuudet",
     "forbidden": "Lisenssien hallinta on saatavilla vain Pro-versiossa.",
@@ -1773,7 +1771,6 @@
     "statusTrialExpired": "Kokeiluaika päättynyt",
     "statusUpdateExpired": "Päivitysoikeus päättynyt",
     "statusValid": "Voimassa",
-    "title": "Lisenssien hallinta",
     "trialDays": "Kokeilupäivät",
     "trialDaysRemaining": "{{days}} päivää jäljellä",
     "updatesUntil": "Päivitykset asti",
@@ -2613,7 +2610,6 @@
       "breakGlassHint": "Mitä tapahtuu, kun hyväksyjää ei tavoiteta: tämän odotusajan jälkeen system:root-ylläpitäjä voi hyväksyä pyynnön yksin. Ohitus kirjataan sellaisenaan valvontaLokiin.",
       "breakGlassMinHours": "Ohitus käytettävissä (tunnin odotuksen) jälkeen",
       "breakGlassMinHoursHint": "Viive on itse valvontakeino, ei sen este: se takaa, että normaali kahden henkilön reitti sai tilaisuutensa ensin. 0 käyttää oletusarvoa 1 tunti.",
-      "description": "Vaatii kaksi henkilöä peruuttamattomiin toimiin: yksi pyytää, toinen hyväksyy, ja vasta sitten se tapahtuu. Oletuksena pois päältä.",
       "destructiveHint": "Tämän käyttöönotto vaatii, että jokainen tällainen poisto tarvitsee toisen henkilön — myös yksittäisen viestin poistaminen.",
       "enabled": "Kaksinkertainen valvonta käytössä",
       "enabledHint": "Kun se on pois päältä, jokainen alla oleva toimi käyttäytyy täsmälleen kuten ennenkin. Mitään ei aseteta jonoon.",
@@ -2638,13 +2634,11 @@
       "revocationHint": "Kun tämä on päällä, tunnusta ei voi peruuttaa ennen kuin toinen henkilö hyväksyy sen — myös silloin, kun käyttäjä peruuttaa oman vuotaneen tunnuksensa.",
       "save": "Tallenna asetukset",
       "saveFailed": "Kaksinkertaisen valvonnan asetusten tallennus epäonnistui",
-      "saved": "Kaksinkertaisen valvonnan asetukset tallennettu",
-      "title": "Kaksinkertainen valvonta"
+      "saved": "Kaksinkertaisen valvonnan asetukset tallennettu"
     },
     "authUrl": "Valtuutus-URL",
     "branding": {
       "companyName": "Yritysnimi",
-      "description": "Mukauta kirjautumissivulla, sivupalkissa ja selaimen välilehdellä näkyvää logoa, yritysnimeä ja iskulausetta",
       "forbidden": "Brändin hallinta vaatii system:root- tai user:manage-oikeudet",
       "loadFailed": "Brändin lataus epäonnistui",
       "logo": "Logo",
@@ -2662,7 +2656,6 @@
       "saved": "Brändi tallennettu",
       "tagline": "Iskulause",
       "taglinePlaceholder": "esim. Itsehostattu sähköpostiarkistoalusta",
-      "title": "Brändi",
       "uploadLogo": "Lataa logo"
     },
     "changePasswordForFutureLogins": "Vaihda salasana tulevia kirjautumisia varten.",
@@ -2701,10 +2694,6 @@
     "filterProxy": "Suodata välityspalvelimet...",
     "general": "Yleinen",
     "generateNewToken": "Luo uusi tunnus, vanha vanhenee välittömästi.",
-    "header": {
-      "description": "Hallitse profiiliasi ja tarkastele järjestelmän määrityksiä.",
-      "title": "Asetukset"
-    },
     "host": "Isäntä",
     "id": "Id",
     "invalidPassword": "Virheellinen salasana",
@@ -2722,7 +2711,6 @@
       "saved": "SMTP-journaloinnin asetukset tallennettu",
       "target": "Journal-kohdeosoite",
       "targetHint": "Osoite, johon journal-sääntösi toimittaa. Tämän asetuksen tallentaminen luo vastaavan arkistotilin (edellyttää järjestelmänvalvojan oikeuksia) — osoitteen ei tarvitse olla olemassa postilaatikkona.",
-      "title": "SMTP-journalointi",
       "tlsHint": "SMTP-kuuntelija on otettava käyttöön (BICHON_ENABLE_SMTP) ja määritettävä STARTTLS- tai TLS-tilaan (BICHON_SMTP_ENCRYPTION); ilman salausta kaikki journal-toimitukset hylätään."
     },
     "lastAccess": "Viimeisin pääsy",
@@ -2771,7 +2759,6 @@
       "testOk": "Yhteydet toimii ja perus-DN on haettavissa.",
       "testing": "Testataan…",
       "timeout": "Aikakatkaisu (sekuntia)",
-      "title": "LDAP / Active Directory",
       "userFilter": "Käyttäjähakusuodatin",
       "userFilterHint": "{username} korvataan käyttäjän syötteellä. Suodattimen on osuttava täsmälleen yhteen tietueeseen.",
       "usernameAttribute": "Käyttäjänimi-attribuutti"
@@ -2786,7 +2773,6 @@
       "copied": "Kopioitu leikepöydälle",
       "copy": "Kopioi",
       "copyFailed": "Kopiointi epäonnistui",
-      "description": "Lisää kertakoodi todennussovelluksesta ylimääräiseksi turvakerrokseksi",
       "disable": "Poista kaksivaiheinen tunnistautuminen käytöstä",
       "disableCode": "Anna nykyinen koodi tai palautuskoodi poistaaksesi käytöstä",
       "disabled": "Kaksivaiheinen tunnistautuminen poistettu käytöstä",
@@ -2807,7 +2793,6 @@
       "recoveryTitle": "Palautuskoodit",
       "recoveryWarning": "Säilytä nämä kertakoodit turvallisessa paikassa. Jokaista koodia voidaan käyttää kerran kirjautumiseen, jos menetät pääsyn todennussovellukseen",
       "ssoNote": "Organisaatiosi käyttää SSO:ta. 2FA koskee täällä vain salasanakirjautumista; SSO-istunnot ovat identiteettipalveluntarjoajan suojaamia",
-      "title": "Kaksivaiheinen tunnistautuminen",
       "useAuthenticatorCode": "Käytä todennuskoodia",
       "useRecoveryCode": "Käytä sen sijaan palautuskoodia"
     },
@@ -2915,7 +2900,6 @@
       "catRepairHint": "email.repaired",
       "categories": "Tapahtumaluokat",
       "clearSecret": "Tyhjennä",
-      "description": "Välittää auditointitapahtumat ulkoiseen SIEM-järjestelmään (Splunk, Elasticsearch, QRadar…) JSON-muodossa HMAC-SHA256-allekirjoituksella.",
       "enabled": "Välitys käytössä",
       "enabledHint": "Kun käytössä, vastaavat auditointitapahtumat lähetetään webhook-osoitteeseen.",
       "forbidden": "SIEM-välitys vaatii Enterprise-version ja system:root- tai user:manage-oikeuden.",
@@ -2943,7 +2927,6 @@
       "testFailed": "Testitapahtuma epäonnistui",
       "testMapping": "Esikatsele hyötykuorma",
       "testOk": "Testitapahtuma toimitettu (HTTP {{status}})",
-      "title": "SIEM-verkkokoukku",
       "url": "Webhook-osoite"
     },
     "sso": {
@@ -2984,8 +2967,7 @@
       "technicalDetails": "Tekniset tiedot",
       "test": "Testaa yhteys",
       "testFailed": "Yhteystesti epäonnistui",
-      "testOk": "Yhteys onnistui",
-      "title": "Kertakirjautuminen (OIDC)"
+      "testOk": "Yhteys onnistui"
     },
     "theRootPasswordHasBeenReset": "Pääkäyttäjän salasana on nollattu",
     "theRootTokenHasBeenReset": "Pääkäyttäjän tunnus on nollattu",
@@ -3020,8 +3002,6 @@
     "notifications": "Järjestelmäilmoitukset"
   },
   "systemConfig": {
-    "pageDescription": "Nämä parametrit alustetaan CLI-lippujen tai ympäristömuuttujien kautta. Ne ovat vain luku -tilassa.",
-    "pageTitle": "Järjestelmätason konfiguraatiot",
     "sections": {
       "cors": {
         "desc": "Cross-origin-käyttösäännöt",

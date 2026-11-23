@@ -692,7 +692,6 @@
     "volumeTrend": "時間経過による件数"
   },
   "apiDocs": {
-    "choosePreferredType": "ご希望のAPIドキュメントタイプを選択してください",
     "downloadSpecYAML": "仕様YAMLをダウンロード",
     "openAPIExplorer": "OpenAPI Explorer",
     "reDoc": "ReDoc",
@@ -1752,7 +1751,6 @@
     "copied": "クリップボードにコピーしました",
     "copyFailed": "コピーに失敗しました",
     "copyMachineId": "マシン ID をコピー",
-    "description": "現在のライセンスの詳細を表示し、資格情報を更新します。",
     "edition": "エディション",
     "features": "機能",
     "forbidden": "ライセンス管理は Pro 版でのみ利用可能です。",
@@ -1773,7 +1771,6 @@
     "statusTrialExpired": "試用期限切れ",
     "statusUpdateExpired": "更新期限切れ",
     "statusValid": "有効",
-    "title": "ライセンス管理",
     "trialDays": "試用日数",
     "trialDaysRemaining": "残り {{days}} 日",
     "updatesUntil": "更新期限",
@@ -2613,7 +2610,6 @@
       "breakGlassHint": "承認者に連絡がつかない場合の動作：この待機時間の経過後、system:root 管理者は単独でリクエストを承認できます。バイパスは監査ログにその旨記録されます。",
       "breakGlassMinHours": "バイパスが利用可能になるまでの待機時間（時間）",
       "breakGlassMinHoursHint": "この遅延は統制そのものであり、妨げではありません。通常の二人経路が先に機会を得たことを保証します。0 は既定値の 1 時間を使用します。",
-      "description": "不可逆な操作に2人を要求します：1人が申請し、別の人が承認して初めて実行されます。既定では無効です。",
       "destructiveHint": "これを有効にすると、そのような削除はすべて二人目の承認が必要になります（1通のメッセージ削除も含む）。",
       "enabled": "二重管理を有効にする",
       "enabledHint": "無効の場合、以下の各操作は以前とまったく同じように動作します。キューに入るものはありません。",
@@ -2638,13 +2634,11 @@
       "revocationHint": "有効にすると、トークンの失効には二人目の承認が必要になります。ユーザーが自身の漏洩したトークンを失効させる場合も同様です。",
       "save": "設定を保存",
       "saveFailed": "二重管理の設定の保存に失敗しました",
-      "saved": "二重管理の設定を保存しました",
-      "title": "二重管理"
+      "saved": "二重管理の設定を保存しました"
     },
     "authUrl": "認証URL",
     "branding": {
       "companyName": "会社名",
-      "description": "ログインページ、サイドバー、ブラウザタブに表示されるロゴ、会社名、タグラインをカスタマイズ",
       "forbidden": "ブランディングには system:root または user:manage 権限が必要です",
       "loadFailed": "ブランディングの読み込みに失敗しました",
       "logo": "ロゴ",
@@ -2662,7 +2656,6 @@
       "saved": "ブランディングを保存しました",
       "tagline": "タグライン",
       "taglinePlaceholder": "例：セルフホスト型メールアーカイブプラットフォーム",
-      "title": "ブランディング",
       "uploadLogo": "ロゴをアップロード"
     },
     "changePasswordForFutureLogins": "今後のログインのためにパスワードを変更します。",
@@ -2701,10 +2694,6 @@
     "filterProxy": "プロキシをフィルター...",
     "general": "一般",
     "generateNewToken": "新しいトークンを生成します。古いトークンは直ちに失効します。",
-    "header": {
-      "description": "プロフィールの管理とシステム設定の確認。",
-      "title": "設定"
-    },
     "host": "ホスト",
     "id": "ID",
     "invalidPassword": "無効なパスワード",
@@ -2722,7 +2711,6 @@
       "saved": "SMTP ジャーナリング設定を保存しました",
       "target": "ジャーナル宛先アドレス",
       "targetHint": "ジャーナルルールの配信先アドレスです。この設定を保存すると、対応するアーカイブアカウントが作成されます（管理者権限が必要）。メールボックスとして存在する必要はありません。",
-      "title": "SMTP ジャーナリング",
       "tlsHint": "SMTP リスナーを有効にし（BICHON_ENABLE_SMTP）、STARTTLS または TLS（BICHON_SMTP_ENCRYPTION）に設定する必要があります。暗号化が無効な場合、ジャーナル配信はすべて拒否されます。"
     },
     "lastAccess": "最終アクセス",
@@ -2771,7 +2759,6 @@
       "testOk": "接続でき、ベース DN を検索できます。",
       "testing": "テスト中…",
       "timeout": "タイムアウト（秒）",
-      "title": "LDAP / Active Directory",
       "userFilter": "ユーザー検索フィルター",
       "userFilterHint": "{username} はユーザーの入力に置き換えられます。フィルターは必ず 1 件だけに一致する必要があります。",
       "usernameAttribute": "ユーザー名属性"
@@ -2786,7 +2773,6 @@
       "copied": "クリップボードにコピーしました",
       "copy": "コピー",
       "copyFailed": "コピーに失敗しました",
-      "description": "パスワードに加えて認証アプリのワンタイムコードを要求",
       "disable": "二段階認証を無効化",
       "disableCode": "無効にするには現在のコードまたはリカバリーコードを入力してください",
       "disabled": "二段階認証が無効化されました",
@@ -2807,7 +2793,6 @@
       "recoveryTitle": "リカバリーコード",
       "recoveryWarning": "これらのワンタイムコードは安全な場所に保存してください。認証アプリが使えなくなった場合に各コードを一度だけ使用できます",
       "ssoNote": "組織はSSOを使用しています。MFAはパスワードログインのみに適用され、SSOはIDプロバイダーで保護されます",
-      "title": "二段階認証",
       "useAuthenticatorCode": "認証コードを使用",
       "useRecoveryCode": "代わりにリカバリーコードを使用"
     },
@@ -2915,7 +2900,6 @@
       "catRepairHint": "email.repaired",
       "categories": "イベントカテゴリ",
       "clearSecret": "クリア",
-      "description": "監査イベントを外部SIEM（Splunk、Elasticsearch、QRadar…）へ、HMAC-SHA256署名付きのJSONとして転送します。",
       "enabled": "転送を有効化",
       "enabledHint": "有効にすると、一致する監査イベントがWebhook URLにプッシュされます。",
       "forbidden": "SIEM転送にはEnterpriseエディションとsystem:rootまたはuser:manage権限が必要です。",
@@ -2943,7 +2927,6 @@
       "testFailed": "テストイベントに失敗しました",
       "testMapping": "ペイロードをプレビュー",
       "testOk": "テストイベントを配信しました（HTTP {{status}}）",
-      "title": "SIEM Webhook",
       "url": "Webhook URL"
     },
     "sso": {
@@ -2984,8 +2967,7 @@
       "technicalDetails": "技術的な詳細",
       "test": "接続をテスト",
       "testFailed": "接続テストに失敗しました",
-      "testOk": "接続テストに成功しました",
-      "title": "シングルサインオン（OIDC）"
+      "testOk": "接続テストに成功しました"
     },
     "theRootPasswordHasBeenReset": "ルートパスワードがリセットされました",
     "theRootTokenHasBeenReset": "ルートトークンがリセットされました",
@@ -3020,8 +3002,6 @@
     "notifications": "システム通知"
   },
   "systemConfig": {
-    "pageDescription": "これらのパラメータは、CLIフラグまたは環境変数を介して初期化されます。環境の一貫性を確保するため、現在は読み取り専用です。",
-    "pageTitle": "システムレベルの設定",
     "sections": {
       "cors": {
         "desc": "クロスオリジンアクセスのルール",

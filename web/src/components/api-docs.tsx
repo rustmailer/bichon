@@ -18,11 +18,8 @@
 
 
 import { Card } from "@/components/ui/card";
-import { FixedHeader } from "./layout/fixed-header";
-import { Main } from "./layout/main";
 import Logo from '@/assets/logo.svg'
 import { useTranslation } from 'react-i18next'
-import { Separator } from "./ui/separator";
 
 export default function APIDocs() {
   const { t } = useTranslation()
@@ -47,17 +44,7 @@ export default function APIDocs() {
 
   return (
     <>
-      <FixedHeader />
-      <Main>
-        <div className='mb-2 flex items-center justify-between space-y-2 flex-wrap gap-x-4'>
-          <div>
-            <h2 className='text-lg font-bold tracking-tight'>{t('navigation.apiDocs')}</h2>
-            <p className='text-xs text-muted-foreground'>
-              {t('apiDocs.choosePreferredType')}
-            </p>
-          </div>
-        </div>
-        <Separator className='mt-2 mb-4 lg:mt-3 lg:mb-6' />
+      <div className='w-full'>
         <div className='-mx-4 flex-1 overflow-auto px-4 py-1 flex-row lg:space-x-12 space-y-0'>
           <div className='m-auto flex h-full w-full flex-col items-center justify-center gap-6 p-4'>
             <div className="grid w-full gap-4 sm:grid-cols-1 md:grid-cols-2 xl:max-w-4xl">
@@ -80,7 +67,7 @@ export default function APIDocs() {
             </div>
           </div>
         </div>
-      </Main>
+      </div>
     </>
   );
 }

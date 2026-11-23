@@ -264,18 +264,6 @@ export function ApprovalSettings() {
 
   return (
     <div className='w-full max-w-7xl space-y-6 px-4'>
-      <div className='space-y-2'>
-        <h2 className='text-xl font-bold'>
-          {t('settings.approvals.title', 'Dual control')}
-        </h2>
-        <p className='text-sm text-muted-foreground'>
-          {t(
-            'settings.approvals.description',
-            'Require two people for irreversible operations: one requests, a different person approves, and only then does it happen. Off by default.'
-          )}
-        </p>
-      </div>
-
       <div className='space-y-6 rounded-lg border p-6'>
         <div className='flex items-center justify-between'>
           <div className='space-y-1'>

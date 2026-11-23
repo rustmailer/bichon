@@ -198,18 +198,6 @@ export function BrandingSettings() {
 
   return (
     <div className="w-full max-w-7xl space-y-6 px-4">
-      <div className="space-y-2">
-        <h2 className="text-xl font-bold">
-          {t('settings.branding.title', 'Branding')}
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          {t(
-            'settings.branding.description',
-            'Customize the logo, company name and tagline shown on the login page, sidebar and browser tab.',
-          )}
-        </p>
-      </div>
-
       <div className="space-y-6 rounded-lg border p-6">
         <div className="space-y-2">
           <Label>{t('settings.branding.logo', 'Logo')}</Label>

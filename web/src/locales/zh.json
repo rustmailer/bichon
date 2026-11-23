@@ -692,7 +692,6 @@
     "volumeTrend": "随时间变化的数量"
   },
   "apiDocs": {
-    "choosePreferredType": "选择您首选的 API 文档类型",
     "downloadSpecYAML": "下载规范 YAML",
     "openAPIExplorer": "OpenAPI Explorer",
     "reDoc": "ReDoc",
@@ -1752,7 +1751,6 @@
     "copied": "已复制到剪贴板",
     "copyFailed": "复制失败",
     "copyMachineId": "复制机器码",
-    "description": "查看当前许可证详情并更新凭证。",
     "edition": "版本",
     "features": "功能特性",
     "forbidden": "许可证管理仅在 Pro 版本中可用。",
@@ -1773,7 +1771,6 @@
     "statusTrialExpired": "试用已过期",
     "statusUpdateExpired": "更新维护期已过期",
     "statusValid": "有效",
-    "title": "许可证管理",
     "trialDays": "试用天数",
     "trialDaysRemaining": "剩余 {{days}} 天",
     "updatesUntil": "更新维护期至",
@@ -2613,7 +2610,6 @@
       "breakGlassHint": "当无法联系审批人时的处理方式：经过这段等待后，system:root 管理员可以单人批准请求。该放行会在审计日志中如实记录。",
       "breakGlassMinHours": "旁路可用所需的等待时间（小时）",
       "breakGlassMinHoursHint": "这段延迟本身就是管控措施，而非其障碍：它保证正常的双人流程先得到机会。0 表示使用默认值 1 小时。",
-      "description": "对不可逆操作要求两个人：一人发起，另一个人批准，之后才会执行。默认关闭。",
       "destructiveHint": "开启后，每一次此类删除都需要第二个人审批——包括删除单封邮件。",
       "enabled": "启用双人控制",
       "enabledHint": "关闭时，下列每个操作的行为与之前完全一致，不会有任何请求进入队列。",
@@ -2638,13 +2634,11 @@
       "revocationHint": "启用后，令牌必须经第二个人批准才能吊销——包括用户吊销自己已泄露的令牌。",
       "save": "保存配置",
       "saveFailed": "保存双人控制配置失败",
-      "saved": "双人控制配置已保存",
-      "title": "双人控制"
+      "saved": "双人控制配置已保存"
     },
     "authUrl": "授权 URL",
     "branding": {
       "companyName": "公司名称",
-      "description": "自定义登录页、侧边栏和浏览器标签页中显示的徽标、公司名称和标语",
       "forbidden": "需要 system:root 或 user:manage 权限才能管理品牌样式",
       "loadFailed": "加载品牌样式失败",
       "logo": "徽标",
@@ -2662,7 +2656,6 @@
       "saved": "品牌样式已保存",
       "tagline": "标语",
       "taglinePlaceholder": "例如：自托管邮件归档平台",
-      "title": "品牌样式",
       "uploadLogo": "上传徽标"
     },
     "changePasswordForFutureLogins": "更改未来登录的密码。",
@@ -2701,10 +2694,6 @@
     "filterProxy": "筛选代理...",
     "general": "常规",
     "generateNewToken": "生成新令牌，旧令牌立即失效。",
-    "header": {
-      "description": "管理您的个人资料并查看系统配置。",
-      "title": "设置"
-    },
     "host": "主机",
     "id": "ID",
     "invalidPassword": "密码无效",
@@ -2722,7 +2711,6 @@
       "saved": "SMTP 日记配置已保存",
       "target": "日记目标地址",
       "targetHint": "日记规则投递的目标地址。保存此配置时会创建对应的归档账户（需要管理员权限）——该地址不需要是真实信箱。",
-      "title": "SMTP Journaling（日记转发）",
       "tlsHint": "SMTP 监听必须已启用（BICHON_ENABLE_SMTP）并配置为 STARTTLS 或 TLS（BICHON_SMTP_ENCRYPTION）；关闭加密时所有日记投递都会被拒绝。"
     },
     "lastAccess": "最后访问",
@@ -2771,7 +2759,6 @@
       "testOk": "连接成功，且基准 DN 可搜索。",
       "testing": "正在测试…",
       "timeout": "超时（秒）",
-      "title": "LDAP / Active Directory",
       "userFilter": "用户搜索过滤器",
       "userFilterHint": "{username} 会被替换为用户输入的内容。过滤器必须精确匹配一个条目。",
       "usernameAttribute": "用户名字段"
@@ -2786,7 +2773,6 @@
       "copied": "已复制到剪贴板",
       "copy": "复制",
       "copyFailed": "复制失败",
-      "description": "登录密码外，再添加一道动态验证码",
       "disable": "关闭两步验证",
       "disableCode": "输入当前验证码或恢复码以关闭",
       "disabled": "两步验证已关闭",
@@ -2807,7 +2793,6 @@
       "recoveryTitle": "恢复码",
       "recoveryWarning": "请妥善保存这些一次性恢复码，每个仅可使用一次",
       "ssoNote": "组织已启用单点登录，两步验证仅用于密码登录",
-      "title": "两步验证",
       "useAuthenticatorCode": "改用身份验证器代码",
       "useRecoveryCode": "改用恢复码"
     },
@@ -2915,7 +2900,6 @@
       "catRepairHint": "email.repaired",
       "categories": "事件类别",
       "clearSecret": "清除",
-      "description": "将审计事件以 JSON 形式转发到外部 SIEM（Splunk、Elasticsearch、QRadar…），并附 HMAC-SHA256 签名。",
       "enabled": "启用转发",
       "enabledHint": "启用后，匹配的审计事件将推送到 webhook 地址。",
       "forbidden": "SIEM 转发需要企业版以及 system:root 或 user:manage 权限。",
@@ -2943,7 +2927,6 @@
       "testFailed": "测试事件失败",
       "testMapping": "预览负载",
       "testOk": "测试事件已送达（HTTP {{status}}）",
-      "title": "SIEM Webhook",
       "url": "Webhook 地址"
     },
     "sso": {
@@ -2984,8 +2967,7 @@
       "technicalDetails": "技术详情",
       "test": "测试连接",
       "testFailed": "连接测试失败",
-      "testOk": "连接测试成功",
-      "title": "单点登录（OIDC）"
+      "testOk": "连接测试成功"
     },
     "theRootPasswordHasBeenReset": "root账户密码已重置",
     "theRootTokenHasBeenReset": "root账户令牌已重置",
@@ -3020,8 +3002,6 @@
     "notifications": "系统通知"
   },
   "systemConfig": {
-    "pageDescription": "这些参数通过 CLI 标志或环境变量初始化。它们当前为只读，以确保环境一致性。",
-    "pageTitle": "系统级配置",
     "sections": {
       "cors": {
         "desc": "跨域访问规则",

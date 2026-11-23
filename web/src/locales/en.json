@@ -692,7 +692,6 @@
     "volumeTrend": "Volume over time"
   },
   "apiDocs": {
-    "choosePreferredType": "Choose your preferred API documentation type",
     "downloadSpecYAML": "Download Spec YAML",
     "openAPIExplorer": "OpenAPI Explorer",
     "reDoc": "ReDoc",
@@ -1752,7 +1751,6 @@
     "copied": "Copied to clipboard",
     "copyFailed": "Failed to copy",
     "copyMachineId": "Copy machine ID",
-    "description": "View your current license details and update credentials.",
     "edition": "Edition",
     "features": "Features",
     "forbidden": "License management is available in the Pro edition only.",
@@ -1773,7 +1771,6 @@
     "statusTrialExpired": "Trial expired",
     "statusUpdateExpired": "Updates expired",
     "statusValid": "Valid",
-    "title": "License management",
     "trialDays": "Trial days",
     "trialDaysRemaining": "{{days}} days remaining",
     "updatesUntil": "Updates until",
@@ -2613,7 +2610,6 @@
       "breakGlassHint": "What happens when the approver cannot be reached: after this wait, a system:root administrator may approve a request alone. The override is recorded as such in the audit log.",
       "breakGlassMinHours": "Override available after (hours pending)",
       "breakGlassMinHoursHint": "The delay is the control, not an obstacle to it: it guarantees the normal two-person path had its chance first. 0 uses the default of 1 hour.",
-      "description": "Require two people for irreversible operations: one requests, a different person approves, and only then does it happen. Off by default.",
       "destructiveHint": "Gating this makes every such deletion need a second person — including deleting a single message.",
       "enabled": "Dual control enabled",
       "enabledHint": "When off, every operation below behaves exactly as it did before. Nothing is queued.",
@@ -2638,13 +2634,11 @@
       "revocationHint": "Gating this means a token cannot be revoked until a second person approves — including a user revoking their own leaked token.",
       "save": "Save configuration",
       "saveFailed": "Failed to save dual-control configuration",
-      "saved": "Dual-control configuration saved",
-      "title": "Dual control"
+      "saved": "Dual-control configuration saved"
     },
     "authUrl": "Auth Url",
     "branding": {
       "companyName": "Company name",
-      "description": "Customize the logo, company name and tagline shown on the login page, sidebar and browser tab",
       "forbidden": "Branding requires system:root or user:manage permission",
       "loadFailed": "Failed to load branding",
       "logo": "Logo",
@@ -2662,7 +2656,6 @@
       "saved": "Branding saved",
       "tagline": "Tagline",
       "taglinePlaceholder": "e.g. Self-hosted email archiving platform",
-      "title": "Branding",
       "uploadLogo": "Upload logo"
     },
     "changePasswordForFutureLogins": "Change password for future logins.",
@@ -2701,10 +2694,6 @@
     "filterProxy": "Filter Proxy...",
     "general": "General",
     "generateNewToken": "Generate new token, old one expires immediately.",
-    "header": {
-      "description": "Manage your account profile and view system configurations.",
-      "title": "Settings"
-    },
     "host": "Host",
     "id": "Id",
     "invalidPassword": "Invalid password",
@@ -2722,7 +2711,6 @@
       "saved": "SMTP journaling configuration saved",
       "target": "Journal target address",
       "targetHint": "The address your journaling rule delivers to. Saving this configuration creates the archive account for it (administrator permission required) — the address does not need to exist as a mailbox.",
-      "title": "SMTP journaling",
       "tlsHint": "The SMTP listener must be enabled (BICHON_ENABLE_SMTP) and configured for STARTTLS or TLS (BICHON_SMTP_ENCRYPTION); with encryption disabled every journal delivery is refused."
     },
     "lastAccess": "Last Access",
@@ -2771,7 +2759,6 @@
       "testOk": "Connected and the base DN is searchable.",
       "testing": "Testing…",
       "timeout": "Timeout (seconds)",
-      "title": "LDAP / Active Directory",
       "userFilter": "User search filter",
       "userFilterHint": "{username} is replaced with what the user typed. The filter must match exactly one entry.",
       "usernameAttribute": "Username attribute"
@@ -2786,7 +2773,6 @@
       "copied": "Copied to clipboard",
       "copy": "Copy",
       "copyFailed": "Failed to copy",
-      "description": "Add a one-time code from your authenticator app as an extra layer of security when signing in with a password",
       "disable": "Disable two-factor authentication",
       "disableCode": "Enter your current code or a recovery code to disable",
       "disabled": "Two-factor authentication disabled",
@@ -2807,7 +2793,6 @@
       "recoveryTitle": "Recovery codes",
       "recoveryWarning": "Save these one-time codes somewhere safe. Each code can be used once to sign in if you lose access to your authenticator app",
       "ssoNote": "Your organization uses single sign-on. MFA here only applies to password sign-in; SSO sessions are secured by your identity provider",
-      "title": "Two-factor authentication",
       "useAuthenticatorCode": "Use an authenticator code",
       "useRecoveryCode": "Use a recovery code instead"
     },
@@ -2915,7 +2900,6 @@
       "catRepairHint": "email.repaired",
       "categories": "Event categories",
       "clearSecret": "Clear",
-      "description": "Forward audit events to an external SIEM (Splunk, Elasticsearch, QRadar…) as JSON signed with an HMAC-SHA256 signature.",
       "enabled": "Forwarding enabled",
       "enabledHint": "When enabled, matching audit events are pushed to the webhook URL.",
       "forbidden": "SIEM forwarding requires the Enterprise edition and system:root or user:manage permission.",
@@ -2943,7 +2927,6 @@
       "testFailed": "Test event failed",
       "testMapping": "Preview payload",
       "testOk": "Test event delivered (HTTP {{status}})",
-      "title": "SIEM Webhook",
       "url": "Webhook URL"
     },
     "sso": {
@@ -2984,8 +2967,7 @@
       "technicalDetails": "Technical details",
       "test": "Test connection",
       "testFailed": "Connection test failed",
-      "testOk": "Connection successful",
-      "title": "Single Sign-On (OIDC)"
+      "testOk": "Connection successful"
     },
     "theRootPasswordHasBeenReset": "The root password has been reset",
     "theRootTokenHasBeenReset": "The root token has been reset",
@@ -3020,8 +3002,6 @@
     "notifications": "System Notifications"
   },
   "systemConfig": {
-    "pageDescription": "These parameters are initialized via CLI flags or Environment Variables. They are currently read-only to ensure environment consistency.",
-    "pageTitle": "System-level Configurations",
     "sections": {
       "cors": {
         "desc": "Cross-origin access rules",

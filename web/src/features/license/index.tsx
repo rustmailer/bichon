@@ -32,8 +32,6 @@ import {
 } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { FixedHeader } from '@/components/layout/fixed-header'
-import { Main } from '@/components/layout/main'
 import { useEdition } from '@/hooks/use-edition'
 import { useCurrentUser } from '@/hooks/use-current-user'
 import { useToast } from '@/hooks/use-toast'
@@ -125,14 +123,9 @@ export default function LicensePage() {
 
   if (!canView) {
     return (
-      <>
-        <FixedHeader />
-        <Main>
-          <div className='mx-auto w-full max-w-7xl px-4 py-16 text-center text-muted-foreground'>
-            {t('license.forbidden', 'License management is available in the Pro edition only.')}
-          </div>
-        </Main>
-      </>
+      <div className='mx-auto w-full max-w-7xl px-4 py-16 text-center text-muted-foreground'>
+        {t('license.forbidden', 'License management is available in the Pro edition only.')}
+      </div>
     )
   }
 
@@ -155,12 +148,8 @@ export default function LicensePage() {
 
   return (
     <>
-      <FixedHeader />
-      <Main>
+      <div className='w-full'>
         <div className='mx-auto w-full max-w-7xl px-4'>
-          <h1 className='mb-1 text-lg font-semibold'>{t('license.title')}</h1>
-          <p className='mb-6 text-xs text-muted-foreground'>{t('license.description')}</p>
-
           {isLoading && (
             <div className='flex h-40 items-center justify-center'>
               <Loader2 className='h-6 w-6 animate-spin' />
@@ -282,7 +271,7 @@ export default function LicensePage() {
             </div>
           )}
         </div>
-      </Main>
+      </div>
     </>
   )
 }

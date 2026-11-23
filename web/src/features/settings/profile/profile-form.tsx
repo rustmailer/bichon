@@ -116,9 +116,9 @@ export function UserProfileForm({ user }: UserProfileFormProps) {
       <Form {...form}>
         <form
           onSubmit={form.handleSubmit((values) => mutation.mutate(values))}
-          className="space-y-6 w-full max-w-screen-xl mx-auto px-4 md:px-6"
+          className="space-y-6 w-full max-w-xl mx-auto px-4 md:px-6"
         >
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr] gap-6">
+          <div className="space-y-6">
             <div className="space-y-6">
               <div className="flex justify-center">
                 <AvatarUpload

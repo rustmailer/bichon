@@ -692,7 +692,6 @@
     "volumeTrend": "隨時間變化的數量"
   },
   "apiDocs": {
-    "choosePreferredType": "選擇您偏好的 API 文件類型",
     "downloadSpecYAML": "下載規格 YAML",
     "openAPIExplorer": "OpenAPI Explorer",
     "reDoc": "ReDoc",
@@ -1752,7 +1751,6 @@
     "copied": "已複製到剪貼簿",
     "copyFailed": "複製失敗",
     "copyMachineId": "複製機器碼",
-    "description": "檢視目前的授權詳情並更新憑證。",
     "edition": "版本",
     "features": "功能特性",
     "forbidden": "授權管理僅在 Pro 版本中可用。",
@@ -1773,7 +1771,6 @@
     "statusTrialExpired": "試用已過期",
     "statusUpdateExpired": "更新維護期已過期",
     "statusValid": "有效",
-    "title": "授權管理",
     "trialDays": "試用天數",
     "trialDaysRemaining": "剩餘 {{days}} 天",
     "updatesUntil": "更新維護期至",
@@ -2613,7 +2610,6 @@
       "breakGlassHint": "當無法聯繫審批人時的處理方式：經過這段等待後，system:root 管理員可以單人批准請求。該放行會在稽核日誌中如實記錄。",
       "breakGlassMinHours": "旁路可用所需的等待時間（小時）",
       "breakGlassMinHoursHint": "這段延遲本身就是管控措施，而非其障礙：它保證正常的雙人流程先得到機會。0 表示使用預設值 1 小時。",
-      "description": "對不可逆操作要求兩個人：一人發起，另一個人批准，之後才會執行。預設關閉。",
       "destructiveHint": "開啟後，每一次此類刪除都需要第二個人審批——包括刪除單封郵件。",
       "enabled": "啟用雙人控制",
       "enabledHint": "關閉時，下列每個操作的行為與之前完全一致，不會有任何請求進入佇列。",
@@ -2638,13 +2634,11 @@
       "revocationHint": "啟用後，權杖必須經第二個人批准才能撤銷——包括使用者撤銷自己已外洩的權杖。",
       "save": "儲存設定",
       "saveFailed": "儲存雙人控制設定失敗",
-      "saved": "雙人控制設定已儲存",
-      "title": "雙人控制"
+      "saved": "雙人控制設定已儲存"
     },
     "authUrl": "授權 URL",
     "branding": {
       "companyName": "公司名稱",
-      "description": "自訂登入頁、側邊欄和瀏覽器標籤頁中顯示的標誌、公司名稱和標語",
       "forbidden": "需要 system:root 或 user:manage 權限才能管理品牌樣式",
       "loadFailed": "載入品牌樣式失敗",
       "logo": "標誌",
@@ -2662,7 +2656,6 @@
       "saved": "品牌樣式已儲存",
       "tagline": "標語",
       "taglinePlaceholder": "例如：自託管郵件歸檔平台",
-      "title": "品牌樣式",
       "uploadLogo": "上傳標誌"
     },
     "changePasswordForFutureLogins": "變更密碼以供未來登入使用。",
@@ -2701,10 +2694,6 @@
     "filterProxy": "篩選代理...",
     "general": "一般",
     "generateNewToken": "產生一個新權杖。舊權杖將立即失效。",
-    "header": {
-      "description": "管理您的個人資料並查看系統配置。",
-      "title": "設置"
-    },
     "host": "主機",
     "id": "ID",
     "invalidPassword": "密碼無效",
@@ -2722,7 +2711,6 @@
       "saved": "SMTP 日誌設定已儲存",
       "target": "日誌目標地址",
       "targetHint": "日誌規則投遞的目標地址。儲存此設定時會建立對應的封存帳戶（需要管理員權限）——該地址不需要是實際信箱。",
-      "title": "SMTP Journaling（日誌轉送）",
       "tlsHint": "SMTP 監聽必須已啟用（BICHON_ENABLE_SMTP）並設定為 STARTTLS 或 TLS（BICHON_SMTP_ENCRYPTION）；關閉加密時所有日誌投遞都會被拒絕。"
     },
     "lastAccess": "上次存取",
@@ -2771,7 +2759,6 @@
       "testOk": "連線成功，且基準 DN 可搜尋。",
       "testing": "正在測試…",
       "timeout": "逾時（秒）",
-      "title": "LDAP / Active Directory",
       "userFilter": "使用者搜尋篩選器",
       "userFilterHint": "{username} 會替換為使用者輸入的內容。篩選器必須精確符合一個項目。",
       "usernameAttribute": "使用者名稱欄位"
@@ -2786,7 +2773,6 @@
       "copied": "已複製到剪貼板",
       "copy": "複製",
       "copyFailed": "複製失敗",
-      "description": "登入密碼外，再增加一道動態驗證碼",
       "disable": "關閉兩步驟驗證",
       "disableCode": "輸入當前驗證碼或復原碼以關閉",
       "disabled": "兩步驟驗證已關閉",
@@ -2807,7 +2793,6 @@
       "recoveryTitle": "復原碼",
       "recoveryWarning": "請妥善保存這些一次性復原碼，每個僅可使用一次",
       "ssoNote": "組織已啟用單一登入，兩步驟驗證僅用於密碼登入",
-      "title": "兩步驟驗證",
       "useAuthenticatorCode": "改用驗證器代碼",
       "useRecoveryCode": "改用復原碼"
     },
@@ -2915,7 +2900,6 @@
       "catRepairHint": "email.repaired",
       "categories": "事件類別",
       "clearSecret": "清除",
-      "description": "將稽核事件以 JSON 形式轉送到外部 SIEM（Splunk、Elasticsearch、QRadar…），並附 HMAC-SHA256 簽章。",
       "enabled": "啟用轉送",
       "enabledHint": "啟用後，相符的稽核事件會推送到 webhook 位址。",
       "forbidden": "SIEM 轉送需要企業版以及 system:root 或 user:manage 權限。",
@@ -2943,7 +2927,6 @@
       "testFailed": "測試事件失敗",
       "testMapping": "預覽負載",
       "testOk": "測試事件已送達（HTTP {{status}}）",
-      "title": "SIEM Webhook",
       "url": "Webhook 位址"
     },
     "sso": {
@@ -2984,8 +2967,7 @@
       "technicalDetails": "技術詳情",
       "test": "測試連線",
       "testFailed": "連線測試失敗",
-      "testOk": "連線測試成功",
-      "title": "單一登入（OIDC）"
+      "testOk": "連線測試成功"
     },
     "theRootPasswordHasBeenReset": "根目錄密碼已重設",
     "theRootTokenHasBeenReset": "根權杖已重設",
@@ -3020,8 +3002,6 @@
     "notifications": "系統通知"
   },
   "systemConfig": {
-    "pageDescription": "這些參數透過 CLI 標誌或環境變數初始化。它們目前為唯讀，以確保環境一致性。",
-    "pageTitle": "系統級配置",
     "sections": {
       "cors": {
         "desc": "跨來源資源共用規則",

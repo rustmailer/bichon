@@ -279,18 +279,6 @@ export function LdapSettings() {
 
   return (
     <div className='w-full max-w-7xl space-y-6 px-4'>
-      <div className='space-y-2'>
-        <h2 className='text-xl font-bold'>
-          {t('settings.ldap.title', 'LDAP / Active Directory')}
-        </h2>
-        <p className='text-sm text-muted-foreground'>
-          {t(
-            'settings.ldap.description',
-            'Sign users in with their directory username and password. Bichon verifies the credentials with a bind against your LDAP server and never stores the password. Changes take effect immediately — no restart.',
-          )}
-        </p>
-      </div>
-
       <Form {...form}>
         <form
           onSubmit={form.handleSubmit(onSubmit)}
@@ -309,6 +297,12 @@ export function LdapSettings() {
                     {t(
                       'settings.ldap.enabledHint',
                       'When enabled, the sign-in page offers LDAP/AD. Every required field must be configured first.',
+                    )}
+                  </FormDescription>
+                  <FormDescription>
+                    {t(
+                      'settings.ldap.description',
+                      'Sign users in with their directory username and password. Bichon verifies the credentials with a bind against your LDAP server and never stores the password. Changes take effect immediately — no restart.',
                     )}
                   </FormDescription>
                 </div>

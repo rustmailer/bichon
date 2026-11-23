@@ -148,18 +148,6 @@ export function JournalSettings() {
 
   return (
     <div className='w-full max-w-7xl space-y-6 px-4'>
-      <div className='space-y-2'>
-        <h2 className='text-xl font-bold'>
-          {t('settings.journal.title', 'SMTP journaling')}
-        </h2>
-        <p className='text-sm text-muted-foreground'>
-          {t(
-            'settings.journal.description',
-            'Accept the copy of every message your mail system delivers to a journal address — before it reaches the recipient. This is the only way to archive a message an employee receives and deletes between two syncs. Deliveries arrive without SMTP authentication, so only the source network is accepted, and only over TLS.',
-          )}
-        </p>
-      </div>
-
       <div className='space-y-6 rounded-lg border p-6'>
         <div className='flex items-center justify-between'>
           <div className='space-y-1'>
@@ -173,6 +161,13 @@ export function JournalSettings() {
           </div>
           <Switch checked={enabled} onCheckedChange={setEnabled} />
         </div>
+
+        <p className='text-xs text-muted-foreground'>
+          {t(
+            'settings.journal.description',
+            'Accept the copy of every message your mail system delivers to a journal address — before it reaches the recipient. This is the only way to archive a message an employee receives and deletes between two syncs. Deliveries arrive without SMTP authentication, so only the source network is accepted, and only over TLS.',
+          )}
+        </p>
 
         <div className='grid gap-4 sm:grid-cols-2'>
           <div className='space-y-2'>

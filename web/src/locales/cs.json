@@ -692,7 +692,6 @@
     "volumeTrend": "Objem v čase"
   },
   "apiDocs": {
-    "choosePreferredType": "Zvolte preferovaný typ dokumentace API",
     "downloadSpecYAML": "Stáhnout specifikaci YAML",
     "openAPIExplorer": "OpenAPI Explorer",
     "reDoc": "ReDoc",
@@ -1752,7 +1751,6 @@
     "copied": "Zkopírováno do schránky",
     "copyFailed": "Kopírování se nezdařilo",
     "copyMachineId": "Kopírovat ID stroje",
-    "description": "Zobrazte podrobnosti aktuální licence a aktualizujte licenční údaje.",
     "edition": "Edice",
     "features": "Funkce",
     "forbidden": "Správa licencí je k dispozici pouze v edici Pro.",
@@ -1773,7 +1771,6 @@
     "statusTrialExpired": "Zkušební verze vypršela",
     "statusUpdateExpired": "Aktualizace vypršely",
     "statusValid": "Platná",
-    "title": "Správa licence",
     "trialDays": "Dny zkušební verze",
     "trialDaysRemaining": "Zbývá dní: {{days}}",
     "updatesUntil": "Aktualizace do",
@@ -2613,7 +2610,6 @@
       "breakGlassHint": "Co se stane, když schvalovatel není dosažitelný: po uplynutí této doby smí administrátor s oprávněním system:root schválit požadavek samostatně. V auditním protokolu se to zaznamená jako nouzové schválení.",
       "breakGlassMinHours": "Nouzové schválení k dispozici po (hodinách čekání)",
       "breakGlassMinHoursHint": "Zpoždění je samotnou kontrolou, ne překážkou: zaručuje, že běžný postup se dvěma osobami dostal nejprve šanci. Při 0 se použije výchozí hodnota 1 hodina.",
-      "description": "Vyžadovat dvě osoby pro nevratné operace: jedna žádá, jiná schvaluje, a teprve pak se operace provede. Ve výchozím stavu vypnuto.",
       "destructiveHint": "Pokud toto chráníte, každé takové smazání bude vyžadovat druhou osobu — včetně smazání jediné zprávy.",
       "enabled": "Dvojí kontrola zapnuta",
       "enabledHint": "Pokud je vypnuto, každá z níže uvedených operací se chová přesně jako dříve. Nic se nezařazuje do fronty.",
@@ -2638,13 +2634,11 @@
       "revocationHint": "Pokud toto chráníte, token nelze zrušit, dokud to neschválí druhá osoba — a to ani když uživatel ruší svůj vlastní uniklý token.",
       "save": "Uložit konfiguraci",
       "saveFailed": "Konfiguraci dvojí kontroly se nepodařilo uložit",
-      "saved": "Konfigurace dvojí kontroly uložena",
-      "title": "Dvojí kontrola"
+      "saved": "Konfigurace dvojí kontroly uložena"
     },
     "authUrl": "URL autorizace",
     "branding": {
       "companyName": "Název společnosti",
-      "description": "Přizpůsobte logo, název společnosti a slogan zobrazené na přihlašovací stránce, v postranním panelu a na kartě prohlížeče",
       "forbidden": "Branding vyžaduje oprávnění system:root nebo user:manage",
       "loadFailed": "Branding se nepodařilo načíst",
       "logo": "Logo",
@@ -2662,7 +2656,6 @@
       "saved": "Branding uložen",
       "tagline": "Slogan",
       "taglinePlaceholder": "např. Platforma pro archivaci e-mailů na vlastním serveru",
-      "title": "Branding",
       "uploadLogo": "Nahrát logo"
     },
     "changePasswordForFutureLogins": "Změňte heslo pro budoucí přihlášení.",
@@ -2701,10 +2694,6 @@
     "filterProxy": "Filtrovat proxy...",
     "general": "Obecné",
     "generateNewToken": "Vygenerovat nový token, platnost starého okamžitě vyprší.",
-    "header": {
-      "description": "Spravujte svůj profil a zobrazte konfiguraci systému.",
-      "title": "Nastavení"
-    },
     "host": "Hostitel",
     "id": "ID",
     "invalidPassword": "Neplatné heslo",
@@ -2722,7 +2711,6 @@
       "saved": "Konfigurace žurnálování SMTP uložena",
       "target": "Cílová adresa žurnálu",
       "targetHint": "Adresa, na kterou doručuje vaše žurnálovací pravidlo. Uložením této konfigurace se pro ni vytvoří archivní účet (vyžaduje oprávnění administrátora) — adresa nemusí existovat jako schránka.",
-      "title": "Žurnálování SMTP",
       "tlsHint": "Naslouchání SMTP musí být zapnuto (BICHON_ENABLE_SMTP) a nastaveno na STARTTLS nebo TLS (BICHON_SMTP_ENCRYPTION); při vypnutém šifrování je každé žurnálové doručení odmítnuto."
     },
     "lastAccess": "Poslední přístup",
@@ -2771,7 +2759,6 @@
       "testOk": "Připojeno a základní DN je prohledávatelné.",
       "testing": "Testování…",
       "timeout": "Časový limit (sekundy)",
-      "title": "LDAP / Active Directory",
       "userFilter": "Filtr hledání uživatelů",
       "userFilterHint": "{username} se nahradí tím, co uživatel zadal. Filtr musí odpovídat právě jednomu záznamu.",
       "usernameAttribute": "Atribut uživatelského jména"
@@ -2786,7 +2773,6 @@
       "copied": "Zkopírováno do schránky",
       "copy": "Kopírovat",
       "copyFailed": "Kopírování se nezdařilo",
-      "description": "Přidejte jako další vrstvu zabezpečení při přihlašování heslem jednorázový kód z ověřovací aplikace",
       "disable": "Vypnout dvoufázové ověření",
       "disableCode": "Pro vypnutí zadejte aktuální kód nebo záchranný kód",
       "disabled": "Dvoufázové ověření vypnuto",
@@ -2807,7 +2793,6 @@
       "recoveryTitle": "Záchranné kódy",
       "recoveryWarning": "Uložte si tyto jednorázové kódy na bezpečné místo. Každý kód lze jednou použít k přihlášení, pokud ztratíte přístup k ověřovací aplikaci",
       "ssoNote": "Vaše organizace používá jednotné přihlášení (SSO). Dvoufázové ověření zde platí pouze pro přihlášení heslem; relace SSO zabezpečuje váš poskytovatel identity",
-      "title": "Dvoufázové ověření",
       "useAuthenticatorCode": "Použít ověřovací kód",
       "useRecoveryCode": "Použít místo toho záložní kód"
     },
@@ -2915,7 +2900,6 @@
       "catRepairHint": "email.repaired",
       "categories": "Kategorie událostí",
       "clearSecret": "Vymazat",
-      "description": "Přeposílat auditní události do externího SIEM (Splunk, Elasticsearch, QRadar…) jako JSON podepsaný podpisem HMAC-SHA256.",
       "enabled": "Přeposílání zapnuto",
       "enabledHint": "Pokud je zapnuto, odpovídající auditní události se odesílají na URL webhooku.",
       "forbidden": "Přeposílání do SIEM vyžaduje edici Enterprise a oprávnění system:root nebo user:manage.",
@@ -2943,7 +2927,6 @@
       "testFailed": "Testovací událost selhala",
       "testMapping": "Náhled dat",
       "testOk": "Testovací událost doručena (HTTP {{status}})",
-      "title": "SIEM Webhook",
       "url": "URL webhooku"
     },
     "sso": {
@@ -2984,8 +2967,7 @@
       "technicalDetails": "Technické podrobnosti",
       "test": "Otestovat připojení",
       "testFailed": "Test připojení selhal",
-      "testOk": "Připojení proběhlo úspěšně",
-      "title": "Jednotné přihlášení (OIDC)"
+      "testOk": "Připojení proběhlo úspěšně"
     },
     "theRootPasswordHasBeenReset": "Heslo uživatele root bylo obnoveno",
     "theRootTokenHasBeenReset": "Token uživatele root byl obnoven",
@@ -3020,8 +3002,6 @@
     "notifications": "Systémová oznámení"
   },
   "systemConfig": {
-    "pageDescription": "Tyto parametry se nastavují pomocí přepínačů CLI nebo proměnných prostředí. Pro zajištění konzistence prostředí jsou momentálně pouze pro čtení.",
-    "pageTitle": "Konfigurace na úrovni systému",
     "sections": {
       "cors": {
         "desc": "Pravidla pro přístup z jiných domén",

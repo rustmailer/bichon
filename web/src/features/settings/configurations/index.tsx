@@ -27,7 +27,6 @@ import {
   Server,
   Database,
   Activity,
-  InfoIcon,
   Mail,
   Zap
 } from "lucide-react"
@@ -139,16 +138,6 @@ export default function ServerConfigurationsPage() {
     <div className="w-full">
       <ScrollArea className="h-full w-full">
         <div className="max-w-5xl mx-auto px-6 py-8 space-y-6">
-
-          <div className="flex items-start gap-3 p-4 rounded-xl border bg-muted/30">
-            <InfoIcon className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
-            <div>
-              <h4 className="text-sm font-semibold">{t("systemConfig.pageTitle")}</h4>
-              <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-                {t("systemConfig.pageDescription")}
-              </p>
-            </div>
-          </div>
 
           {isLoading ? (
             <PageSkeleton />

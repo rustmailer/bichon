@@ -276,18 +276,6 @@ export function SsoSettings() {
 
   return (
     <div className='w-full max-w-7xl space-y-6 px-4'>
-      <div className='space-y-2'>
-        <h2 className='text-xl font-bold'>
-          {t('settings.sso.title', 'Single Sign-On (OIDC)')}
-        </h2>
-        <p className='text-sm text-muted-foreground'>
-          {t(
-            'settings.sso.description',
-            'Sign users in through your identity provider using the OIDC Authorization Code flow with PKCE. Changes take effect immediately — no restart.',
-          )}
-        </p>
-      </div>
-
       <Form {...form}>
         <form
           onSubmit={form.handleSubmit(onSubmit)}
@@ -304,6 +292,12 @@ export function SsoSettings() {
                     {t(
                       'settings.sso.enabledHint',
                       'When enabled, the sign-in page shows an SSO button. Every required field must be configured first.',
+                    )}
+                  </FormDescription>
+                  <FormDescription>
+                    {t(
+                      'settings.sso.description',
+                      'Sign users in through your identity provider using the OIDC Authorization Code flow with PKCE. Changes take effect immediately — no restart.',
                     )}
                   </FormDescription>
                 </div>

@@ -692,7 +692,6 @@
     "volumeTrend": "Volumen im Zeitverlauf"
   },
   "apiDocs": {
-    "choosePreferredType": "Wählen Sie den bevorzugten Typ der API-Dokumentation",
     "downloadSpecYAML": "Spezifikation YAML herunterladen",
     "openAPIExplorer": "OpenAPI Explorer",
     "reDoc": "ReDoc",
@@ -1752,7 +1751,6 @@
     "copied": "In die Zwischenablage kopiert",
     "copyFailed": "Kopieren fehlgeschlagen",
     "copyMachineId": "Maschinen-ID kopieren",
-    "description": "Zeigen Sie Ihre aktuellen Lizenzdetails an und aktualisieren Sie die Anmeldeinformationen.",
     "edition": "Edition",
     "features": "Funktionen",
     "forbidden": "Die Lizenzverwaltung ist nur in der Pro-Edition verfügbar.",
@@ -1773,7 +1771,6 @@
     "statusTrialExpired": "Testversion abgelaufen",
     "statusUpdateExpired": "Updates abgelaufen",
     "statusValid": "Gültig",
-    "title": "Lizenzverwaltung",
     "trialDays": "Testtage",
     "trialDaysRemaining": "Noch {{days}} Tage",
     "updatesUntil": "Updates bis",
@@ -2613,7 +2610,6 @@
       "breakGlassHint": "Was geschieht, wenn der Genehmigende nicht erreichbar ist: Nach dieser Wartezeit darf ein system:root-Administrator einen Antrag allein genehmigen. Die Freigabe wird im Prüfprotokoll als solche vermerkt.",
       "breakGlassMinHours": "Freigabe verfügbar nach (Stunden Wartezeit)",
       "breakGlassMinHoursHint": "Die Verzögerung ist die Kontrolle, kein Hindernis: Sie stellt sicher, dass der normale Zwei-Personen-Weg zuerst zum Zug kam. 0 verwendet die Standardeinstellung von 1 Stunde.",
-      "description": "Erfordert zwei Personen für unwiderrufliche Vorgänge: Eine stellt die Anfrage, eine andere genehmigt, und erst dann geschieht es. Standardmäßig aus.",
       "destructiveHint": "Wenn Sie dies aktivieren, benötigt jede solche Löschung eine zweite Person – auch das Löschen einer einzelnen Nachricht.",
       "enabled": "Dual Control aktiviert",
       "enabledHint": "Wenn aus, verhält sich jeder der folgenden Vorgänge genau wie zuvor. Es wird nichts eingereiht.",
@@ -2638,13 +2634,11 @@
       "revocationHint": "Ist dies aktiv, kann ein Token erst widerrufen werden, wenn eine zweite Person zugestimmt hat — auch wenn ein Benutzer sein eigenes kompromittiertes Token widerrufen will.",
       "save": "Konfiguration speichern",
       "saveFailed": "Speichern der Dual-Control-Konfiguration fehlgeschlagen",
-      "saved": "Dual-Control-Konfiguration gespeichert",
-      "title": "Dual Control"
+      "saved": "Dual-Control-Konfiguration gespeichert"
     },
     "authUrl": "Autorisierungs-URL",
     "branding": {
       "companyName": "Firmenname",
-      "description": "Passen Sie Logo, Firmenname und Slogan an, die auf der Anmeldeseite, der Seitenleiste und im Browser-Tab angezeigt werden",
       "forbidden": "Für die Markenidentität ist die Berechtigung system:root oder user:manage erforderlich",
       "loadFailed": "Markenidentität konnte nicht geladen werden",
       "logo": "Logo",
@@ -2662,7 +2656,6 @@
       "saved": "Markenidentität gespeichert",
       "tagline": "Slogan",
       "taglinePlaceholder": "z.B. Self-hosted E-Mail-Archivierungsplattform",
-      "title": "Markenidentität",
       "uploadLogo": "Logo hochladen"
     },
     "changePasswordForFutureLogins": "Passwort für zukünftige Anmeldungen ändern.",
@@ -2701,10 +2694,6 @@
     "filterProxy": "Proxys filtern...",
     "general": "Allgemein",
     "generateNewToken": "Einen neuen Token generieren, der alte läuft sofort ab.",
-    "header": {
-      "description": "Profil verwalten und Systemkonfigurationen anzeigen.",
-      "title": "Einstellungen"
-    },
     "host": "Host",
     "id": "Id",
     "invalidPassword": "Ungültiges Passwort",
@@ -2722,7 +2711,6 @@
       "saved": "SMTP-Journaling-Konfiguration gespeichert",
       "target": "Journal-Zieladresse",
       "targetHint": "Die Adresse, an die Ihre Journaling-Regel zustellt. Beim Speichern dieser Konfiguration wird das zugehörige Archivkonto angelegt (Administratorrechte erforderlich) — die Adresse muss kein Postfach sein.",
-      "title": "SMTP-Journaling",
       "tlsHint": "Der SMTP-Eingang muss aktiviert sein (BICHON_ENABLE_SMTP) und auf STARTTLS oder TLS konfiguriert sein (BICHON_SMTP_ENCRYPTION); ohne Verschlüsselung wird jede Journal-Zustellung abgewiesen."
     },
     "lastAccess": "Letzter Zugriff",
@@ -2771,7 +2759,6 @@
       "testOk": "Verbunden und das Basis-DN ist durchsuchbar.",
       "testing": "Testen…",
       "timeout": "Zeitlimit (Sekunden)",
-      "title": "LDAP / Active Directory",
       "userFilter": "Benutzersuchfilter",
       "userFilterHint": "{username} wird durch die Eingabe des Benutzers ersetzt. Der Filter muss genau einen Eintrag treffen.",
       "usernameAttribute": "Benutzernamen-Attribut"
@@ -2786,7 +2773,6 @@
       "copied": "In die Zwischenablage kopiert",
       "copy": "Kopieren",
       "copyFailed": "Kopieren fehlgeschlagen",
-      "description": "Zusätzlich zum Passwort einen Einmalcode aus der Authenticator-App abfragen",
       "disable": "Zwei-Faktor-Authentifizierung deaktivieren",
       "disableCode": "Geben Sie Ihren aktuellen Code oder einen Wiederherstellungscode ein, um zu deaktivieren",
       "disabled": "Zwei-Faktor-Authentifizierung deaktiviert",
@@ -2807,7 +2793,6 @@
       "recoveryTitle": "Wiederherstellungscodes",
       "recoveryWarning": "Bewahren Sie diese Einmalcodes sicher auf. Jeder Code kann einmal verwendet werden, wenn Sie keinen Zugriff auf Ihre Authenticator-App haben",
       "ssoNote": "Ihre Organisation verwendet Single Sign-On. Die 2FA gilt hier nur für die Passwortanmeldung; SSO wird vom Identity Provider abgesichert",
-      "title": "Zwei-Faktor-Authentifizierung",
       "useAuthenticatorCode": "Einen Authentifizierungscode verwenden",
       "useRecoveryCode": "Stattdessen einen Wiederherstellungscode verwenden"
     },
@@ -2915,7 +2900,6 @@
       "catRepairHint": "email.repaired",
       "categories": "Ereigniskategorien",
       "clearSecret": "Leeren",
-      "description": "Leitet Audit-Ereignisse an ein externes SIEM (Splunk, Elasticsearch, QRadar…) als JSON weiter, signiert mit einer HMAC-SHA256-Signatur.",
       "enabled": "Weiterleitung aktiviert",
       "enabledHint": "Wenn aktiviert, werden passende Audit-Ereignisse an die Webhook-URL gesendet.",
       "forbidden": "SIEM-Weiterleitung erfordert die Enterprise-Edition und die Berechtigung system:root oder user:manage.",
@@ -2943,7 +2927,6 @@
       "testFailed": "Testereignis fehlgeschlagen",
       "testMapping": "Payload-Vorschau",
       "testOk": "Testereignis zugestellt (HTTP {{status}})",
-      "title": "SIEM-Webhook",
       "url": "Webhook-URL"
     },
     "sso": {
@@ -2984,8 +2967,7 @@
       "technicalDetails": "Technische Details",
       "test": "Verbindung testen",
       "testFailed": "Verbindungstest fehlgeschlagen",
-      "testOk": "Verbindung erfolgreich",
-      "title": "Single Sign-On (OIDC)"
+      "testOk": "Verbindung erfolgreich"
     },
     "theRootPasswordHasBeenReset": "Das Root-Passwort wurde zurückgesetzt",
     "theRootTokenHasBeenReset": "Das Root-Token wurde zurückgesetzt",
@@ -3020,8 +3002,6 @@
     "notifications": "Systembenachrichtigungen"
   },
   "systemConfig": {
-    "pageDescription": "Diese Parameter werden über CLI-Flags oder Umgebungsvariablen initialisiert. Sie sind schreibgeschützt, um die Umgebungskonsistenz zu gewährleisten.",
-    "pageTitle": "Systemkonfigurationen",
     "sections": {
       "cors": {
         "desc": "Cross-Origin-Zugriffsregeln",

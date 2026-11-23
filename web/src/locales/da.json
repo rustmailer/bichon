@@ -692,7 +692,6 @@
     "volumeTrend": "Mængde over tid"
   },
   "apiDocs": {
-    "choosePreferredType": "Vælg foretrukken type API-dokumentation",
     "downloadSpecYAML": "Download Spec YAML",
     "openAPIExplorer": "OpenAPI Explorer",
     "reDoc": "ReDoc",
@@ -1752,7 +1751,6 @@
     "copied": "Kopieret til udklipsholder",
     "copyFailed": "Kunne ikke kopiere",
     "copyMachineId": "Kopier maskin-ID",
-    "description": "Se dine aktuelle licensdetaljer og opdater legitimationsoplysninger.",
     "edition": "Udgave",
     "features": "Funktioner",
     "forbidden": "Licensstyring er kun tilgængelig i Pro-udgaven.",
@@ -1773,7 +1771,6 @@
     "statusTrialExpired": "Prøveperiode udløbet",
     "statusUpdateExpired": "Opdateringsperiode udløbet",
     "statusValid": "Gyldig",
-    "title": "Licensstyring",
     "trialDays": "Prøvedage",
     "trialDaysRemaining": "{{days}} dage tilbage",
     "updatesUntil": "Opdateringer indtil",
@@ -2613,7 +2610,6 @@
       "breakGlassHint": "Hvad der sker, når den godkendende ikke kan kontaktes: efter denne ventetid kan en system:root-administrator godkende en anmodning alene. Tilsidesættelsen registreres som sådan i revisionsloggen.",
       "breakGlassMinHours": "Tilsidesættelse tilgængelig efter (timers ventetid)",
       "breakGlassMinHoursHint": "Forsinkelsen er selve kontrollen, ikke en hindring for den: den sikrer, at den normale to-persons vej fik sin chance først. 0 bruger standardværdien 1 time.",
-      "description": "Kræver to personer til uigenkaldelige handlinger: én anmoder, en anden godkender, og først derefter sker det. Slået fra som standard.",
       "destructiveHint": "Aktiverer du dette kræver enhver sådan sletning en anden person — også sletning af en enkelt meddelelse.",
       "enabled": "Dobbeltkontrol aktiveret",
       "enabledHint": "Når det er slået fra, opfører hver handling nedenfor sig præcis som før. Intet sættes i kø.",
@@ -2638,13 +2634,11 @@
       "revocationHint": "Er dette slået til, kan et token ikke tilbagekaldes, før en anden person godkender det — også når en bruger tilbagekalder sit eget lækkede token.",
       "save": "Gem konfiguration",
       "saveFailed": "Kunne ikke gemme konfiguration for dobbeltkontrol",
-      "saved": "Konfiguration for dobbeltkontrol gemt",
-      "title": "Dobbeltkontrol"
+      "saved": "Konfiguration for dobbeltkontrol gemt"
     },
     "authUrl": "Godkendelses-URL",
     "branding": {
       "companyName": "Virksomhedsnavn",
-      "description": "Tilpas logo, virksomhedsnavn og slagord vist på loginsiden, sidepanelet og browserfanen",
       "forbidden": "Branding kræver system:root eller user:manage tilladelse",
       "loadFailed": "Kunne ikke indlæse branding",
       "logo": "Logo",
@@ -2662,7 +2656,6 @@
       "saved": "Branding gemt",
       "tagline": "Slagord",
       "taglinePlaceholder": "f.eks. Selvhostet e-mailarkiveringsplatform",
-      "title": "Branding",
       "uploadLogo": "Upload logo"
     },
     "changePasswordForFutureLogins": "Skift adgangskode til fremtidige logins.",
@@ -2701,10 +2694,6 @@
     "filterProxy": "Filtrer Proxy...",
     "general": "Generelt",
     "generateNewToken": "Generer nyt token, det gamle udløber øjeblikkeligt.",
-    "header": {
-      "description": "Administrer din profil og se systemkonfigurationer.",
-      "title": "Indstillinger"
-    },
     "host": "Vært",
     "id": "Id",
     "invalidPassword": "Ugyldig adgangskode",
@@ -2722,7 +2711,6 @@
       "saved": "SMTP-journalføringskonfiguration gemt",
       "target": "Journal-mål adresse",
       "targetHint": "Den adresse, som din journalregel leverer til. Når denne konfiguration gemmes, oprettes den tilhørende arkivkonto (administratorrettigheder påkrævet) — adressen behøver ikke at eksistere som postkasse.",
-      "title": "SMTP-journalføring",
       "tlsHint": "SMTP-lytteren skal være aktiveret (BICHON_ENABLE_SMTP) og konfigureret til STARTTLS eller TLS (BICHON_SMTP_ENCRYPTION); uden kryptering afvises enhver journalleverance."
     },
     "lastAccess": "Sidste adgang",
@@ -2771,7 +2759,6 @@
       "testOk": "Forbundet, og basis-DN kan søges.",
       "testing": "Tester…",
       "timeout": "Timeout (sekunder)",
-      "title": "LDAP / Active Directory",
       "userFilter": "Bruger-søgefilter",
       "userFilterHint": "{username} erstattes med det, brugeren indtastede. Filteret skal matche præcis én post.",
       "usernameAttribute": "Brugernavn-attribut"
@@ -2786,7 +2773,6 @@
       "copied": "Kopieret til udklipsholder",
       "copy": "Kopier",
       "copyFailed": "Kopiering mislykkedes",
-      "description": "Tilføj en engangskode fra din autentificeringsapp som et ekstra sikkerhedslag",
       "disable": "Deaktiver to-faktor-godkendelse",
       "disableCode": "Indtast din nuværende kode eller en gendannelseskode for at deaktivere",
       "disabled": "To-faktor-godkendelse deaktiveret",
@@ -2807,7 +2793,6 @@
       "recoveryTitle": "Gendannelseskoder",
       "recoveryWarning": "Gem disse engangskoder et sikkert sted. Hver kode kan bruges én gang til at logge ind, hvis du mister adgang til din autentificeringsapp",
       "ssoNote": "Din organisation bruger SSO. 2FA her gælder kun for adgangskode-login; SSO-sessioner er sikret af din identitetsudbyder",
-      "title": "To-faktor-godkendelse",
       "useAuthenticatorCode": "Brug en godkendelseskode",
       "useRecoveryCode": "Brug en gendannelseskode i stedet"
     },
@@ -2915,7 +2900,6 @@
       "catRepairHint": "email.repaired",
       "categories": "Hændelseskategorier",
       "clearSecret": "Ryd",
-      "description": "Videresender revisionshændelser til et eksternt SIEM (Splunk, Elasticsearch, QRadar…) som JSON underskrevet med en HMAC-SHA256-signatur.",
       "enabled": "Videresendelse aktiveret",
       "enabledHint": "Når aktiveret, bliver matchende revisionshændelser sendt til webhook-URL'en.",
       "forbidden": "SIEM-videresendelse kræver Enterprise-udgaven og tilladelsen system:root eller user:manage.",
@@ -2943,7 +2927,6 @@
       "testFailed": "Testhændelse mislykkedes",
       "testMapping": "Vis payload-forsmag",
       "testOk": "Testhændelse leveret (HTTP {{status}})",
-      "title": "SIEM-webhook",
       "url": "Webhook-URL"
     },
     "sso": {
@@ -2984,8 +2967,7 @@
       "technicalDetails": "Tekniske detaljer",
       "test": "Test forbindelse",
       "testFailed": "Forbindelsestest mislykkedes",
-      "testOk": "Forbindelsen lykkedes",
-      "title": "Single Sign-On (OIDC)"
+      "testOk": "Forbindelsen lykkedes"
     },
     "theRootPasswordHasBeenReset": "Root-adgangskoden er blevet nulstillet",
     "theRootTokenHasBeenReset": "Root-tokenet er blevet nulstillet",
@@ -3020,8 +3002,6 @@
     "notifications": "Systemmeddelelser"
   },
   "systemConfig": {
-    "pageDescription": "Disse parametre initialiseres via CLI-flag eller miljøvariabler. De er skrivebeskyttede.",
-    "pageTitle": "Systemkonfigurationer",
     "sections": {
       "cors": {
         "desc": "Adgangsregler for cross-origin",

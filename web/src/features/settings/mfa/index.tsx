@@ -154,18 +154,6 @@ export function MfaSettings() {
 
   return (
     <div className='w-full space-y-6 text-xs'>
-      <div className='space-y-0.5'>
-        <h2 className='text-xs font-bold tracking-tight'>
-          {t('settings.mfa.title', 'Two-factor authentication')}
-        </h2>
-        <p className='text-xs text-muted-foreground'>
-          {t(
-            'settings.mfa.description',
-            'Add a one-time code from your authenticator app as an extra layer of security when signing in with a password.',
-          )}
-        </p>
-      </div>
-
       {ssoEnabled && (
         <Alert>
           <Info size={16} className='mr-2' />

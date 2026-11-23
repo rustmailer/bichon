@@ -19,13 +19,12 @@
 
 import { Outlet } from '@tanstack/react-router'
 import { Main } from '@/components/layout/main'
-import SidebarNav from './components/sidebar-nav'
+import SettingsNav from './components/settings-nav'
 import { BadgeCheck, Brush, Building2, FileCode2, Fingerprint, Inbox, KeyRound, LockKeyhole, Palette, Radar, SettingsIcon, ShieldCheck, UserCog, Users, Waypoints } from 'lucide-react'
 import { FixedHeader } from '@/components/layout/fixed-header'
 import { useCurrentUser } from '@/hooks/use-current-user'
 import { useEdition } from '@/hooks/use-edition'
 import { useTranslation } from 'react-i18next'
-import { Separator } from '@/components/ui/separator'
 import { ScrollArea } from '@/components/ui/scroll-area'
 
 export default function Settings() {
@@ -154,25 +153,16 @@ export default function Settings() {
   return (
     <>
       <FixedHeader />
-      {/* A fixed-height shell: the title and the settings nav stay put and
-          only the panel scrolls, with the app's ScrollArea bar instead of the
-          browser's. Without `fixed`, `overflow-hidden` below had nothing to
-          constrain and the whole page scrolled. */}
+      {/* A fixed-height shell: the settings nav stays put and only the panel
+          scrolls, with the app's ScrollArea bar instead of the browser's.
+          Without `fixed`, `overflow-hidden` below had nothing to constrain and
+          the whole page scrolled. */}
       <Main fixed>
-        <div className='space-y-0.5'>
-          <h1 className='text-lg font-bold tracking-tight md:text-3xl'>
-            {t('settings.header.title')}
-          </h1>
-          <p className='text-xs text-muted-foreground'>
-            {t('settings.header.description')}
-          </p>
-        </div>
-        <Separator className='my-4 lg:my-6' />
-        <div className='flex min-h-0 flex-1 flex-col space-y-2 overflow-hidden md:space-y-2 lg:flex-row lg:space-x-12 lg:space-y-0'>
-          <aside className='top-0 lg:sticky lg:w-1/5'>
-            <SidebarNav items={sidebarNavItems} />
-          </aside>
-          <div className='flex min-h-0 w-full flex-1 p-1 pr-4'>
+        <div className='mx-auto flex min-h-0 w-full max-w-5xl flex-1 flex-col overflow-hidden'>
+          {/* Group tabs on top, the active group's entries below them; the
+              panel keeps the remaining height and scrolls on its own. */}
+          <SettingsNav items={sidebarNavItems} />
+          <div className='flex min-h-0 w-full flex-1 px-4 pb-2 pt-4'>
             <ScrollArea className='h-full w-full'>
               <Outlet />
             </ScrollArea>

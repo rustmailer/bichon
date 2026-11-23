@@ -692,7 +692,6 @@
     "volumeTrend": "Wolumen w czasie"
   },
   "apiDocs": {
-    "choosePreferredType": "Wybierz preferowany typ dokumentacji API",
     "downloadSpecYAML": "Plik YAML",
     "openAPIExplorer": "OpenAPI",
     "reDoc": "ReDoc",
@@ -1752,7 +1751,6 @@
     "copied": "Skopiowano do schowka",
     "copyFailed": "Nie udało się skopiować",
     "copyMachineId": "Skopiuj identyfikator maszyny",
-    "description": "Wyświetl szczegóły swojej bieżącej licencji i zaktualizuj poświadczenia.",
     "edition": "Wersja",
     "features": "Funkcje",
     "forbidden": "Zarządzanie licencjami jest dostępne tylko w wersji Pro.",
@@ -1773,7 +1771,6 @@
     "statusTrialExpired": "Okres próbny wygasł",
     "statusUpdateExpired": "Wygasły updates (aktualizacje)",
     "statusValid": "Ważna",
-    "title": "Zarządzanie licencjami",
     "trialDays": "Dni próbne",
     "trialDaysRemaining": "Pozostało dni: {{days}}",
     "updatesUntil": "Aktualizacje do",
@@ -2613,7 +2610,6 @@
       "breakGlassHint": "Co się dzieje, gdy zatwierdzający jest nieosiągalny: po tym czasie oczekiwania administrator system:root może zatwierdzić wniosek samodzielnie. Wymuszenie jest rejestrowane jako takie w dzienniku audytu.",
       "breakGlassMinHours": "Wymuszenie dostępne po (godzinach oczekiwania)",
       "breakGlassMinHoursHint": "Opóźnienie jest zabezpieczeniem, a nie przeszkodą: gwarantuje, że normalna dwuosobowa ścieżka miała najpierw szansę. 0 używa domyślnej wartości 1 godziny.",
-      "description": "Wymaga dwóch osób do nieodwracalnych operacji: jedna zgłasza, druga zatwierdza i dopiero wtedy następuje wykonanie. Domyślnie wyłączone.",
       "destructiveHint": "Włączenie tego sprawia, że każde takie usunięcie wymaga drugiej osoby — także usunięcie pojedynczej wiadomości.",
       "enabled": "Podwójna kontrola włączona",
       "enabledHint": "Gdy wyłączone, każda z poniższych operacji działa dokładnie tak jak wcześniej. Nic nie trafia do kolejki.",
@@ -2638,13 +2634,11 @@
       "revocationHint": "Po włączeniu token można unieważnić dopiero po zatwierdzeniu przez drugą osobę — również gdy użytkownik unieważnia własny ujawniony token.",
       "save": "Zapisz konfigurację",
       "saveFailed": "Nie udało się zapisać konfiguracji podwójnej kontroli",
-      "saved": "Zapisano konfigurację podwójnej kontroli",
-      "title": "Podwójna kontrola"
+      "saved": "Zapisano konfigurację podwójnej kontroli"
     },
     "authUrl": "Auth URL",
     "branding": {
       "companyName": "Nazwa firmy",
-      "description": "Dostosuj logo, nazwę firmy i slogan wyświetlane na stronie logowania, pasku bocznym i karcie przeglądarki",
       "forbidden": "Identyfikacja wizualna wymaga uprawnień system:root lub user:manage",
       "loadFailed": "Nie udało się załadować identyfikacji wizualnej",
       "logo": "Logo",
@@ -2662,7 +2656,6 @@
       "saved": "Identyfikacja wizualna zapisana",
       "tagline": "Slogan",
       "taglinePlaceholder": "np. Samodzielnie hostowana platforma do archiwizacji e-maili",
-      "title": "Identyfikacja wizualna",
       "uploadLogo": "Prześlij logo"
     },
     "changePasswordForFutureLogins": "Zmień hasło dla przyszłych logowań",
@@ -2701,10 +2694,6 @@
     "filterProxy": "Filtr Proxy...",
     "general": "Ogólne",
     "generateNewToken": "Wygeneruj nowy token, stary wygaśnie natychmiast.",
-    "header": {
-      "description": "Zarządzaj profilem i przeglądaj konfiguracje systemu.",
-      "title": "Ustawienia"
-    },
     "host": "Host",
     "id": "Id",
     "invalidPassword": "Błędne hasło",
@@ -2722,7 +2711,6 @@
       "saved": "Zapisano konfigurację journaling SMTP",
       "target": "Docelowy adres journaling",
       "targetHint": "Adres, na który dostarcza reguła journaling. Zapisanie tej konfiguracji tworzy odpowiednie konto archiwum (wymagane uprawnienia administratora) — adres nie musi istnieć jako skrzynka.",
-      "title": "Journaling SMTP",
       "tlsHint": "Nasłuch SMTP musi być włączony (BICHON_ENABLE_SMTP) i skonfigurowany na STARTTLS lub TLS (BICHON_SMTP_ENCRYPTION); przy wyłączonym szyfrowaniu każda dostawa journaling jest odrzucana."
     },
     "lastAccess": "Ostatni dostęp",
@@ -2771,7 +2759,6 @@
       "testOk": "Połączono i bazowy DN jest przeszukiwalny.",
       "testing": "Testowanie…",
       "timeout": "Limit czasu (sekundy)",
-      "title": "LDAP / Active Directory",
       "userFilter": "Filtr wyszukiwania użytkowników",
       "userFilterHint": "{username} jest zastępowane tym, co wpisał użytkownik. Filtr musi pasować do dokładnie jednego wpisu.",
       "usernameAttribute": "Atrybut nazwy użytkownika"
@@ -2786,7 +2773,6 @@
       "copied": "Skopiowano do schowka",
       "copy": "Kopiuj",
       "copyFailed": "Nie udało się skopiować",
-      "description": "Dodaj kod jednorazowy z aplikacji uwierzytelniającej jako dodatkową warstwę zabezpieczeń",
       "disable": "Wyłącz uwierzytelnianie dwuskładnikowe",
       "disableCode": "Wprowadź obecny kod lub kod odzyskiwania, aby wyłączyć",
       "disabled": "Uwierzytelnianie dwuskładnikowe wyłączone",
@@ -2807,7 +2793,6 @@
       "recoveryTitle": "Kody odzyskiwania",
       "recoveryWarning": "Zapisz te kody jednorazowe w bezpiecznym miejscu. Każdy kod może zostać użyty raz do logowania, jeśli stracisz dostęp do aplikacji uwierzytelniającej",
       "ssoNote": "Twoja organizacja używa SSO. 2FA dotyczy tutaj tylko logowania hasłem; sesje SSO są zabezpieczone przez dostawcę tożsamości",
-      "title": "Uwierzytelnianie dwuskładnikowe",
       "useAuthenticatorCode": "Użyj kodu uwierzytelniającego",
       "useRecoveryCode": "Użyj zamiast tego kodu odzyskiwania"
     },
@@ -2915,7 +2900,6 @@
       "catRepairHint": "email.repaired",
       "categories": "Kategorie zdarzeń",
       "clearSecret": "Wyczyść",
-      "description": "Przekazuje zdarzenia audytowe do zewnętrznego SIEM (Splunk, Elasticsearch, QRadar…) jako JSON podpisany podpisem HMAC-SHA256.",
       "enabled": "Przekazywanie włączone",
       "enabledHint": "Po włączeniu pasujące zdarzenia audytowe są wysyłane na adres URL webhooka.",
       "forbidden": "Przekazywanie do SIEM wymaga edycji Enterprise oraz uprawnienia system:root lub user:manage.",
@@ -2943,7 +2927,6 @@
       "testFailed": "Zdarzenie testowe nie powiodło się",
       "testMapping": "Podgląd ładunku",
       "testOk": "Zdarzenie testowe dostarczone (HTTP {{status}})",
-      "title": "Webhook SIEM",
       "url": "Adres URL webhooka"
     },
     "sso": {
@@ -2984,8 +2967,7 @@
       "technicalDetails": "Szczegóły techniczne",
       "test": "Testuj połączenie",
       "testFailed": "Test połączenia nie powiódł się",
-      "testOk": "Połączenie udane",
-      "title": "Logowanie jednokrotne (OIDC)"
+      "testOk": "Połączenie udane"
     },
     "theRootPasswordHasBeenReset": "Hasło roota zostało zresetowane",
     "theRootTokenHasBeenReset": "Token główny został zresetowany",
@@ -3020,8 +3002,6 @@
     "notifications": "Powiadomienia systemowe"
   },
   "systemConfig": {
-    "pageDescription": "Parametry te są inicjowane za pomocą flag CLI lub zmiennych środowiskowych. Są one obecnie tylko do odczytu.",
-    "pageTitle": "Konfiguracje na poziomie systemu",
     "sections": {
       "cors": {
         "desc": "Zasady dostępu cross-origin",

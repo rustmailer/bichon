@@ -692,7 +692,6 @@
     "volumeTrend": "Volumen a lo largo del tiempo"
   },
   "apiDocs": {
-    "choosePreferredType": "Elige el tipo de documentación API preferido",
     "downloadSpecYAML": "Descargar especificación YAML",
     "openAPIExplorer": "Explorador OpenAPI",
     "reDoc": "ReDoc",
@@ -1752,7 +1751,6 @@
     "copied": "Copiado al portapapeles",
     "copyFailed": "Error al copiar",
     "copyMachineId": "Copiar ID de la máquina",
-    "description": "Consulte los detalles de su licencia actual y actualice las credenciales.",
     "edition": "Edición",
     "features": "Características",
     "forbidden": "La gestión de licencias solo está disponible en la edición Pro.",
@@ -1773,7 +1771,6 @@
     "statusTrialExpired": "Prueba expirada",
     "statusUpdateExpired": "Periodo de actualización expirado",
     "statusValid": "Válida",
-    "title": "Gestión de licencias",
     "trialDays": "Días de prueba",
     "trialDaysRemaining": "Quedan {{days}} días",
     "updatesUntil": "Actualizaciones hasta",
@@ -2613,7 +2610,6 @@
       "breakGlassHint": "Qué ocurre cuando no se puede contactar con el aprobador: tras esta espera, un administrador system:root puede aprobar una solicitud en solitario. La anulación queda registrada como tal en el registro de auditoría.",
       "breakGlassMinHours": "Anulación disponible tras (horas de espera)",
       "breakGlassMinHoursHint": "La espera es el control, no un obstáculo: garantiza que la vía normal de dos personas tenga primero su oportunidad. 0 usa el valor predeterminado de 1 hora.",
-      "description": "Exige dos personas para operaciones irreversibles: una solicita, otra aprueba y solo entonces se ejecuta. Desactivado de forma predeterminada.",
       "destructiveHint": "Activar esto hace que cada eliminación de este tipo necesite una segunda persona, incluida la eliminación de un solo mensaje.",
       "enabled": "Doble control activado",
       "enabledHint": "Cuando está desactivado, cada operación siguiente se comporta exactamente como antes. No se encola nada.",
@@ -2638,13 +2634,11 @@
       "revocationHint": "Si se activa, un token no podrá revocarse hasta que lo apruebe una segunda persona, incluido el caso de un usuario que revoca su propio token filtrado.",
       "save": "Guardar configuración",
       "saveFailed": "No se pudo guardar la configuración de doble control",
-      "saved": "Configuración de doble control guardada",
-      "title": "Doble control"
+      "saved": "Configuración de doble control guardada"
     },
     "authUrl": "URL de autorización",
     "branding": {
       "companyName": "Nombre de la empresa",
-      "description": "Personalice el logotipo, nombre de la empresa y eslogan que se muestran en la página de inicio de sesión, la barra lateral y la pestaña del navegador",
       "forbidden": "La identidad visual requiere permisos system:root o user:manage",
       "loadFailed": "Error al cargar la identidad visual",
       "logo": "Logotipo",
@@ -2662,7 +2656,6 @@
       "saved": "Identidad visual guardada",
       "tagline": "Eslogan",
       "taglinePlaceholder": "Ej. Plataforma de archivado de correo autoalojada",
-      "title": "Identidad visual",
       "uploadLogo": "Subir logotipo"
     },
     "changePasswordForFutureLogins": "Cambiar la contraseña para futuros inicios de sesión.",
@@ -2701,10 +2694,6 @@
     "filterProxy": "Filtrar proxies...",
     "general": "General",
     "generateNewToken": "Generar un nuevo token, el antiguo caducará inmediatamente.",
-    "header": {
-      "description": "Administra tu perfil y consulta las configuraciones del sistema.",
-      "title": "Configuración"
-    },
     "host": "Host",
     "id": "Id",
     "invalidPassword": "Contraseña inválida",
@@ -2722,7 +2711,6 @@
       "saved": "Configuración de journaling SMTP guardada",
       "target": "Dirección de destino del journaling",
       "targetHint": "La dirección a la que entrega su regla de journaling. Al guardar esta configuración se crea la cuenta de archivo correspondiente (se requieren permisos de administrador); la dirección no necesita existir como buzón.",
-      "title": "Journaling SMTP",
       "tlsHint": "El listener SMTP debe estar activado (BICHON_ENABLE_SMTP) y configurado para STARTTLS o TLS (BICHON_SMTP_ENCRYPTION); con el cifrado desactivado se rechaza toda entrega de journaling."
     },
     "lastAccess": "Último acceso",
@@ -2771,7 +2759,6 @@
       "testOk": "Conectado y el DN base se puede buscar.",
       "testing": "Probando…",
       "timeout": "Tiempo de espera (segundos)",
-      "title": "LDAP / Active Directory",
       "userFilter": "Filtro de búsqueda de usuarios",
       "userFilterHint": "{username} se sustituye por lo que escribió el usuario. El filtro debe coincidir con una sola entrada.",
       "usernameAttribute": "Atributo de nombre de usuario"
@@ -2786,7 +2773,6 @@
       "copied": "Copiado al portapapeles",
       "copy": "Copiar",
       "copyFailed": "Error al copiar",
-      "description": "Añade un código único de tu aplicación autenticadora como capa extra de seguridad",
       "disable": "Deshabilitar autenticación de dos factores",
       "disableCode": "Ingresa tu código actual o un código de recuperación para deshabilitar",
       "disabled": "Autenticación de dos factores deshabilitada",
@@ -2807,7 +2793,6 @@
       "recoveryTitle": "Códigos de recuperación",
       "recoveryWarning": "Guarda estos códigos únicos en un lugar seguro. Cada código se puede usar una vez para iniciar sesión si pierdes acceso a tu aplicación autenticadora",
       "ssoNote": "Su organización usa inicio de sesión único (SSO). La 2FA aquí solo aplica al inicio de sesión con contraseña; el SSO está protegido por su proveedor de identidad",
-      "title": "Autenticación de dos factores",
       "useAuthenticatorCode": "Usar un código de autenticación",
       "useRecoveryCode": "Usar un código de recuperación en su lugar"
     },
@@ -2915,7 +2900,6 @@
       "catRepairHint": "email.repaired",
       "categories": "Categorías de eventos",
       "clearSecret": "Borrar",
-      "description": "Reenvía eventos de auditoría a un SIEM externo (Splunk, Elasticsearch, QRadar…) como JSON firmado con una firma HMAC-SHA256.",
       "enabled": "Reenvío activado",
       "enabledHint": "Cuando está activado, los eventos de auditoría coincidentes se envían a la URL del webhook.",
       "forbidden": "El reenvío a SIEM requiere la edición Enterprise y el permiso system:root o user:manage.",
@@ -2943,7 +2927,6 @@
       "testFailed": "Falló el evento de prueba",
       "testMapping": "Vista previa de la carga útil",
       "testOk": "Evento de prueba entregado (HTTP {{status}})",
-      "title": "Webhook de SIEM",
       "url": "URL del webhook"
     },
     "sso": {
@@ -2984,8 +2967,7 @@
       "technicalDetails": "Detalles técnicos",
       "test": "Probar conexión",
       "testFailed": "Error en la prueba de conexión",
-      "testOk": "Conexión correcta",
-      "title": "Inicio de sesión único (OIDC)"
+      "testOk": "Conexión correcta"
     },
     "theRootPasswordHasBeenReset": "La contraseña raíz ha sido restablecida",
     "theRootTokenHasBeenReset": "El token raíz ha sido restablecido",
@@ -3020,8 +3002,6 @@
     "notifications": "Notificaciones del sistema"
   },
   "systemConfig": {
-    "pageDescription": "Estos parámetros se inicializan mediante indicadores CLI o variables de entorno. Actualmente son de solo lectura.",
-    "pageTitle": "Configuraciones a nivel de sistema",
     "sections": {
       "cors": {
         "desc": "Reglas de acceso de origen cruzado",

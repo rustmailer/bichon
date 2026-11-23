@@ -692,7 +692,6 @@
     "volumeTrend": "시간에 따른 볼륨"
   },
   "apiDocs": {
-    "choosePreferredType": "선호하는 API 문서 유형을 선택하십시오",
     "downloadSpecYAML": "YAML 사양 다운로드",
     "openAPIExplorer": "OpenAPI 탐색기",
     "reDoc": "ReDoc",
@@ -1752,7 +1751,6 @@
     "copied": "클립보드에 복사되었습니다",
     "copyFailed": "복사 실패",
     "copyMachineId": "머신 ID 복사",
-    "description": "현재 라이선스 세부 정보를 확인하고 자격 증명을 업데이트하세요.",
     "edition": "에디션",
     "features": "기능",
     "forbidden": "라이선스 관리는 Pro 버전에서만 사용할 수 있습니다.",
@@ -1773,7 +1771,6 @@
     "statusTrialExpired": "체험 기간 만료",
     "statusUpdateExpired": "업데이트 기간 만료",
     "statusValid": "유효함",
-    "title": "라이선스 관리",
     "trialDays": "체험 일수",
     "trialDaysRemaining": "{{days}}일 남음",
     "updatesUntil": "업데이트 기한",
@@ -2613,7 +2610,6 @@
       "breakGlassHint": "승인자에게 연락할 수 없을 때의 동작: 이 대기 시간이 지나면 system:root 관리자가 단독으로 요청을 승인할 수 있습니다. 우회는 감사 로그에 그대로 기록됩니다.",
       "breakGlassMinHours": "우회 사용 가능까지의 대기 시간(시간)",
       "breakGlassMinHoursHint": "이 지연은 통제 수단이며 장애물이 아닙니다. 정상적인 두 사람 경로가 먼저 기회를 얻었음을 보장합니다. 0은 기본값인 1시간을 사용합니다.",
-      "description": "되돌릴 수 없는 작업에 두 사람을 요구합니다: 한 사람이 요청하고 다른 사람이 승인해야 실행됩니다. 기본값은 꺼짐입니다.",
       "destructiveHint": "이를 활성화하면 모든 삭제에 두 번째 사람의 승인이 필요합니다(단일 메시지 삭제 포함).",
       "enabled": "이중 통제 사용",
       "enabledHint": "꺼져 있으면 아래의 각 작업이 이전과 정확히 동일하게 동작합니다. 대기열에 아무것도 들어가지 않습니다.",
@@ -2638,13 +2634,11 @@
       "revocationHint": "이를 켜면 두 번째 사람의 승인 없이는 토큰을 폐기할 수 없습니다. 사용자가 자신의 유출된 토큰을 폐기하는 경우도 포함됩니다.",
       "save": "설정 저장",
       "saveFailed": "이중 통제 설정 저장 실패",
-      "saved": "이중 통제 설정이 저장되었습니다",
-      "title": "이중 통제"
+      "saved": "이중 통제 설정이 저장되었습니다"
     },
     "authUrl": "인증 URL",
     "branding": {
       "companyName": "회사명",
-      "description": "로그인 페이지, 사이드바, 브라우저 탭에 표시되는 로고, 회사명, 태그라인을 맞춤설정",
       "forbidden": "브랜딩을 관리하려면 system:root 또는 user:manage 권한이 필요합니다",
       "loadFailed": "브랜딩 로드 실패",
       "logo": "로고",
@@ -2662,7 +2656,6 @@
       "saved": "브랜딩이 저장되었습니다",
       "tagline": "태그라인",
       "taglinePlaceholder": "예: 자체 호스팅 이메일 아카이빙 플랫폼",
-      "title": "브랜딩",
       "uploadLogo": "로고 업로드"
     },
     "changePasswordForFutureLogins": "향후 로그인을 위한 비밀번호를 변경합니다.",
@@ -2701,10 +2694,6 @@
     "filterProxy": "프록시 필터링...",
     "general": "일반",
     "generateNewToken": "새 토큰을 생성합니다. 이전 토큰은 즉시 무효화됩니다.",
-    "header": {
-      "description": "프로필 관리 및 시스템 설정 확인.",
-      "title": "설정"
-    },
     "host": "호스트",
     "id": "ID",
     "invalidPassword": "유효하지 않은 비밀번호",
@@ -2722,7 +2711,6 @@
       "saved": "SMTP 저널링 설정이 저장되었습니다",
       "target": "저널 대상 주소",
       "targetHint": "저널 규칙이 전달하는 주소입니다. 이 설정을 저장하면 해당 아카이브 계정이 생성됩니다(관리자 권한 필요). 실제 메일함으로 존재할 필요는 없습니다.",
-      "title": "SMTP 저널링",
       "tlsHint": "SMTP 리스너를 사용하도록 설정하고(BICHON_ENABLE_SMTP) STARTTLS 또는 TLS(BICHON_SMTP_ENCRYPTION)로 구성해야 합니다. 암호화가 꺼져 있으면 모든 저널 전달이 거부됩니다."
     },
     "lastAccess": "최종 접근",
@@ -2771,7 +2759,6 @@
       "testOk": "연결되었고 기본 DN을 검색할 수 있습니다.",
       "testing": "테스트 중…",
       "timeout": "시간 제한(초)",
-      "title": "LDAP / Active Directory",
       "userFilter": "사용자 검색 필터",
       "userFilterHint": "{username}은 사용자가 입력한 값으로 바뀝니다. 필터는 정확히 하나의 항목과 일치해야 합니다.",
       "usernameAttribute": "사용자 이름 속성"
@@ -2786,7 +2773,6 @@
       "copied": "클립보드에 복사되었습니다",
       "copy": "복사",
       "copyFailed": "복사 실패",
-      "description": "비밀번호 외에 인증 앱의 일회용 코드를 추가로 요구",
       "disable": "2단계 인증 비활성화",
       "disableCode": "비활성화하려면 현재 코드 또는 복구 코드를 입력하세요",
       "disabled": "2단계 인증이 비활성화되었습니다",
@@ -2807,7 +2793,6 @@
       "recoveryTitle": "복구 코드",
       "recoveryWarning": "이 일회용 코드를 안전한 곳에 보관하세요. 인증 앱에 접근할 수 없을 때 각 코드를 한 번씩 사용할 수 있습니다",
       "ssoNote": "조직에서 SSO를 사용합니다. MFA는 비밀번호 로그인에만 적용되며 SSO는 ID 공급자가 보호합니다",
-      "title": "2단계 인증",
       "useAuthenticatorCode": "인증 코드 사용",
       "useRecoveryCode": "대신 복구 코드 사용"
     },
@@ -2915,7 +2900,6 @@
       "catRepairHint": "email.repaired",
       "categories": "이벤트 카테고리",
       "clearSecret": "지우기",
-      "description": "감사 이벤트를 외부 SIEM(Splunk, Elasticsearch, QRadar…)으로 HMAC-SHA256 서명된 JSON으로 전달합니다.",
       "enabled": "전달 활성화",
       "enabledHint": "활성화하면 일치하는 감사 이벤트가 웹훅 URL로 전송됩니다.",
       "forbidden": "SIEM 전달에는 Enterprise 에디션과 system:root 또는 user:manage 권한이 필요합니다.",
@@ -2943,7 +2927,6 @@
       "testFailed": "테스트 이벤트 실패",
       "testMapping": "페이로드 미리보기",
       "testOk": "테스트 이벤트가 전달되었습니다(HTTP {{status}})",
-      "title": "SIEM 웹훅",
       "url": "웹훅 URL"
     },
     "sso": {
@@ -2984,8 +2967,7 @@
       "technicalDetails": "기술 세부 정보",
       "test": "연결 테스트",
       "testFailed": "연결 테스트 실패",
-      "testOk": "연결 테스트 성공",
-      "title": "싱글 사인온(OIDC)"
+      "testOk": "연결 테스트 성공"
     },
     "theRootPasswordHasBeenReset": "루트 비밀번호가 초기화되었습니다",
     "theRootTokenHasBeenReset": "루트 토큰이 초기화되었습니다",
@@ -3020,8 +3002,6 @@
     "notifications": "시스템 알림"
   },
   "systemConfig": {
-    "pageDescription": "이 매개변수는 CLI 플래그 또는 환경 변수를 통해 초기화됩니다. 환경의 일관성을 위해 현재 읽기 전용입니다.",
-    "pageTitle": "시스템 레벨 구성",
     "sections": {
       "cors": {
         "desc": "교차 출처 액세스 규칙",
