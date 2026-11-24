@@ -115,7 +115,7 @@ export const TokenCardList: React.FC<Props> = ({ tokens, userId }) => {
                             <AccordionTrigger className="px-5 py-4 hover:no-underline">
                                 <div className="flex items-center justify-between w-full gap-4">
                                     <div className="flex flex-col gap-1 min-w-0">
-                                        <h3 className="text-sm font-semibold truncate">
+                                        <h3 className="text-xs font-semibold truncate">
                                             {token.name || t('apiTokens.list.unnamedToken')}
                                         </h3>
 

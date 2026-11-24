@@ -21,10 +21,10 @@ import { Loader2, Plus } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { get_user_tokens } from '@/api/users/api'
 import { Skeleton } from '@/components/ui/skeleton'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import Logo from '@/assets/logo.svg'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { TokenCardList } from './token-list'
 import { TokensActionDialog } from './access-token-action'
 import { useTranslation } from 'react-i18next'
@@ -71,7 +71,7 @@ export function APITokens() {
   }
 
   return (
-    <div className="w-full max-w-3xl px-4 sm:px-6 lg:px-8">
+    <div className="flex h-full min-h-0 w-full max-w-3xl flex-col px-4 sm:px-6 lg:px-8">
       {tokensLoading ? (
         <div className="flex flex-col gap-4 mt-4">
           <Skeleton className="h-16 w-full rounded-lg" />
@@ -98,7 +98,7 @@ export function APITokens() {
         </div>
       ) : (
         <>
-          <div className="flex items-center justify-between gap-3 mb-4">
+          <div className="mb-4 flex shrink-0 items-center justify-between gap-3">
             <Select
               value={filter}
               onValueChange={(value) =>
@@ -129,7 +129,7 @@ export function APITokens() {
               {t('apiTokens.list.filterEmpty')}
             </p>
           ) : (
-            <ScrollArea className="h-[calc(100vh-16rem)] w-full pr-4 -mr-4 py-1">
+            <ScrollArea className="-mr-4 min-h-0 w-full flex-1 pr-4">
               <TokenCardList tokens={filteredTokens} userId={user.id} />
             </ScrollArea>
           )}

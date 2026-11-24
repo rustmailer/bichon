@@ -163,7 +163,14 @@ export default function Settings() {
               panel keeps the remaining height and scrolls on its own. */}
           <SettingsNav items={sidebarNavItems} />
           <div className='flex min-h-0 w-full flex-1 px-4 pb-2 pt-4'>
-            <ScrollArea className='h-full w-full'>
+            {/* The viewport's table wrapper is height:auto, so a panel that
+                asks for h-full would instead grow with its content. Give the
+                wrapper the viewport height; panels that are taller than the
+                panel still scroll the outer area. */}
+            <ScrollArea
+              className='h-full w-full'
+              viewportClassName='[&>div]:!block [&>div]:h-full'
+            >
               <Outlet />
             </ScrollArea>
           </div>

@@ -13,6 +13,19 @@ export default {
   		}
   	},
   	extend: {
+  		fontFamily: {
+  			sans: [
+  				'-apple-system',
+  				'BlinkMacSystemFont',
+  				'"Segoe UI"',
+  				'"Noto Sans"',
+  				'"PingFang SC"',
+  				'"Microsoft YaHei"',
+  				'"Noto Sans CJK SC"',
+  				'"Noto Naskh Arabic"',
+  				'sans-serif'
+  			]
+  		},
   		borderRadius: {
   			lg: 'var(--radius)',
   			md: 'calc(var(--radius) - 2px)',

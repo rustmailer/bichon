@@ -96,7 +96,7 @@ export function NavGroup({ id, title, items, defaultOpen }: NavGroup) {
     >
       <SidebarGroup>
         <CollapsibleTrigger asChild>
-          <SidebarGroupLabel className='cursor-pointer uppercase select-none'>
+          <SidebarGroupLabel className='cursor-pointer select-none uppercase text-[11px] font-semibold tracking-[0.06em] text-sidebar-foreground/60'>
             {title}
             <ChevronRight className='ml-auto transition-transform duration-200 group-data-[state=open]/group:rotate-90' />
           </SidebarGroupLabel>

@@ -121,19 +121,17 @@ export default function SettingsNav({
       </div>
 
       <div className='hidden shrink-0 md:block'>
-        <nav
+        <div
           className={cn(
-            'no-scrollbar flex items-center gap-3 overflow-x-auto border-b px-4',
+            'no-scrollbar overflow-x-auto px-1 pb-2 pt-1',
             className
           )}
           {...props}
         >
-          {groups.map((group, index) => (
-            <Fragment key={group.name}>
-              {index > 0 && (
-                <span aria-hidden='true' className='h-4 w-px shrink-0 bg-border' />
-              )}
+          <div className='inline-flex min-w-max items-center gap-1 rounded-lg bg-muted p-1'>
+            {groups.map((group) => (
               <button
+                key={group.name}
                 type='button'
                 onClick={() => {
                   if (group !== activeGroup) {
@@ -142,24 +140,24 @@ export default function SettingsNav({
                 }}
                 aria-current={group === activeGroup ? 'true' : undefined}
                 className={cn(
-                  'h-10 shrink-0 whitespace-nowrap text-sm transition-colors',
+                  'h-8 shrink-0 whitespace-nowrap rounded-md px-3 text-sm font-medium transition-colors',
                   group === activeGroup
-                    ? 'font-semibold text-foreground'
+                    ? 'bg-background text-foreground shadow-sm'
                     : 'text-muted-foreground hover:text-foreground'
                 )}
               >
                 {group.name}
               </button>
-            </Fragment>
-          ))}
-        </nav>
+            ))}
+          </div>
+        </div>
 
         {/* A group with a single entry needs no second row: the group tab is
             the entry. */}
         {activeGroup && activeGroup.items.length > 1 && (
           <nav
             aria-label={activeGroup.name}
-            className='no-scrollbar flex items-center gap-6 overflow-x-auto border-b px-4'
+            className='no-scrollbar flex items-center gap-6 overflow-x-auto border-b px-8'
           >
             {activeGroup.items.map((item) => (
               <Link
@@ -167,7 +165,7 @@ export default function SettingsNav({
                 to={item.href}
                 aria-current={item.href === activeHref ? 'page' : undefined}
                 className={cn(
-                  'inline-flex h-10 shrink-0 items-center whitespace-nowrap border-b-2 text-sm transition-colors',
+                  'inline-flex h-10 shrink-0 items-center whitespace-nowrap border-b-2 text-xs transition-colors',
                   item.href === activeHref
                     ? 'border-primary font-medium text-foreground'
                     : 'border-transparent text-muted-foreground hover:text-foreground'
