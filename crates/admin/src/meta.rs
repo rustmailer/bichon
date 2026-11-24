@@ -636,7 +636,12 @@ impl From<AccessTokenModel> for bichon_core::token::AccessTokenModel {
     fn from(value: AccessTokenModel) -> Self {
         Self {
             user_id: value.user_id,
-            token: value.token,
+            // Restored data predates hashing; the server's startup migration
+            // rewrites these records before any listener starts.
+            token_material: value.token,
+            token_scheme: Default::default(),
+            token_prefix: String::new(),
+            token_id: String::new(),
             name: value.name,
             token_type: value.token_type,
             created_at: value.created_at,

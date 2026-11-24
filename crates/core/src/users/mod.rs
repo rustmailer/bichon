@@ -23,8 +23,8 @@ use crate::{
     },
     decrypt,
     error::{code::ErrorCode, BichonResult},
-    generate_token, id, raise_error,
-    token::{AccessTokenModel, TokenType},
+    id, raise_error,
+    token::AccessTokenModel,
     users::{
         acl::AccessControl,
         payload::{UserCreateRequest, UserUpdateRequest},
@@ -363,23 +363,16 @@ impl BichonUserV2 {
             };
 
             // 3. Generate and insert an initial access token for the first-time setup
-            let access_token = AccessTokenModel {
-                token: generate_token!(128),
-                created_at: now,
-                updated_at: now,
-                last_access_at: Default::default(),
-                name: Some("Initial Setup Token".into()),
-                user_id: DEFAULT_ADMIN_USER_ID,
-                token_type: TokenType::WebUI,
-                expire_at: None, // Admin setup token usually persistent until changed
-                metrics_only: false,
-            };
+            let (mut access_token, _plaintext) =
+                AccessTokenModel::new_webui_token(DEFAULT_ADMIN_USER_ID);
+            access_token.name = Some("Initial Setup Token".into());
+            access_token.expire_at = None; // Admin setup token usually persistent until changed
 
             with_transaction(DB_MANAGER.db(), move |txn| {
                 let txn = txn
                     .insert("users", DEFAULT_ADMIN_USER_ID.to_string(), &user)
                     .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?
-                    .upsert("tokens", access_token.token.clone(), &access_token)
+                    .upsert("tokens", access_token.key(), &access_token)
                     .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;
                 Ok(txn)
             })?;
@@ -700,23 +693,15 @@ impl BichonUserV2 {
         let user_clone = user.clone();
 
         // 4. Atomic transaction for User and Initial Token
-        let access_token = AccessTokenModel {
-            token: generate_token!(128),
-            created_at: now,
-            updated_at: now,
-            last_access_at: Default::default(),
-            name: Some("Default WebUI Token".into()),
-            user_id: user.id,
-            token_type: TokenType::WebUI,
-            expire_at: None,
-            metrics_only: false,
-        };
+        let (mut access_token, _plaintext) = AccessTokenModel::new_webui_token(user.id);
+        access_token.name = Some("Default WebUI Token".into());
+        access_token.expire_at = None;
 
         with_transaction(DB_MANAGER.db(), move |txn| {
             let txn = txn
                 .insert("users", user.key(), &user)
                 .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?
-                .insert("tokens", access_token.token.clone(), &access_token)
+                .insert("tokens", access_token.key(), &access_token)
                 .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;
             Ok(txn)
         })?;
@@ -746,7 +731,7 @@ impl BichonUserV2 {
         let token_keys: Vec<String> = all_tokens
             .into_iter()
             .filter(|t| t.user_id == uid)
-            .map(|t| t.token)
+            .map(|t| t.key())
             .collect();
 
         if !token_keys.is_empty() {

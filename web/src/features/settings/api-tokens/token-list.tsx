@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Copy, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import {
     Dialog,
@@ -41,7 +41,6 @@ import { OP_TOKEN_REVOKE } from "@/api/approvals/api";
 import { useGatedOp } from "@/features/approvals/use-gated-op";
 import { useTranslation } from "react-i18next";
 import { toast } from "@/hooks/use-toast";
-import { copyToClipboard } from "@/lib/clipboard";
 
 interface Props {
     tokens: AccessToken[];
@@ -61,7 +60,7 @@ export const TokenCardList: React.FC<Props> = ({ tokens, userId }) => {
         React.useState<AccessToken | null>(null);
 
     const deleteMutation = useMutation({
-        mutationFn: (token: string) => remove_access_token(token),
+        mutationFn: (tokenId: string) => remove_access_token(tokenId),
         onSuccess: (data) => {
             queryClient.invalidateQueries({ queryKey: ['user-tokens', userId] });
             queryClient.invalidateQueries({ queryKey: ['approvals'] });
@@ -82,26 +81,12 @@ export const TokenCardList: React.FC<Props> = ({ tokens, userId }) => {
         }
     });
 
-    const handleCopy = async (text: string) => {
-        try {
-            await copyToClipboard(text);
-            toast({
-                description: t('apiTokens.notifications.copied'),
-            });
-        } catch {
-            toast({
-                variant: "destructive",
-                description: t('settings.failedToCopyText'),
-            });
-        }
-    };
-
     return (
         <>
             <Accordion type="multiple" className="w-full space-y-4">
                 {tokens.map((token) => {
                     const expired = isTokenExpired(token.expire_at);
-                    const itemValue = token.token;
+                    const itemValue = token.token_id;
 
                     return (
                         <AccordionItem
@@ -151,19 +136,14 @@ export const TokenCardList: React.FC<Props> = ({ tokens, userId }) => {
                                         <div className="text-xs font-medium text-muted-foreground mb-1">
                                             {t('apiTokens.list.tokenLabel')}
                                         </div>
-                                        <div className="flex items-center gap-2 bg-background border rounded-md px-3 py-2">
-                                            <code className="font-mono text-xs truncate flex-1">
-                                                {token.token}
+                                        <div className="bg-background border rounded-md px-3 py-2">
+                                            <code className="font-mono text-xs truncate block">
+                                                {token.token_prefix}…
                                             </code>
-                                            <Button
-                                                size="icon"
-                                                variant="ghost"
-                                                className="h-7 w-7"
-                                                onClick={() => handleCopy(token.token)}
-                                            >
-                                                <Copy className="h-4 w-4" />
-                                            </Button>
                                         </div>
+                                        <p className="mt-2 text-xs text-muted-foreground">
+                                            {t('apiTokens.list.prefixNotice')}
+                                        </p>
                                     </div>
                                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs text-muted-foreground">
                                         <div>
@@ -238,7 +218,7 @@ export const TokenCardList: React.FC<Props> = ({ tokens, userId }) => {
                             disabled={deleteMutation.isPending}
                             onClick={() => {
                                 if (!deleteTarget) return;
-                                deleteMutation.mutate(deleteTarget.token);
+                                deleteMutation.mutate(deleteTarget.token_id);
                             }}
                         >
                             {deleteMutation.isPending

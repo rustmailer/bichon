@@ -19,6 +19,7 @@
 use crate::common::auth::WrappedContext;
 use crate::rest::api::ApiTags;
 use crate::rest::ApiResult;
+use bichon_core::database::MemDbModel;
 use bichon_core::ext::event_bus::{emit, Event};
 use bichon_core::token::view::AccessTokenResp;
 use bichon_core::users::permissions::Permission;
@@ -45,25 +46,29 @@ impl AccessTokenApi {
     }
 
     /// Deletes a specific access token.
+    ///
+    /// `:token_id` is the public id returned by the list endpoints. The full
+    /// token is also accepted for clients written before ids existed — it is
+    /// hashed and looked up, so it never has to be stored in clear.
     #[oai(
-        path = "/access-token/:token",
+        path = "/access-token/:token_id",
         method = "delete",
         operation_id = "remove_access_token"
     )]
     async fn remove_access_token(
         &self,
-        /// The access token to be deleted
-        token: Path<String>,
+        /// Public token id (or the legacy full token)
+        token_id: Path<String>,
         context: WrappedContext,
     ) -> ApiResult<()> {
-        let token = token.0.trim();
-        let token = AccessTokenModel::get_token(token)?;
+        let token_id = token_id.0.trim();
+        let token = AccessTokenModel::get_token(token_id)?;
         if context.user.id != token.user_id {
             context.require_permission(None, Permission::TOKEN_MANAGE)?;
         }
         let token_name = token.name.clone();
         let token_user = token.user_id;
-        AccessTokenModel::delete(&token.token)?;
+        AccessTokenModel::delete(&token.key())?;
         let target_username = bichon_core::users::UserModel::find(token_user)?
             .map(|u| u.username)
             .unwrap_or_else(|| format!("user-{token_user}"));

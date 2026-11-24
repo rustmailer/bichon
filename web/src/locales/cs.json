@@ -699,6 +699,10 @@
     "swaggerUI": "Swagger UI"
   },
   "apiTokens": {
+    "created": {
+      "title": "Přístupový token vytvořen",
+      "warning": "Zkopírujte jej nyní. Tento token se zobrazí pouze jednou – pokud jej ztratíte, smažte jej a vytvořte nový."
+    },
     "deleteDialog": {
       "cancel": "Zrušit",
       "confirm": "Smazat",
@@ -748,6 +752,7 @@
       "neverExpires": "Bez omezení platnosti",
       "neverLabel": "Nikdy",
       "neverUsed": "Nikdy",
+      "prefixNotice": "Z bezpečnostních důvodů se celý token zobrazí pouze při vytvoření. Poté se pro identifikaci uchovává pouze tato předpona.",
       "statusActive": "Aktivní",
       "statusExpired": "Platnost vypršela",
       "tokenLabel": "Token",

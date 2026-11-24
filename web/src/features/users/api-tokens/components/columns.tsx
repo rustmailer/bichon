@@ -39,7 +39,7 @@ export const getColumns = (t: (key: string) => string): ColumnDef<AccessToken>[]
             {row.original.name || t('users.api_tokens.table.unnamed')}
           </span>
           <span className="text-[11px] text-muted-foreground font-mono leading-none mt-1">
-            {row.original.token.substring(0, 12)}...
+            {row.original.token_prefix}...
           </span>
         </div>
       ),

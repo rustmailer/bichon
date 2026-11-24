@@ -87,14 +87,14 @@ export function ApiTokenDeleteDialog({ open, onOpenChange, currentRow }: Props) 
   }
 
   const deleteMutation = useMutation({
-    mutationFn: (token: string) => remove_access_token(token),
+    mutationFn: (tokenId: string) => remove_access_token(tokenId),
     onSuccess: handleSuccess,
     onError: handleError,
   })
 
   const handleDelete = () => {
     if (value.toLowerCase() !== 'delete') return
-    deleteMutation.mutate(currentRow.token)
+    deleteMutation.mutate(currentRow.token_id)
   }
 
   return (
@@ -125,7 +125,7 @@ export function ApiTokenDeleteDialog({ open, onOpenChange, currentRow }: Props) 
             <p className="mt-1 text-muted-foreground">
               {t('users.api_tokens.delete.prefix')}:{' '}
               <span className="font-mono">
-                {currentRow.token.substring(0, 8)}...
+                {currentRow.token_prefix}...
               </span>
             </p>
             <p className="mt-2 font-bold text-destructive">

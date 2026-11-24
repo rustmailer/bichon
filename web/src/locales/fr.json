@@ -699,6 +699,10 @@
     "swaggerUI": "Swagger UI"
   },
   "apiTokens": {
+    "created": {
+      "title": "Jeton d'accès créé",
+      "warning": "Copiez-le maintenant. Ce jeton ne s'affiche qu'une seule fois ; en cas de perte, supprimez-le et créez-en un nouveau."
+    },
     "deleteDialog": {
       "cancel": "Annuler",
       "confirm": "Supprimer",
@@ -748,6 +752,7 @@
       "neverExpires": "N'expire jamais",
       "neverLabel": "Jamais",
       "neverUsed": "Jamais",
+      "prefixNotice": "Pour des raisons de sécurité, le jeton complet n'est affiché qu'à sa création. Seul ce préfixe est conservé pour l'identification.",
       "statusActive": "Actif",
       "statusExpired": "Expiré",
       "tokenLabel": "Jeton",

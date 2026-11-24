@@ -38,6 +38,12 @@ impl DatabaseManager {
         let db = MemDb::open_with(db_path, Durability::Batch { max_ops: 100 })
             .expect("Failed to open memdb database");
 
+        // One-way migration: rewrite pre-hash token records before any
+        // listener accepts a credential. Idempotent, so old backups restored
+        // on a later boot take the same path.
+        crate::token::migrate::migrate_legacy_tokens(&db)
+            .expect("Failed to migrate legacy access tokens");
+
         // Start periodic snapshot worker (every 5 minutes)
         db.start_snapshot_worker(Duration::from_secs(300));
 

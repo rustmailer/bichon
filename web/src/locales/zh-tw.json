@@ -699,6 +699,10 @@
     "swaggerUI": "Swagger UI"
   },
   "apiTokens": {
+    "created": {
+      "title": "存取權杖已建立",
+      "warning": "請立即複製。此權杖只顯示這一次；如果遺失，只能刪除後重新建立。"
+    },
     "deleteDialog": {
       "cancel": "取消",
       "confirm": "刪除",
@@ -748,6 +752,7 @@
       "neverExpires": "永不過期",
       "neverLabel": "從不",
       "neverUsed": "未使用",
+      "prefixNotice": "基於安全考量，完整權杖僅在建立時顯示一次；之後只保留此前綴用於識別。",
       "statusActive": "已激活",
       "statusExpired": "已過期",
       "tokenLabel": "權杖",

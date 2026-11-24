@@ -129,7 +129,7 @@ impl UsersApi {
         &self,
         id: Path<u64>,
         context: WrappedContext,
-    ) -> ApiResult<Json<Vec<AccessTokenModel>>> {
+    ) -> ApiResult<Json<Vec<bichon_core::token::view::AccessTokenResp>>> {
         let target_user_id = id.0;
         let tokens = AccessTokenModel::get_user_api_tokens(target_user_id)?;
         if context.user.id == target_user_id {

@@ -699,6 +699,10 @@
     "swaggerUI": "Swagger UI"
   },
   "apiTokens": {
+    "created": {
+      "title": "Åtkomsttoken skapad",
+      "warning": "Kopiera det nu. Den här token visas bara en gång – tappar du bort det får du ta bort det och skapa ett nytt."
+    },
     "deleteDialog": {
       "cancel": "Avbryt",
       "confirm": "Ta bort",
@@ -748,6 +752,7 @@
       "neverExpires": "Går aldrig ut",
       "neverLabel": "Aldrig",
       "neverUsed": "Aldrig",
+      "prefixNotice": "Av säkerhetsskäl visas hela token endast när det skapas. Därefter sparas bara detta prefix för identifiering.",
       "statusActive": "Aktiv",
       "statusExpired": "Utgången",
       "tokenLabel": "Token",

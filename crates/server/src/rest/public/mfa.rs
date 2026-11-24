@@ -5,7 +5,7 @@
 // token. This endpoint validates the 6-digit code (or a one-time recovery
 // code) and, on success, issues the real WebUI token.
 
-use bichon_core::database::{delete_impl, find_impl, manager::DB_MANAGER};
+use bichon_core::database::{manager::DB_MANAGER, MemDbModel};
 use bichon_core::ext::event_bus::{emit, Event};
 use bichon_core::token::{AccessTokenModel, TokenType};
 use bichon_core::users::{LoginResult, UserModel};
@@ -67,7 +67,7 @@ pub async fn mfa_verify(payload: Json<MfaVerifyPayload>, req: &Request) -> Respo
         return failure("Missing challenge or verification code.");
     }
 
-    let token = match find_impl::<AccessTokenModel>(DB_MANAGER.db(), &challenge) {
+    let token = match AccessTokenModel::find_by_secret(&challenge) {
         Ok(Some(token)) => token,
         _ => return failure("Invalid or expired verification challenge."),
     };
@@ -99,7 +99,10 @@ pub async fn mfa_verify(payload: Json<MfaVerifyPayload>, req: &Request) -> Respo
     }
 
     // Consume the one-time challenge regardless of which factor succeeded.
-    let _ = delete_impl::<AccessTokenModel>(DB_MANAGER.db(), &challenge);
+    let _ = bichon_core::database::delete_impl::<AccessTokenModel>(
+        DB_MANAGER.db(),
+        &token.key(),
+    );
 
     let new_token = match AccessTokenModel::reset_webui_token(user.id) {
         Ok(token) => token,

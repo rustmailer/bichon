@@ -699,6 +699,10 @@
     "swaggerUI": "Swagger UI"
   },
   "apiTokens": {
+    "created": {
+      "title": "アクセストークンを作成しました",
+      "warning": "今すぐコピーしてください。このトークンは一度しか表示されません。紛失した場合は削除して作り直してください。"
+    },
     "deleteDialog": {
       "cancel": "キャンセル",
       "confirm": "削除",
@@ -748,6 +752,7 @@
       "neverExpires": "無期限",
       "neverLabel": "なし",
       "neverUsed": "未使用",
+      "prefixNotice": "セキュリティのため、完全なトークンは作成時に一度だけ表示されます。以降は識別用にこの接頭辞のみ保持されます。",
       "statusActive": "有効",
       "statusExpired": "期限切れ",
       "tokenLabel": "トークン",

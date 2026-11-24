@@ -100,7 +100,7 @@ export function ApiTokensTable({ columns, data }: DataTableProps) {
       const name = row.original.name?.toLowerCase() ?? '';
       const owner = row.original.user_name?.toLowerCase() ?? '';
       const email = row.original.user_email?.toLowerCase() ?? '';
-      const token = row.original.token?.toLowerCase() ?? '';
+      const token = row.original.token_prefix?.toLowerCase() ?? '';
       return (
         name.includes(searchValue) ||
         owner.includes(searchValue) ||

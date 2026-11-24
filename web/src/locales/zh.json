@@ -699,6 +699,10 @@
     "swaggerUI": "Swagger UI"
   },
   "apiTokens": {
+    "created": {
+      "title": "访问令牌已创建",
+      "warning": "请立即复制。该令牌只显示这一次；如果丢失，只能删除后重新创建。"
+    },
     "deleteDialog": {
       "cancel": "取消",
       "confirm": "删除",
@@ -748,6 +752,7 @@
       "neverExpires": "永不过期",
       "neverLabel": "从不",
       "neverUsed": "未使用",
+      "prefixNotice": "出于安全考虑，完整令牌仅在创建时显示一次；之后只保留此前缀用于识别。",
       "statusActive": "已激活",
       "statusExpired": "已过期",
       "tokenLabel": "令牌",

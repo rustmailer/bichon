@@ -699,6 +699,10 @@
     "swaggerUI": "Swagger UI"
   },
   "apiTokens": {
+    "created": {
+      "title": "Adgangstoken oprettet",
+      "warning": "Kopiér det nu. Dette token vises kun én gang – mister du det, skal du slette det og oprette et nyt."
+    },
     "deleteDialog": {
       "cancel": "Annuller",
       "confirm": "Slet",
@@ -748,6 +752,7 @@
       "neverExpires": "Udløber aldrig",
       "neverLabel": "Aldrig",
       "neverUsed": "Aldrig",
+      "prefixNotice": "Af sikkerhedshensyn vises det fulde token kun ved oprettelsen. Bagefter gemmes kun dette præfiks til identifikation.",
       "statusActive": "Aktiv",
       "statusExpired": "Udløbet",
       "tokenLabel": "Token",

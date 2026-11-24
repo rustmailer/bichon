@@ -699,6 +699,10 @@
     "swaggerUI": "Swagger UI"
   },
   "apiTokens": {
+    "created": {
+      "title": "Token de acesso criado",
+      "warning": "Copie agora. Este token é mostrado apenas uma vez; se o perder, elimine-o e crie um novo."
+    },
     "deleteDialog": {
       "cancel": "Cancelar",
       "confirm": "Eliminar",
@@ -748,6 +752,7 @@
       "neverExpires": "Nunca expira",
       "neverLabel": "Nunca",
       "neverUsed": "Nunca",
+      "prefixNotice": "Por segurança, o token completo é mostrado apenas na criação. Depois disso, apenas este prefixo é mantido para identificação.",
       "statusActive": "Ativo",
       "statusExpired": "Expirado",
       "tokenLabel": "Token",

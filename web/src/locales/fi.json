@@ -699,6 +699,10 @@
     "swaggerUI": "Swagger UI"
   },
   "apiTokens": {
+    "created": {
+      "title": "Käyttöoikeustunnus luotu",
+      "warning": "Kopioi se nyt. Tämä tunnus näytetään vain kerran – jos kadotat sen, poista se ja luo uusi."
+    },
     "deleteDialog": {
       "cancel": "Peruuta",
       "confirm": "Poista",
@@ -748,6 +752,7 @@
       "neverExpires": "Ei vanhene koskaan",
       "neverLabel": "Ei koskaan",
       "neverUsed": "Ei koskaan",
+      "prefixNotice": "Turvallisuussyistä täysi tunnus näytetään vain luotaessa. Sen jälkeen tunnistamista varten säilytetään vain tämä etuliite.",
       "statusActive": "Aktiivinen",
       "statusExpired": "Vanhentunut",
       "tokenLabel": "Tunnus",

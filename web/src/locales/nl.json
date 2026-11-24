@@ -699,6 +699,10 @@
     "swaggerUI": "Swagger UI"
   },
   "apiTokens": {
+    "created": {
+      "title": "Toegangstoken aangemaakt",
+      "warning": "Kopieer het nu. Dit token wordt slechts één keer getoond; ben je het kwijt, verwijder het en maak een nieuw aan."
+    },
     "deleteDialog": {
       "cancel": "Annuleren",
       "confirm": "Verwijderen",
@@ -748,6 +752,7 @@
       "neverExpires": "Verloopt nooit",
       "neverLabel": "Nooit",
       "neverUsed": "Nooit",
+      "prefixNotice": "Om veiligheidsredenen wordt het volledige token alleen bij aanmaken getoond. Daarna wordt alleen dit voorvoegsel bewaard ter identificatie.",
       "statusActive": "Actief",
       "statusExpired": "Verlopen",
       "tokenLabel": "Token",

@@ -94,7 +94,10 @@ export interface AccessToken {
     user_id: number;
     user_name: string,
     user_email: string,
-    token: string;
+    /** Public, non-secret identifier used for revocation. */
+    token_id: string;
+    /** Leading characters of the token, for display only. */
+    token_prefix: string;
     created_at: number;
     updated_at: number;
     name?: string;
@@ -227,13 +230,13 @@ export const create_access_token = async (data: Record<string, any>) => {
     return response.data;
 }
 
-export const update_access_token = async (token: string, data: Record<string, any>) => {
-    const response = await axiosInstance.post(`api/v1/access-token/${token}`, data);
+export const update_access_token = async (token_id: string, data: Record<string, any>) => {
+    const response = await axiosInstance.post(`api/v1/access-token/${token_id}`, data);
     return response.data;
 }
 
-export const remove_access_token = async (token: string) => {
-    const response = await axiosInstance.delete(`api/v1/access-token/${token}`);
+export const remove_access_token = async (token_id: string) => {
+    const response = await axiosInstance.delete(`api/v1/access-token/${token_id}`);
     return response.data;
 }
 

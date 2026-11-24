@@ -18,10 +18,12 @@
 
 use std::collections::HashMap;
 
+use bichon_memdb::MemDb;
+
 use crate::database::manager::DB_MANAGER;
 use crate::database::{
-    MemDbModel, delete_impl, filter_impl, find_impl, insert_impl, list_all_impl, update_impl,
-    with_transaction_exempt
+    delete_impl, filter_impl, find_impl, insert_impl, list_all_impl, update_impl,
+    with_transaction_exempt, MemDbModel,
 };
 use crate::error::code::ErrorCode;
 use crate::raise_error;
@@ -35,8 +37,22 @@ use crate::{
 //use poem_openapi::{Enum, Object};
 use serde::{Deserialize, Serialize};
 
+pub mod migrate;
 pub mod payload;
 pub mod view;
+
+/// How [`AccessTokenModel::token_material`] is encoded.
+///
+/// Records written before token hashing deserialize as `Plaintext`; their
+/// `token_material` is the live bearer token. `startup` migration rewrites
+/// them so that only a digest remains on disk.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TokenScheme {
+    #[default]
+    Plaintext,
+    Blake3,
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[cfg_attr(feature = "web-api", derive(poem_openapi::Enum))]
@@ -48,12 +64,28 @@ pub enum TokenType {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
-#[cfg_attr(feature = "web-api", derive(poem_openapi::Object))]
 pub struct AccessTokenModel {
     /// The ID of the user who owns this token
     pub user_id: u64,
-    /// The unique token string used for authentication
-    pub token: String,
+    /// The bearer token itself before migration, and its BLAKE3 digest after.
+    ///
+    /// The serialized field name stays `token` so existing memdb snapshots
+    /// (and every older backup) keep deserializing; `token_scheme` says which
+    /// of the two forms this value holds. Once migrated the plaintext is gone
+    /// and the token cannot be displayed again.
+    #[serde(rename = "token")]
+    pub token_material: String,
+    /// Whether [`Self::token_material`] is plaintext (legacy) or a digest.
+    #[serde(default)]
+    pub token_scheme: TokenScheme,
+    /// First characters of the plaintext token, kept for identification in
+    /// lists after the digest replaced the full value.
+    #[serde(default)]
+    pub token_prefix: String,
+    /// Non-secret identifier used by revocation endpoints. Derived from the
+    /// digest, so it is stable and does not reveal the token.
+    #[serde(default)]
+    pub token_id: String,
     /// An optional name of the token.
     pub name: Option<String>,
     /// Token type: WebUI or API
@@ -87,11 +119,69 @@ impl MemDbModel for AccessTokenModel {
         "tokens"
     }
     fn key(&self) -> String {
-        self.token.clone()
+        self.token_material.clone()
     }
 }
 
+/// Domain-separated digest of a bearer token. The token space is 128 random
+/// bits, so a single fast hash is enough; a slow KDF would only tax every
+/// authenticated request.
+pub(crate) fn digest_token(plaintext: &str) -> String {
+    blake3::hash(format!("bichon-access-token:v1:{plaintext}").as_bytes())
+        .to_hex()
+        .to_string()
+}
+
+/// First characters of the plaintext, kept so the UI can tell tokens apart
+/// after the full value is no longer stored.
+pub(crate) fn token_prefix(plaintext: &str) -> String {
+    plaintext.chars().take(12).collect()
+}
+
+/// Public, non-secret identifier derived from the digest. Stable across
+/// restarts and across eager/lazy migration.
+pub(crate) fn token_id_from_digest(digest: &str) -> String {
+    digest.chars().take(24).collect()
+}
+
+/// How often "last used" is persisted. Every authenticated request refreshes
+/// it in the model, but writing to memdb each time turns read-only polling
+/// into disk I/O; a minute of drift is invisible in the UI and harmless for
+/// the WebUI idle timeout.
+const LAST_ACCESS_REFRESH_MS: i64 = 60_000;
+
+pub(crate) fn should_refresh_last_access(last_access_at: i64, now: i64) -> bool {
+    last_access_at <= 0 || now.saturating_sub(last_access_at) >= LAST_ACCESS_REFRESH_MS
+}
+
 impl AccessTokenModel {
+    /// Build a record whose stored material is the digest, never the token.
+    fn from_plaintext(
+        plaintext: &str,
+        user_id: u64,
+        name: Option<String>,
+        token_type: TokenType,
+        expire_at: Option<i64>,
+        metrics_only: bool,
+    ) -> Self {
+        let now = utc_now!();
+        let digest = digest_token(plaintext);
+        Self {
+            token_id: token_id_from_digest(&digest),
+            token_prefix: token_prefix(plaintext),
+            token_material: digest,
+            token_scheme: TokenScheme::Blake3,
+            created_at: now,
+            updated_at: now,
+            last_access_at: Default::default(),
+            name,
+            user_id,
+            token_type,
+            expire_at,
+            metrics_only,
+        }
+    }
+
     pub fn new_api_token(
         token: String,
         user_id: u64,
@@ -99,45 +189,34 @@ impl AccessTokenModel {
         expire_at: Option<i64>,
         metrics_only: bool,
     ) -> Self {
-        Self {
-            token,
-            created_at: utc_now!(),
-            updated_at: utc_now!(),
-            last_access_at: Default::default(),
-            name,
-            user_id,
-            token_type: TokenType::Api,
-            expire_at,
-            metrics_only,
-        }
+        Self::from_plaintext(&token, user_id, name, TokenType::Api, expire_at, metrics_only)
     }
 
-    pub fn new_webui_token(user_id: u64) -> AccessTokenModel {
-        let now = utc_now!();
-        AccessTokenModel {
-            token: generate_token!(128),
-            created_at: now,
-            updated_at: now,
-            last_access_at: Default::default(),
-            name: None,
+    /// Returns the record and the plaintext token. The plaintext is only ever
+    /// returned to the caller that created it.
+    pub fn new_webui_token(user_id: u64) -> (AccessTokenModel, String) {
+        let plaintext = generate_token!(128);
+        let model = Self::from_plaintext(
+            &plaintext,
             user_id,
-            token_type: TokenType::WebUI,
-            expire_at: None,
-            metrics_only: false,
-        }
+            None,
+            TokenType::WebUI,
+            None,
+            false,
+        );
+        (model, plaintext)
     }
 
     pub fn reset_webui_token(user_id: u64) -> BichonResult<String> {
         let old_token = Self::get_user_webui_token(user_id)?;
-        let new_token = Self::new_webui_token(user_id);
-        let new_token_str = new_token.token.clone();
+        let (new_token, plaintext) = Self::new_webui_token(user_id);
 
         match old_token {
             Some(old) => {
                 // Tokens are gate-exempt (memdb-only writes); the exempt
                 // transaction keeps login working during a backup window.
                 with_transaction_exempt(DB_MANAGER.db(), move |txn| {
-                    let txn = txn.delete(AccessTokenModel::collection(), old.token.clone());
+                    let txn = txn.delete(AccessTokenModel::collection(), old.key());
                     txn.insert(AccessTokenModel::collection(), new_token.key(), &new_token)
                         .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))
                 })?;
@@ -147,7 +226,7 @@ impl AccessTokenModel {
             }
         }
 
-        Ok(new_token_str)
+        Ok(plaintext)
     }
 
     /// Issue a short-lived, one-time challenge token for the MFA login step.
@@ -162,24 +241,21 @@ impl AccessTokenModel {
         })?;
         for stale_token in stale {
             if stale_token.expire_at.map_or(false, |e| e < now) {
-                let _ = delete_impl::<AccessTokenModel>(DB_MANAGER.db(), &stale_token.token);
+                let _ = delete_impl::<AccessTokenModel>(DB_MANAGER.db(), &stale_token.key());
             }
         }
 
-        let token = AccessTokenModel {
-            token: generate_token!(128),
-            created_at: now,
-            updated_at: now,
-            last_access_at: 0,
-            name: None,
+        let plaintext = generate_token!(128);
+        let token = AccessTokenModel::from_plaintext(
+            &plaintext,
             user_id,
-            token_type: TokenType::MfaChallenge,
-            expire_at: Some(expire_at),
-            metrics_only: false,
-        };
-        let token_str = token.token.clone();
+            None,
+            TokenType::MfaChallenge,
+            Some(expire_at),
+            false,
+        );
         insert_impl(DB_MANAGER.db(), token)?;
-        Ok(token_str)
+        Ok(plaintext)
     }
 
     pub fn get_user_webui_token(user_id: u64) -> BichonResult<Option<AccessTokenModel>> {
@@ -190,26 +266,74 @@ impl AccessTokenModel {
             .find(|t| t.token_type == TokenType::WebUI))
     }
 
-    pub fn get_user_api_tokens(user_id: u64) -> BichonResult<Vec<AccessTokenModel>> {
+    /// API tokens owned by `user_id`, in the masked shape the WebUI renders.
+    /// Never returns token material — only the prefix and the public id.
+    pub fn get_user_api_tokens(user_id: u64) -> BichonResult<Vec<AccessTokenResp>> {
+        let user = UserModel::find(user_id)?;
         let tokens =
             filter_impl::<AccessTokenModel, _>(DB_MANAGER.db(), move |t| t.user_id == user_id)?;
         Ok(tokens
             .into_iter()
             .filter(|t| t.token_type == TokenType::Api)
+            .map(|t| AccessTokenResp::from_model(&t, user.as_ref()))
             .collect())
     }
 
-    /// Validate a token's lifecycle (type and expiry) and refresh its
-    /// last-access timestamp. Returns the stored token record.
+    /// Look a token up by the secret the client presented.
+    ///
+    /// Hashed records are found directly. A legacy record still keyed by its
+    /// plaintext is migrated on the spot, so an upgrade does not invalidate
+    /// credentials that were issued before it.
+    pub(crate) fn find_by_secret_in(
+        db: &MemDb,
+        presented: &str,
+    ) -> BichonResult<Option<AccessTokenModel>> {
+        let digest = digest_token(presented);
+        if let Some(model) = find_impl::<AccessTokenModel>(db, &digest)? {
+            return Ok(Some(model));
+        }
+
+        // Legacy path: the collection key is the plaintext token. Rewrite the
+        // record so this is the last time the plaintext is read.
+        //
+        // Only a plaintext record may match here. A hashed record's key is
+        // its digest, and accepting a raw key hit would let anyone who saw
+        // the database authenticate with the digest itself.
+        if let Some(model) = find_impl::<AccessTokenModel>(db, presented)? {
+            if model.token_scheme == TokenScheme::Plaintext
+                && model.token_material == presented
+            {
+                let migrated = migrate::migrate_record_in(db, &model)?;
+                return Ok(Some(migrated));
+            }
+        }
+
+        Ok(None)
+    }
+
+    pub fn find_by_secret(presented: &str) -> BichonResult<Option<AccessTokenModel>> {
+        Self::find_by_secret_in(DB_MANAGER.db(), presented)
+    }
+
+    /// Public id lookup used by the revocation endpoint.
+    pub fn find_by_id(token_id: &str) -> BichonResult<Option<AccessTokenModel>> {
+        if token_id.is_empty() {
+            return Ok(None);
+        }
+        Ok(list_all_impl::<AccessTokenModel>(DB_MANAGER.db())?
+            .into_iter()
+            .find(|t| t.token_id == token_id))
+    }
+
+    /// Validate lifecycle (type and expiry) and refresh the last-access
+    /// timestamp. Returns the stored token record.
     fn resolve_token(token: &str) -> BichonResult<AccessTokenModel> {
-        let token_str = token.to_string();
-        let token_model = find_impl::<AccessTokenModel>(DB_MANAGER.db(), &token_str)?
-            .ok_or_else(|| {
-                raise_error!(
-                    "Invalid access token provided. Please check your credentials.".into(),
-                    ErrorCode::PermissionDenied
-                )
-            })?;
+        let token_model = Self::find_by_secret(token)?.ok_or_else(|| {
+            raise_error!(
+                "Invalid access token provided. Please check your credentials.".into(),
+                ErrorCode::PermissionDenied
+            )
+        })?;
 
         if matches!(token_model.token_type, TokenType::MfaChallenge) {
             return Err(raise_error!(
@@ -249,12 +373,19 @@ impl AccessTokenModel {
             }
         }
 
-        // Update last_access_at on every successful use for both token types
-        update_impl(DB_MANAGER.db(), &token_str, |current: AccessTokenModel| {
-            let mut updated = current.clone();
-            updated.last_access_at = utc_now!();
-            Ok(updated)
-        })?;
+        // Refreshing `last_access_at` is a memdb write (and a WAL append).
+        // Doing it on every request turns read-only polling into disk writes;
+        // minute precision is plenty for both the WebUI idle timeout and the
+        // "last used" column.
+        let now = utc_now!();
+        if should_refresh_last_access(token_model.last_access_at, now) {
+            let key = token_model.key();
+            update_impl(DB_MANAGER.db(), &key, move |current: AccessTokenModel| {
+                let mut updated = current.clone();
+                updated.last_access_at = now;
+                Ok(updated)
+            })?;
+        }
 
         Ok(token_model)
     }
@@ -336,17 +467,34 @@ impl AccessTokenModel {
         Ok(token)
     }
 
-    pub fn delete(token: &str) -> BichonResult<()> {
-        delete_impl::<AccessTokenModel>(DB_MANAGER.db(), token)
+    /// Delete by any identifier a caller may hold: the presented secret, the
+    /// public token id, or the stored material (legacy plaintext or digest).
+    /// Kept permissive so old callers and old WebUI builds keep working.
+    pub fn delete(identifier: &str) -> BichonResult<()> {
+        if let Some(model) = Self::find_by_secret(identifier)? {
+            return delete_impl::<AccessTokenModel>(DB_MANAGER.db(), &model.key());
+        }
+        if let Some(model) = Self::find_by_id(identifier)? {
+            return delete_impl::<AccessTokenModel>(DB_MANAGER.db(), &model.key());
+        }
+        // Already a stored key (hash or legacy plaintext).
+        delete_impl::<AccessTokenModel>(DB_MANAGER.db(), identifier)
     }
 
-    pub fn get_token(token: &str) -> BichonResult<AccessTokenModel> {
-        find_impl::<AccessTokenModel>(DB_MANAGER.db(), token)?.ok_or_else(|| {
-            raise_error!(
-                format!("Access token '{}' not found", token),
-                ErrorCode::ResourceNotFound
-            )
-        })
+    /// Look up by a secret or a public token id. The revocation endpoint uses
+    /// the same function for both, so a stale client that still holds the old
+    /// full-token URL keeps working after the upgrade.
+    pub fn get_token(identifier: &str) -> BichonResult<AccessTokenModel> {
+        if let Some(model) = Self::find_by_secret(identifier)? {
+            return Ok(model);
+        }
+        if let Some(model) = Self::find_by_id(identifier)? {
+            return Ok(model);
+        }
+        Err(raise_error!(
+            format!("Access token '{}' not found", identifier),
+            ErrorCode::ResourceNotFound
+        ))
     }
 
     pub fn list_all_api_tokens() -> BichonResult<Vec<AccessTokenResp>> {
@@ -358,26 +506,7 @@ impl AccessTokenModel {
         let resp = all
             .into_iter()
             .filter(|t| t.token_type == TokenType::Api)
-            .map(|token| {
-                let user = user_map.get(&token.user_id);
-                AccessTokenResp {
-                    user_name: user
-                        .map(|u| u.username.clone())
-                        .unwrap_or_else(|| "Unknown".to_string()),
-                    user_email: user
-                        .map(|u| u.email.clone())
-                        .unwrap_or_else(|| "N/A".to_string()),
-                    user_id: token.user_id,
-                    name: token.name,
-                    token: token.token,
-                    token_type: token.token_type,
-                    created_at: token.created_at,
-                    updated_at: token.updated_at,
-                    expire_at: token.expire_at,
-                    last_access_at: token.last_access_at,
-                    metrics_only: token.metrics_only,
-                }
-            })
+            .map(|token| AccessTokenResp::from_model(&token, user_map.get(&token.user_id)))
             .collect();
 
         Ok(resp)

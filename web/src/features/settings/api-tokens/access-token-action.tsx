@@ -16,6 +16,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import { useState } from 'react'
 import { z } from 'zod'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -45,8 +46,9 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ToastAction } from '@/components/ui/toast'
 import { AxiosError } from 'axios'
-import { Loader2, Clock } from 'lucide-react'
+import { Loader2, Clock, Copy } from 'lucide-react'
 import { AccessToken, create_access_token, update_access_token } from '@/api/users/api'
+import { copyToClipboard } from '@/lib/clipboard'
 import {
   Select,
   SelectContent,
@@ -96,6 +98,9 @@ export function TokensActionDialog({
   const { t } = useTranslation()
   const isEdit = !!currentRow
   const queryClient = useQueryClient()
+  // The one time the plaintext exists in this UI. Cleared when the dialog
+  // closes; it is never re-fetched, because the server only keeps a digest.
+  const [createdToken, setCreatedToken] = useState<string | null>(null)
 
   const form = useForm<AccessTokenForm>({
     resolver: zodResolver(getAccessTokenSchema(t)),
@@ -110,13 +115,16 @@ export function TokensActionDialog({
 
   const createMutation = useMutation({
     mutationFn: create_access_token,
-    onSuccess: handleSuccess,
+    onSuccess: (token: string) => {
+      setCreatedToken(token)
+      handleSuccess()
+    },
     onError: handleError,
   })
 
   const updateMutation = useMutation({
     mutationFn: (data: Record<string, any>) =>
-      update_access_token(currentRow?.token ?? '', data),
+      update_access_token(currentRow?.token_id ?? '', data),
     onSuccess: handleSuccess,
     onError: handleError,
   })
@@ -182,6 +190,7 @@ export function TokensActionDialog({
     : createMutation.isPending
 
   return (
+    <>
     <Dialog
       open={open}
       onOpenChange={(state) => {
@@ -197,6 +206,11 @@ export function TokensActionDialog({
           <DialogDescription>
             {t('apiTokens.dialog.description')}
           </DialogDescription>
+          {!isEdit && (
+            <p className="text-xs text-amber-600 dark:text-amber-500">
+              {t('apiTokens.created.warning')}
+            </p>
+          )}
         </DialogHeader>
 
         <ScrollArea className="h-[23rem] w-full pr-4 -mr-4">
@@ -308,5 +322,54 @@ export function TokensActionDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <Dialog
+      open={!!createdToken}
+      onOpenChange={(state) => {
+        if (!state) setCreatedToken(null)
+      }}
+    >
+      <DialogContent className="max-w-xl" aria-describedby={undefined}>
+        <DialogHeader className="text-left">
+          <DialogTitle>{t('apiTokens.created.title')}</DialogTitle>
+          <DialogDescription>
+            {t('apiTokens.created.warning')}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2">
+          <code className="flex-1 break-all font-mono text-xs">
+            {createdToken}
+          </code>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-8 w-8 shrink-0"
+            onClick={() => {
+              if (!createdToken) return
+              copyToClipboard(createdToken)
+                .then(() =>
+                  toast({ description: t('apiTokens.notifications.copied') }),
+                )
+                .catch(() =>
+                  toast({
+                    variant: 'destructive',
+                    description: t('settings.failedToCopyText'),
+                  }),
+                )
+            }}
+          >
+            <Copy className="h-4 w-4" />
+          </Button>
+        </div>
+
+        <DialogFooter>
+          <Button onClick={() => setCreatedToken(null)}>
+            {t('apiTokens.notifications.close')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   )
 }

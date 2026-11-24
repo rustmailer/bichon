@@ -699,6 +699,10 @@
     "swaggerUI": "Swagger UI"
   },
   "apiTokens": {
+    "created": {
+      "title": "액세스 토큰이 생성되었습니다",
+      "warning": "지금 복사하세요. 이 토큰은 한 번만 표시됩니다. 잃어버리면 삭제 후 새로 만들어야 합니다."
+    },
     "deleteDialog": {
       "cancel": "취소",
       "confirm": "삭제",
@@ -748,6 +752,7 @@
       "neverExpires": "만료 없음",
       "neverLabel": "없음",
       "neverUsed": "사용 안 함",
+      "prefixNotice": "보안을 위해 전체 토큰은 생성 시 한 번만 표시되며, 이후에는 식별용 접두사만 보관됩니다.",
       "statusActive": "활성",
       "statusExpired": "만료됨",
       "tokenLabel": "토큰",

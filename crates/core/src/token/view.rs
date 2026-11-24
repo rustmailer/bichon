@@ -16,14 +16,23 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::token::TokenType;
+use crate::token::{AccessTokenModel, TokenType};
+use crate::users::UserModel;
 use serde::{Deserialize, Serialize};
 
+/// The masked shape of a token row.
+///
+/// The full token is returned exactly once, from the create endpoint. Lists
+/// only expose a prefix for identification and a public id for revocation, so
+/// the bearer secret never leaves the server again.
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[cfg_attr(feature = "web-api", derive(poem_openapi::Object))]
 pub struct AccessTokenResp {
     pub user_id: u64,
-    pub token: String,
+    /// Public, non-secret identifier used by the revoke endpoint.
+    pub token_id: String,
+    /// Leading characters of the token, for display only.
+    pub token_prefix: String,
     /// An optional name of the token.
     pub name: Option<String>,
     /// Token type: WebUI or API
@@ -44,4 +53,27 @@ pub struct AccessTokenResp {
     /// Whether this token may only be used on the metrics endpoint.
     #[serde(default)]
     pub metrics_only: bool,
+}
+
+impl AccessTokenResp {
+    pub(crate) fn from_model(token: &AccessTokenModel, user: Option<&UserModel>) -> Self {
+        Self {
+            user_id: token.user_id,
+            token_id: token.token_id.clone(),
+            token_prefix: token.token_prefix.clone(),
+            name: token.name.clone(),
+            token_type: token.token_type.clone(),
+            created_at: token.created_at,
+            updated_at: token.updated_at,
+            expire_at: token.expire_at,
+            last_access_at: token.last_access_at,
+            user_name: user
+                .map(|u| u.username.clone())
+                .unwrap_or_else(|| "Unknown".to_string()),
+            user_email: user
+                .map(|u| u.email.clone())
+                .unwrap_or_else(|| "N/A".to_string()),
+            metrics_only: token.metrics_only,
+        }
+    }
 }

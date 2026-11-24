@@ -72,7 +72,7 @@ export default function ApiTokens() {
 
           {currentRow && (
             <ApiTokenDeleteDialog
-              key={`api-token-delete-${currentRow.token}`}
+              key={`api-token-delete-${currentRow.token_id}`}
               currentRow={currentRow}
               open={open === 'delete'}
               onOpenChange={() => {
