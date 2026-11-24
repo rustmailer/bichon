@@ -657,7 +657,7 @@ export function MailMessageView({
         ) : content ? (
           <div className="bg-gray-100 rounded-lg border border-gray-300 p-4">
             {contentType === 'Html' ? (
-              <EmailIframe emailHtml={content} />
+              <EmailIframe emailHtml={content} allowRemote={!blockRemote} />
             ) : (
               <pre className="whitespace-pre-wrap text-gray-800 text-sm font-sans">{content}</pre>
             )}

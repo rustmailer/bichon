@@ -37,6 +37,7 @@ use api::create_openapi_service;
 use http::Method;
 use poem::listener::{Listener, TcpListener};
 use poem::middleware::{CatchPanic, Compression, Cors};
+use security_headers::SecurityHeaders;
 use poem::{get, post, Endpoint, EndpointExt, Route, Server};
 use public::oauth2::oauth2_callback;
 use std::collections::HashSet;
@@ -56,6 +57,7 @@ pub mod health;
 pub mod maintenance;
 pub mod metrics;
 pub mod public;
+pub mod security_headers;
 
 pub type ApiResult<T, E = ApiErrorResponse> = std::result::Result<T, E>;
 
@@ -145,6 +147,8 @@ pub fn build_routes() -> impl Endpoint {
         .with(cors)
         .with_if(SETTINGS.bichon_http_compression_enabled, Compression::new())
         .with(CatchPanic::new())
+        // Outermost: even panic and error responses get the hardening headers.
+        .with(SecurityHeaders)
 }
 
 #[cfg(feature = "embed-web")]
@@ -182,14 +186,22 @@ async fn serve_index_with_base() -> impl IntoResponse {
         format!("{}/", raw_base)
     };
 
+    // The bootstrap script is inline, so the strict application CSP would
+    // block it. Bind it to a per-response nonce instead of relaxing
+    // `script-src` to `'unsafe-inline'`.
+    let nonce = security_headers::new_nonce();
     let inject_content = format!(
-        r#"<base href="{}"><script>window.__BICHON_BASE__ = '{}';</script>"#,
-        base_href, raw_base
+        r#"<base href="{}"><script nonce="{}">window.__BICHON_BASE__ = '{}';</script>"#,
+        base_href, nonce, raw_base
     );
 
     html = html.replace("<head>", &format!("<head>{}", inject_content));
     poem::Response::builder()
         .content_type("text/html; charset=utf-8")
+        .header(
+            http::header::CONTENT_SECURITY_POLICY,
+            security_headers::index_csp(&nonce),
+        )
         .body(html)
 }
 

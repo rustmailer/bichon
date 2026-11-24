@@ -19,12 +19,17 @@
 
 import React, { useCallback, useRef, useState } from 'react';
 
+import { withCsp } from '@/lib/mail-csp';
+
 interface EmailIframeProps {
   emailHtml: string;
   height?: number;
+  /** Keep remote images/fonts loadable. Only set this when the user explicitly
+   *  opted in to showing remote content for this message. */
+  allowRemote?: boolean;
 }
 
-const EmailIframe: React.FC<EmailIframeProps> = ({ emailHtml, height }) => {
+const EmailIframe: React.FC<EmailIframeProps> = ({ emailHtml, height, allowRemote = false }) => {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [iframeHeight, setIframeHeight] = useState<number>(height ?? 300);
 
@@ -48,7 +53,7 @@ const EmailIframe: React.FC<EmailIframeProps> = ({ emailHtml, height }) => {
   return (
     <iframe
       ref={iframeRef}
-      srcDoc={emailHtml}
+      srcDoc={withCsp(emailHtml, allowRemote)}
       sandbox="allow-same-origin"
       scrolling="no"
       className="w-full border-none"
