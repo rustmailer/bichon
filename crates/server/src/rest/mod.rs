@@ -194,6 +194,9 @@ async fn serve_index_with_base() -> impl IntoResponse {
 }
 
 pub async fn start_http_server() -> BichonResult<()> {
+    // Log the effective client-IP trust mode once, before the first request.
+    crate::common::client_ip::init();
+
     let listener = TcpListener::bind((
         SETTINGS.bichon_bind_ip.clone().unwrap_or("0.0.0.0".into()),
         SETTINGS.bichon_http_port as u16,

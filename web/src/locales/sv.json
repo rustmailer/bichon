@@ -3003,12 +3003,14 @@
   },
   "systemConfig": {
     "runtime": {
-      "desc": "Värden som lagras i databasen. De har företräde framför startkonfigurationen; ändringar av lyssnare gäller efter en omstart.",
+      "desc": "Körvärden lagras i databasen och har företräde framför startkonfigurationen; känsliga fält låses av ett explicit startvärde och visas skrivskyddade. Ändringar av lyssnare gäller efter omstart.",
       "invalid": "Vissa värden ligger utanför intervallet. Kontrollera de markerade fälten.",
+      "lockedByStartup": "Styrs av startkonfigurationen. Ändra miljövariabeln eller CLI-flaggan och starta om.",
       "resetDone": "Körtidsöverskridanden rensade",
       "restartRequired": "Starta om tjänsten för att tillämpa SMTP- och synkroniseringsinställningarna.",
       "saved": "Körtidsinställningar sparade",
-      "title": "Körtidsinställningar"
+      "title": "Körtidsinställningar",
+      "trustedProxiesHelp": "IP-adresser eller CIDR-block för omvända proxyservrar vars X-Forwarded-For-, Forwarded- eller X-Real-IP-rubriker är betrodda. Lämna tomt om Bichon är direkt exponerad; ett explicit BICHON_TRUSTED_PROXIES har företräde."
     },
     "sections": {
       "cors": {

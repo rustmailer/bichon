@@ -3003,12 +3003,14 @@
   },
   "systemConfig": {
     "runtime": {
-      "desc": "Valori salvati nel database. Hanno la precedenza sulla configurazione di avvio; le modifiche ai listener si applicano dopo un riavvio.",
+      "desc": "I valori di runtime sono salvati nel database e prevalgono sulla configurazione di avvio; i campi sensibili sono bloccati da un valore di avvio esplicito e mostrati in sola lettura. Le modifiche ai listener si applicano dopo il riavvio.",
       "invalid": "Alcuni valori sono fuori intervallo. Controlla i campi evidenziati.",
+      "lockedByStartup": "Controllato dalla configurazione di avvio. Modificare la variabile d'ambiente o l'opzione CLI e riavviare.",
       "resetDone": "Override di runtime cancellati",
       "restartRequired": "Riavvia il servizio per applicare le impostazioni SMTP e di sincronizzazione.",
       "saved": "Impostazioni di runtime salvate",
-      "title": "Impostazioni di runtime"
+      "title": "Impostazioni di runtime",
+      "trustedProxiesHelp": "IP o blocchi CIDR dei proxy inversi di cui fidarsi per le intestazioni X-Forwarded-For, Forwarded o X-Real-IP. Lasciare vuoto se Bichon è esposto direttamente; un BICHON_TRUSTED_PROXIES esplicito prevale su questo campo."
     },
     "sections": {
       "cors": {

@@ -225,7 +225,12 @@ export type RuntimeSettings = {
   imap_timeout_seconds: number
   web_mbox_upload_limit_mb: number
   web_pst_upload_limit_mb: number
+  trusted_proxies: string[]
+  /** Fields pinned by an explicit BICHON_* startup value; read-only in the WebUI. */
+  locked_by_startup: string[]
 }
+
+export type RuntimeSettingsUpdate = Omit<RuntimeSettings, 'locked_by_startup'>
 
 export type RuntimeSettingsResult = {
   restart_required: boolean
@@ -239,7 +244,7 @@ export const get_runtime_settings = async () => {
   return response.data
 }
 
-export const update_runtime_settings = async (settings: RuntimeSettings) => {
+export const update_runtime_settings = async (settings: RuntimeSettingsUpdate) => {
   const response = await axiosInstance.post<RuntimeSettingsResult>(
     `api/v1/runtime-settings`,
     settings

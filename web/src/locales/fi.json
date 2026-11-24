@@ -3003,12 +3003,14 @@
   },
   "systemConfig": {
     "runtime": {
-      "desc": "Tietokantaan tallennetut arvot. Ne ovat ensisijaisia käynnistysasetuksiin nähden; kuuntelijoiden muutokset tulevat voimaan uudelleenkäynnistyksen jälkeen.",
+      "desc": "Ajonaikaiset arvot tallennetaan tietokantaan ja ohittavat käynnistysasetukset; arkaluontoiset kentät lukitaan eksplisiittisellä käynnistysarvolla ja näytetään vain luku -tilassa. Kuuntelijoiden muutokset tulevat voimaan uudelleenkäynnistyksen jälkeen.",
       "invalid": "Jotkin arvot ovat sallitun alueen ulkopuolella. Tarkista merkityt kentät.",
+      "lockedByStartup": "Käynnistysasetusten hallinnassa. Muuta ympäristömuuttujaa tai CLI-valitsinta ja käynnistä uudelleen.",
       "resetDone": "Ajonaikaiset ohitukset tyhjennetty",
       "restartRequired": "Käynnistä palvelu uudelleen, jotta SMTP- ja synkronointiasetukset tulevat voimaan.",
       "saved": "Ajonaikaiset asetukset tallennettu",
-      "title": "Ajonaikaiset asetukset"
+      "title": "Ajonaikaiset asetukset",
+      "trustedProxiesHelp": "Käänteisproxyn IP-osoitteet tai CIDR-lohkot, joiden X-Forwarded-For-, Forwarded- ja X-Real-IP-otsikoihin luotetaan. Jätä tyhjäksi, jos Bichon on suoraan julkinen; eksplisiittinen BICHON_TRUSTED_PROXIES ohittaa tämän kentän."
     },
     "sections": {
       "cors": {

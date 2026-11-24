@@ -3003,12 +3003,14 @@
   },
   "systemConfig": {
     "runtime": {
-      "desc": "Waarden opgeslagen in de database. Ze gaan vóór de opstartconfiguratie; wijzigingen aan listeners gelden na een herstart.",
+      "desc": "Runtimewaarden worden in de database opgeslagen en gaan vóór de startconfiguratie; gevoelige velden worden vastgezet door een expliciete startwaarde en alleen-lezen getoond. Wijzigingen aan listeners gelden na een herstart.",
       "invalid": "Sommige waarden vallen buiten het toegestane bereik. Controleer de gemarkeerde velden.",
+      "lockedByStartup": "Beheerd door de startconfiguratie. Wijzig de omgevingsvariabele of CLI-optie en herstart.",
       "resetDone": "Runtime-overschrijvingen gewist",
       "restartRequired": "Herstart de dienst om de SMTP- en synchronisatie-instellingen toe te passen.",
       "saved": "Runtime-instellingen opgeslagen",
-      "title": "Runtime-instellingen"
+      "title": "Runtime-instellingen",
+      "trustedProxiesHelp": "IP's of CIDR-blokken van reverse proxies waarvan de X-Forwarded-For-, Forwarded- of X-Real-IP-headers worden vertrouwd. Laat leeg als Bichon direct bereikbaar is; een expliciete BICHON_TRUSTED_PROXIES gaat vóór dit veld."
     },
     "sections": {
       "cors": {

@@ -3003,12 +3003,14 @@
   },
   "systemConfig": {
     "runtime": {
-      "desc": "Valeurs stockées dans la base de données. Elles prévalent sur la configuration de démarrage ; les changements de listener s'appliquent après un redémarrage.",
+      "desc": "Les valeurs d'exécution sont stockées dans la base et priment sur la configuration de démarrage ; les champs sensibles sont figés par une valeur de démarrage explicite et affichés en lecture seule. Les changements de listener s'appliquent après redémarrage.",
       "invalid": "Certaines valeurs sont hors limites. Vérifiez les champs signalés.",
+      "lockedByStartup": "Contrôlé par la configuration de démarrage. Modifiez la variable d'environnement ou l'option CLI, puis redémarrez.",
       "resetDone": "Surcharges d'exécution supprimées",
       "restartRequired": "Redémarrez le service pour appliquer les paramètres SMTP et de synchronisation.",
       "saved": "Paramètres d'exécution enregistrés",
-      "title": "Paramètres d'exécution"
+      "title": "Paramètres d'exécution",
+      "trustedProxiesHelp": "Adresses IP ou blocs CIDR des proxys inverses dont les en-têtes X-Forwarded-For, Forwarded ou X-Real-IP sont approuvés. Laissez vide si Bichon est exposé directement. Un BICHON_TRUSTED_PROXIES explicite prime sur ce champ."
     },
     "sections": {
       "cors": {

@@ -3003,12 +3003,14 @@
   },
   "systemConfig": {
     "runtime": {
-      "desc": "儲存在資料庫中的覆寫值，優先於啟動設定；監聽器相關變更重啟後生效。",
+      "desc": "一般執行參數儲存在資料庫中，優先於啟動設定；敏感欄位由明確的啟動值鎖定並顯示為唯讀。接聽器相關變更需重新啟動生效。",
       "invalid": "有數值超出允許範圍，請檢查標紅的欄位。",
+      "lockedByStartup": "由啟動設定控制。請修改環境變數或命令列參數並重新啟動。",
       "resetDone": "已清除執行時覆寫值",
       "restartRequired": "重啟服務後 SMTP 與同步設定才會生效。",
       "saved": "執行時設定已儲存",
-      "title": "執行時設定"
+      "title": "執行時設定",
+      "trustedProxiesHelp": "可信任其 X-Forwarded-For、Forwarded 或 X-Real-IP 標頭的反向代理 IP 或 CIDR。Bichon 直接對外時留空；明確設定的 BICHON_TRUSTED_PROXIES 優先於此。"
     },
     "sections": {
       "cors": {

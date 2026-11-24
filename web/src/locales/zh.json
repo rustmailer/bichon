@@ -3003,12 +3003,14 @@
   },
   "systemConfig": {
     "runtime": {
-      "desc": "保存在数据库中的覆盖值，优先于启动配置；监听器相关改动重启后生效。",
+      "desc": "普通运行参数保存在数据库中，优先于启动配置；敏感字段由显式启动值锁定并显示为只读。监听器相关改动需重启生效。",
       "invalid": "有数值超出允许范围，请检查标红的字段。",
+      "lockedByStartup": "由启动配置控制。请修改环境变量或命令行参数并重启。",
       "resetDone": "已清除运行时覆盖值",
       "restartRequired": "重启服务后 SMTP 和同步设置才会生效。",
       "saved": "运行时设置已保存",
-      "title": "运行时设置"
+      "title": "运行时设置",
+      "trustedProxiesHelp": "可信任其 X-Forwarded-For、Forwarded 或 X-Real-IP 头的反向代理 IP 或 CIDR。Bichon 直接暴露时留空；显式设置的 BICHON_TRUSTED_PROXIES 优先于此处。"
     },
     "sections": {
       "cors": {

@@ -20,8 +20,9 @@ use bichon_core::ext::event_bus::{emit, Event};
 use bichon_core::token::AccessTokenModel;
 use bichon_core::users::UserModel;
 use bichon_core::utils::rate_limit::LOGIN_RATE_LIMITER_MANAGER;
-use poem::web::{Json, RealIp};
-use poem::{handler, FromRequest, IntoResponse, Request, Response};
+use crate::common::client_ip;
+use poem::web::Json;
+use poem::{handler, IntoResponse, Request, Response};
 use serde::Deserialize;
 use tracing::error;
 
@@ -39,10 +40,7 @@ pub struct LoginPayload {
 pub async fn login(payload: Json<LoginPayload>, req: &Request) -> Response {
     let login_username = payload.0.username.clone();
 
-    let ip = RealIp::from_request_without_body(req)
-        .await
-        .ok()
-        .and_then(|r| r.0);
+    let ip = client_ip::client_ip(req);
     if let Some(ip_addr) = &ip {
         if LOGIN_RATE_LIMITER_MANAGER.check(&ip_addr.to_string()).await.is_err() {
             return Response::builder()

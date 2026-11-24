@@ -22,16 +22,13 @@ use bichon_core::{
 };
 use governor::clock::{Clock, QuantaClock};
 use poem::{
-    web::{
-        headers::{authorization::Bearer, Authorization, HeaderMapExt},
-        RealIp,
-    },
+    web::headers::{authorization::Bearer, Authorization, HeaderMapExt},
     Endpoint, FromRequest, Middleware, Request, RequestBody, Result,
 };
 use serde::Deserialize;
 use std::{ops::Deref, sync::Arc};
 
-use super::create_api_error_response;
+use super::{client_ip, create_api_error_response};
 
 pub struct ApiGuard;
 
@@ -87,21 +84,12 @@ fn is_metrics_endpoint(path: &str) -> bool {
 }
 
 pub async fn extract_client_context(req: &Request) -> Result<ClientContext> {
-    let ip_addr = RealIp::from_request_without_body(req)
-        .await
-        .map_err(|_| {
-            create_api_error_response(
-                "Failed to parse client IP address",
-                ErrorCode::InvalidParameter,
-            )
-        })?
-        .0
-        .ok_or_else(|| {
-            create_api_error_response(
-                "Failed to parse client IP address",
-                ErrorCode::InvalidParameter,
-            )
-        })?;
+    let ip_addr = client_ip::client_ip(req).ok_or_else(|| {
+        create_api_error_response(
+            "Failed to parse client IP address",
+            ErrorCode::InvalidParameter,
+        )
+    })?;
     // Extract access token from Bearer header or query params
     let bearer = req
         .headers()
@@ -125,6 +113,7 @@ pub async fn extract_client_context(req: &Request) -> Result<ClientContext> {
 
     return Ok(ClientContext {
         ip_addr: Some(ip_addr),
+        peer_ip: client_ip::peer_ip(req),
         user,
     });
 }

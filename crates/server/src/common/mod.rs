@@ -28,6 +28,7 @@ use tracing::error;
 use crate::error::code::IntoStatusCode;
 
 pub mod auth;
+pub mod client_ip;
 pub mod error;
 pub mod log;
 pub mod recorder;

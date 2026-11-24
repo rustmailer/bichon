@@ -3003,12 +3003,14 @@
   },
   "systemConfig": {
     "runtime": {
-      "desc": "Wartości przechowywane w bazie danych. Mają pierwszeństwo przed konfiguracją startową; zmiany listenerów obowiązują po restarcie.",
+      "desc": "Wartości uruchomieniowe są przechowywane w bazie i mają pierwszeństwo przed konfiguracją startową; pola krytyczne są blokowane jawną wartością startową i wyświetlane tylko do odczytu. Zmiany listenerów działają po restarcie.",
       "invalid": "Niektóre wartości są poza dozwolonym zakresem. Sprawdź wyróżnione pola.",
+      "lockedByStartup": "Sterowane przez konfigurację startową. Zmień zmienną środowiskową lub opcję CLI i uruchom ponownie.",
       "resetDone": "Wyczyszczono nadpisania czasu działania",
       "restartRequired": "Uruchom usługę ponownie, aby zastosować ustawienia SMTP i synchronizacji.",
       "saved": "Zapisano ustawienia czasu działania",
-      "title": "Ustawienia czasu działania"
+      "title": "Ustawienia czasu działania",
+      "trustedProxiesHelp": "Adresy IP lub bloki CIDR odwrotnych proxy, których nagłówki X-Forwarded-For, Forwarded lub X-Real-IP są zaufane. Pozostaw puste, jeśli Bichon jest wystawiony bezpośrednio; jawne BICHON_TRUSTED_PROXIES ma pierwszeństwo przed tym polem."
     },
     "sections": {
       "cors": {

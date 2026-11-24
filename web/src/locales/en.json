@@ -3003,12 +3003,14 @@
   },
   "systemConfig": {
     "runtime": {
-      "desc": "Values stored in the database. They win over the startup configuration; listener changes apply after a restart.",
+      "desc": "Operational values are stored in the database and win over the startup configuration; sensitive fields are pinned by an explicit startup value and shown read-only. Listener changes apply after a restart.",
       "invalid": "Some values are out of range. Check the highlighted fields.",
+      "lockedByStartup": "Controlled by the startup configuration. Change the environment variable or CLI flag and restart.",
       "resetDone": "Runtime overrides cleared",
       "restartRequired": "Restart the service to apply the SMTP and sync settings.",
       "saved": "Runtime settings saved",
-      "title": "Runtime settings"
+      "title": "Runtime settings",
+      "trustedProxiesHelp": "Reverse proxy IPs or CIDR blocks whose X-Forwarded-For, Forwarded, or X-Real-IP headers are trusted. Leave empty when Bichon is directly exposed; an explicit BICHON_TRUSTED_PROXIES value wins over this field."
     },
     "sections": {
       "cors": {

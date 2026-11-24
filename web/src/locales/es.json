@@ -3003,12 +3003,14 @@
   },
   "systemConfig": {
     "runtime": {
-      "desc": "Valores guardados en la base de datos. Tienen prioridad sobre la configuración de inicio; los cambios de listener se aplican tras reiniciar.",
+      "desc": "Los valores de ejecución se guardan en la base de datos y prevalecen sobre la configuración de inicio; los campos sensibles quedan fijados por un valor de inicio explícito y se muestran como solo lectura. Los cambios de listener se aplican tras reiniciar.",
       "invalid": "Algunos valores están fuera de rango. Revisa los campos marcados.",
+      "lockedByStartup": "Controlado por la configuración de inicio. Cambie la variable de entorno o la opción de CLI y reinicie.",
       "resetDone": "Valores de ejecución restablecidos",
       "restartRequired": "Reinicia el servicio para aplicar la configuración de SMTP y sincronización.",
       "saved": "Configuración en tiempo de ejecución guardada",
-      "title": "Configuración en tiempo de ejecución"
+      "title": "Configuración en tiempo de ejecución",
+      "trustedProxiesHelp": "IP o bloques CIDR de los proxies inversos cuyas cabeceras X-Forwarded-For, Forwarded o X-Real-IP son de confianza. Déjelo vacío si Bichon está expuesto directamente; un BICHON_TRUSTED_PROXIES explícito prevalece sobre este campo."
     },
     "sections": {
       "cors": {

@@ -10,8 +10,9 @@ use bichon_core::ext::event_bus::{emit, Event};
 use bichon_core::token::{AccessTokenModel, TokenType};
 use bichon_core::users::{LoginResult, UserModel};
 use bichon_core::utils::rate_limit::LOGIN_RATE_LIMITER_MANAGER;
-use poem::web::{Json, RealIp};
-use poem::{handler, FromRequest, IntoResponse, Request, Response};
+use crate::common::client_ip;
+use poem::web::Json;
+use poem::{handler, IntoResponse, Request, Response};
 use serde::Deserialize;
 use tracing::error;
 
@@ -46,10 +47,7 @@ fn failure(message: &str) -> Response {
 
 #[handler]
 pub async fn mfa_verify(payload: Json<MfaVerifyPayload>, req: &Request) -> Response {
-    let ip = RealIp::from_request_without_body(req)
-        .await
-        .ok()
-        .and_then(|r| r.0);
+    let ip = client_ip::client_ip(req);
     if let Some(ip_addr) = &ip {
         if LOGIN_RATE_LIMITER_MANAGER
             .check(&ip_addr.to_string())

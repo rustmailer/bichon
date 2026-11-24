@@ -3003,12 +3003,14 @@
   },
   "systemConfig": {
     "runtime": {
-      "desc": "Valores armazenados no banco de dados. Têm precedência sobre a configuração de inicialização; alterações de listener são aplicadas após reiniciar.",
+      "desc": "Valores de execução são armazenados no banco e prevalecem sobre a configuração de inicialização; campos sensíveis são fixados por um valor de inicialização explícito e exibidos como somente leitura. Alterações de listener entram em vigor após reiniciar.",
       "invalid": "Alguns valores estão fora do intervalo. Verifique os campos destacados.",
+      "lockedByStartup": "Controlado pela configuração de inicialização. Altere a variável de ambiente ou a opção de CLI e reinicie.",
       "resetDone": "Substituições de runtime removidas",
       "restartRequired": "Reinicie o serviço para aplicar as configurações de SMTP e sincronização.",
       "saved": "Configurações de runtime salvas",
-      "title": "Configurações de runtime"
+      "title": "Configurações de runtime",
+      "trustedProxiesHelp": "IPs ou blocos CIDR dos proxies reversos cujos cabeçalhos X-Forwarded-For, Forwarded ou X-Real-IP são confiáveis. Deixe vazio se o Bichon estiver exposto diretamente; um BICHON_TRUSTED_PROXIES explícito prevalece sobre este campo."
     },
     "sections": {
       "cors": {

@@ -113,6 +113,30 @@ pub struct Settings {
     )]
     pub bichon_cors_max_age: i32,
 
+    /// Trusted reverse proxies (comma-separated IPs or CIDR blocks).
+    ///
+    /// Forwarding headers (`X-Forwarded-For`, `Forwarded`, `X-Real-IP`) are
+    /// ignored unless the socket peer is one of these networks. Use `*` to
+    /// restore the pre-2.4.5 behaviour of trusting forwarding headers from any
+    /// peer — that is spoofable and intended only as a compatibility escape
+    /// hatch.
+    #[clap(
+        long,
+        env,
+        help = "Trust X-Forwarded-For / Forwarded / X-Real-IP only from these peers (comma-separated IPs or CIDR blocks, e.g. \"127.0.0.1,10.0.0.0/8,172.17.0.0/16\"). Empty (default) ignores forwarding headers. \"*\" trusts any peer (legacy, insecure).",
+        value_parser = ValueParser::new(parse_trusted_proxy_list)
+    )]
+    pub bichon_trusted_proxies: Option<HashSet<String>>,
+
+    /// Argument ids that were provided on the command line or through the
+    /// environment, rather than being filled from a compiled default.
+    ///
+    /// Security-sensitive runtime settings use this to decide whether the
+    /// startup value is authoritative: an operator who sets `BICHON_...` gets
+    /// the operator's value, not a value saved earlier in the WebUI.
+    #[clap(skip)]
+    pub explicit_settings: HashSet<String>,
+
     /// Enable ANSI logs (default: false)
     #[clap(long, default_value = "true", env, help = "Enable ANSI formatted logs")]
     pub bichon_ansi_logs: bool,
@@ -450,6 +474,13 @@ impl Settings {
         self.bichon_root_dir.as_str()
     }
 
+    /// Whether `id` (a clap argument id, e.g. `bichon_smtp_port`) was provided
+    /// by the operator on the command line or through the environment. A
+    /// compiled default does not count.
+    pub fn is_explicitly_set(&self, id: &str) -> bool {
+        self.explicit_settings.contains(id)
+    }
+
     pub fn init() -> Self {
         // The Pro binary parses a single merged clap command (community +
         // Pro args) and seeds the override below before anything derefs
@@ -493,7 +524,7 @@ impl Settings {
 /// fail, the original error is the truthful one.
 fn parse_settings_from(command: clap::Command, args: Vec<String>) -> Result<Settings, clap::Error> {
     match command.clone().try_get_matches_from(&args) {
-        Ok(matches) => Settings::from_arg_matches(&matches),
+        Ok(matches) => settings_from_matches(&matches),
         Err(first) => match first.kind() {
             // `--help` / `--version` are successful short-circuits, not
             // failures; let clap print and exit.
@@ -506,12 +537,36 @@ fn parse_settings_from(command: clap::Command, args: Vec<String>) -> Result<Sett
                     .cloned()
                     .unwrap_or_else(|| "bichon".to_string());
                 match command.try_get_matches_from([binary]) {
-                    Ok(matches) => Settings::from_arg_matches(&matches),
+                    Ok(matches) => settings_from_matches(&matches),
                     Err(_) => Err(first),
                 }
             }
         },
     }
+}
+
+/// The argument ids an operator actually supplied, either as a flag or as an
+/// environment variable. Ids filled from a compiled default are excluded.
+pub fn explicit_settings_from_matches(matches: &clap::ArgMatches) -> HashSet<String> {
+    matches
+        .ids()
+        .filter(|id| {
+            !matches!(
+                matches.value_source(id.as_str()),
+                Some(clap::parser::ValueSource::DefaultValue) | None
+            )
+        })
+        .map(|id| id.as_str().to_string())
+        .collect()
+}
+
+/// `Settings::from_arg_matches`, plus the record of which values came from the
+/// operator. The Pro binary parses one merged command for both editions, so
+/// it calls this helper too.
+pub fn settings_from_matches(matches: &clap::ArgMatches) -> Result<Settings, clap::Error> {
+    let mut settings = Settings::from_arg_matches(matches)?;
+    settings.explicit_settings = explicit_settings_from_matches(matches);
+    Ok(settings)
 }
 
 fn validate_base_url(s: &str) -> Result<String, String> {
@@ -524,6 +579,29 @@ fn validate_base_url(s: &str) -> Result<String, String> {
         ));
     }
     Ok(s.to_string())
+}
+
+/// Parse the trusted-proxy list once at startup and reject typos here rather
+/// than silently falling back to "trust nobody" at request time.
+fn parse_trusted_proxy_list(s: &str) -> Result<HashSet<String>, String> {
+    let entries: HashSet<String> = s
+        .split(',')
+        .map(|entry| entry.trim().to_string())
+        .filter(|entry| !entry.is_empty())
+        .collect();
+    if entries.is_empty() {
+        return Err(String::from(
+            "Expected at least one IP address, CIDR block, or \"*\"",
+        ));
+    }
+    for entry in &entries {
+        if entry == "*" {
+            continue;
+        }
+        crate::utils::net::Cidr::parse(entry)
+            .map_err(|reason| format!("Invalid trusted proxy '{entry}': {reason}"))?;
+    }
+    Ok(entries)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, ValueEnum)]
@@ -701,5 +779,48 @@ mod tests {
         assert_eq!(err.kind(), clap::error::ErrorKind::ValueValidation);
 
         let _ = std::fs::remove_file(&cfg);
+    }
+
+    #[test]
+    fn trusted_proxy_list_accepts_ips_cidrs_and_wildcard() {
+        let parsed = parse_trusted_proxy_list("127.0.0.1, 10.0.0.0/8,::1").unwrap();
+        assert_eq!(parsed.len(), 3);
+        assert!(parsed.contains("127.0.0.1"));
+        assert!(parsed.contains("10.0.0.0/8"));
+        assert!(parsed.contains("::1"));
+
+        let legacy = parse_trusted_proxy_list("*").unwrap();
+        assert!(legacy.contains("*"));
+    }
+
+    #[test]
+    fn trusted_proxy_list_rejects_invalid_entries() {
+        assert!(parse_trusted_proxy_list("").is_err());
+        assert!(parse_trusted_proxy_list("not-an-ip").is_err());
+        assert!(parse_trusted_proxy_list("10.0.0.0/33").is_err());
+        assert!(parse_trusted_proxy_list("10.0.0.0/8,bogus").is_err());
+    }
+
+    #[test]
+    fn explicit_settings_records_only_supplied_arguments() {
+        let root = std::env::temp_dir().join("bichon-explicit-settings-test");
+        let matches = Settings::command()
+            .try_get_matches_from([
+                "bichon",
+                "--bichon-root-dir",
+                root.to_str().unwrap(),
+                "--bichon-smtp-port",
+                "2526",
+                "--bichon-trusted-proxies",
+                "127.0.0.1",
+            ])
+            .expect("settings should parse");
+        let settings = settings_from_matches(&matches).unwrap();
+
+        assert!(settings.is_explicitly_set("bichon_root_dir"));
+        assert!(settings.is_explicitly_set("bichon_smtp_port"));
+        assert!(settings.is_explicitly_set("bichon_trusted_proxies"));
+        assert!(!settings.is_explicitly_set("bichon_webui_token_expiration_hours"));
+        assert!(!settings.is_explicitly_set("bichon_enable_smtp"));
     }
 }

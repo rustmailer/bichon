@@ -3003,12 +3003,14 @@
   },
   "systemConfig": {
     "runtime": {
-      "desc": "Værdier gemt i databasen. De har forrang for opstartskonfigurationen; ændringer af lyttere træder i kraft efter en genstart.",
+      "desc": "Kørselsværdier gemmes i databasen og har forrang for startkonfigurationen; følsomme felter låses af en eksplicit startværdi og vises skrivebeskyttet. Ændringer af listeners gælder efter genstart.",
       "invalid": "Nogle værdier er uden for det tilladte interval. Kontroller de markerede felter.",
+      "lockedByStartup": "Styres af startkonfigurationen. Ændr miljøvariablen eller CLI-flaget, og genstart.",
       "resetDone": "Runtime-tilsidesættelser ryddet",
       "restartRequired": "Genstart tjenesten for at anvende SMTP- og synkroniseringsindstillingerne.",
       "saved": "Runtime-indstillinger gemt",
-      "title": "Runtime-indstillinger"
+      "title": "Runtime-indstillinger",
+      "trustedProxiesHelp": "IP-adresser eller CIDR-blokke for omvendte proxyer, hvis X-Forwarded-For-, Forwarded- eller X-Real-IP-headere er betroet. Lad feltet være tomt, hvis Bichon er direkte eksponeret; en eksplicit BICHON_TRUSTED_PROXIES har forrang."
     },
     "sections": {
       "cors": {

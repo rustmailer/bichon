@@ -57,9 +57,19 @@ pub struct Overrides {
     pub imap_timeout_seconds: Option<u64>,
     pub web_mbox_upload_limit_mb: Option<u64>,
     pub web_pst_upload_limit_mb: Option<u64>,
+    /// Reverse proxies whose forwarding headers may be trusted. Only used when
+    /// `BICHON_TRUSTED_PROXIES` was not provided at startup.
+    pub trusted_proxies: Option<Vec<String>>,
 }
 
 static CACHE: LazyLock<RwLock<Option<Overrides>>> = LazyLock::new(|| RwLock::new(None));
+
+/// Effective trusted-proxy entries. Kept separately from the settings document
+/// because the request path reads it on every request: a WebUI save
+/// invalidates it, while the common case is a memory read with no database
+/// access. `SETTINGS` (CLI/environment) is still checked first.
+static TRUSTED_PROXIES_CACHE: LazyLock<RwLock<Option<Vec<String>>>> =
+    LazyLock::new(|| RwLock::new(None));
 
 fn load() -> Overrides {
     if let Some(cached) = CACHE.read().unwrap().clone() {
@@ -89,6 +99,7 @@ pub fn store(value: &Overrides) -> crate::error::BichonResult<()> {
         .map_err(|e| raise_error!(format!("cannot encode runtime settings: {e}"), ErrorCode::InternalError))?;
     system_config::set(KEY, &raw)?;
     *CACHE.write().unwrap() = Some(value.clone());
+    *TRUSTED_PROXIES_CACHE.write().unwrap() = None;
     Ok(())
 }
 
@@ -96,23 +107,48 @@ pub fn store(value: &Overrides) -> crate::error::BichonResult<()> {
 pub fn clear() -> crate::error::BichonResult<()> {
     system_config::delete(KEY)?;
     *CACHE.write().unwrap() = Some(Overrides::default());
+    *TRUSTED_PROXIES_CACHE.write().unwrap() = None;
     Ok(())
+}
+
+/// Resolve a setting where the startup value may be authoritative.
+///
+/// Security-sensitive fields follow the opposite rule from operational
+/// tuning: when the operator provided a value at startup (CLI flag or
+/// environment variable), that value wins and a WebUI override is ignored.
+/// The operator can therefore pin a policy in the deployment manifest; the
+/// WebUI field is shown read-only in that case.
+fn resolve<T: Clone>(startup_wins: bool, startup: T, runtime: Option<T>) -> T {
+    if startup_wins {
+        startup
+    } else {
+        runtime.unwrap_or(startup)
+    }
 }
 
 /// Whether the SMTP listener starts. Read at startup.
 pub fn smtp_enabled() -> bool {
-    load()
-        .smtp_enabled
-        .unwrap_or(SETTINGS.bichon_enable_smtp)
+    resolve(
+        SETTINGS.is_explicitly_set("bichon_enable_smtp"),
+        SETTINGS.bichon_enable_smtp,
+        load().smtp_enabled,
+    )
 }
 
 /// SMTP listener port. Read at startup.
 pub fn smtp_port() -> u16 {
-    load().smtp_port.unwrap_or(SETTINGS.bichon_smtp_port)
+    resolve(
+        SETTINGS.is_explicitly_set("bichon_smtp_port"),
+        SETTINGS.bichon_smtp_port,
+        load().smtp_port,
+    )
 }
 
 /// SMTP encryption mode. Read at startup.
 pub fn smtp_encryption() -> EncryptionMode {
+    if SETTINGS.is_explicitly_set("bichon_smtp_encryption") {
+        return SETTINGS.bichon_smtp_encryption;
+    }
     match load().smtp_encryption.as_deref() {
         Some("none") => EncryptionMode::None,
         Some("starttls") => EncryptionMode::Starttls,
@@ -129,16 +165,53 @@ pub fn smtp_encryption() -> EncryptionMode {
 
 /// Whether SMTP clients must authenticate. Read at startup.
 pub fn smtp_auth_required() -> bool {
-    load()
-        .smtp_auth_required
-        .unwrap_or(SETTINGS.bichon_smtp_auth_required)
+    resolve(
+        SETTINGS.is_explicitly_set("bichon_smtp_auth_required"),
+        SETTINGS.bichon_smtp_auth_required,
+        load().smtp_auth_required,
+    )
 }
 
 /// Idle lifetime of a WebUI token. Read per request.
 pub fn webui_token_expiration_hours() -> u32 {
-    load()
-        .webui_token_expiration_hours
-        .unwrap_or(SETTINGS.bichon_webui_token_expiration_hours)
+    resolve(
+        SETTINGS.is_explicitly_set("bichon_webui_token_expiration_hours"),
+        SETTINGS.bichon_webui_token_expiration_hours,
+        load().webui_token_expiration_hours,
+    )
+}
+
+/// Effective trusted reverse proxies. A startup value wins when it was
+/// provided explicitly; otherwise the WebUI override is used, and an empty
+/// list means forwarding headers are ignored.
+pub fn trusted_proxies() -> Vec<String> {
+    let mut startup: Vec<String> = SETTINGS
+        .bichon_trusted_proxies
+        .clone()
+        .unwrap_or_default()
+        .into_iter()
+        .collect();
+    startup.sort();
+
+    if SETTINGS.is_explicitly_set("bichon_trusted_proxies") {
+        return startup;
+    }
+
+    if let Some(cached) = TRUSTED_PROXIES_CACHE.read().unwrap().clone() {
+        return cached;
+    }
+
+    let mut effective = load().trusted_proxies.unwrap_or(startup);
+    effective.sort();
+    effective.dedup();
+    *TRUSTED_PROXIES_CACHE.write().unwrap() = Some(effective.clone());
+    effective
+}
+
+/// The WebUI-saved list, ignoring the startup precedence. Used only for
+/// startup logging so the operator can see that an override exists.
+pub fn trusted_proxies_from_webui() -> Option<Vec<String>> {
+    load().trusted_proxies
 }
 
 /// Sync worker concurrency. `0` means "auto" (CPU count × 2).
@@ -221,6 +294,7 @@ mod tests {
             imap_timeout_seconds: Some(0),
             web_mbox_upload_limit_mb: Some(2048),
             web_pst_upload_limit_mb: Some(4096),
+            trusted_proxies: None,
         })
         .unwrap();
 
@@ -254,6 +328,38 @@ mod tests {
         .unwrap();
         assert_eq!(sync_concurrency(), None);
         cleanup();
+    }
+
+    #[test]
+    fn sensitive_settings_prefer_an_explicit_startup_value() {
+        assert_eq!(resolve(true, 168, Some(12)), 168);
+        assert_eq!(resolve(false, 168, Some(12)), 12);
+        assert_eq!(resolve(false, 168, None), 168);
+    }
+
+    #[tokio::test]
+    async fn trusted_proxies_override_applies_when_startup_is_not_explicit() {
+        let _guard = TEST_LOCK.lock().unwrap();
+        init_test_env();
+        cleanup();
+
+        // The tests do not set BICHON_TRUSTED_PROXIES, so the WebUI value is
+        // effective and clearing it returns to the (empty) startup default.
+        assert!(trusted_proxies().is_empty());
+
+        store(&Overrides {
+            trusted_proxies: Some(vec!["10.0.0.0/8".into(), "127.0.0.1".into()]),
+            ..Default::default()
+        })
+        .unwrap();
+        assert_eq!(trusted_proxies(), vec!["10.0.0.0/8", "127.0.0.1"]);
+        assert_eq!(
+            trusted_proxies_from_webui(),
+            Some(vec!["10.0.0.0/8".into(), "127.0.0.1".into()])
+        );
+
+        cleanup();
+        assert!(trusted_proxies().is_empty());
     }
 
     #[tokio::test]

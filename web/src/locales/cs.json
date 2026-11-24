@@ -3003,12 +3003,14 @@
   },
   "systemConfig": {
     "runtime": {
-      "desc": "Hodnoty uložené v databázi. Mají přednost před konfigurací při spuštění; změny listenerů platí po restartu.",
+      "desc": "Běžné hodnoty se ukládají do databáze a mají přednost před startovní konfigurací; citlivá pole jsou uzamčena explicitní startovní hodnotou a zobrazena jen pro čtení. Změny listenerů se projeví po restartu.",
       "invalid": "Některé hodnoty jsou mimo povolený rozsah. Zkontrolujte zvýrazněná pole.",
+      "lockedByStartup": "Řídí se startovní konfigurací. Změňte proměnnou prostředí nebo parametr CLI a restartujte.",
       "resetDone": "Přepisy za běhu vymazány",
       "restartRequired": "Restartujte službu, aby se použila nastavení SMTP a synchronizace.",
       "saved": "Nastavení za běhu uloženo",
-      "title": "Nastavení za běhu"
+      "title": "Nastavení za běhu",
+      "trustedProxiesHelp": "IP adresy nebo bloky CIDR reverzních proxy, jejichž hlavičkám X-Forwarded-For, Forwarded a X-Real-IP se důvěřuje. Ponechte prázdné, pokud je Bichon přímo vystaven; explicitní BICHON_TRUSTED_PROXIES má přednost před tímto polem."
     },
     "sections": {
       "cors": {

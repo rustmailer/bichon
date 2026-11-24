@@ -22,7 +22,7 @@ use crate::settings::proxy::Proxy;
 use crate::utils::tls::establish_tls_stream;
 use crate::{error::BichonResult, imap::session::SessionStream};
 use base64::{engine::general_purpose, Engine as _};
-use std::net::SocketAddr;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::pin::Pin;
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -514,5 +514,235 @@ async fn connect_via_http_proxy(addr: &ProxyAddr, address: SocketAddr) -> Bichon
             ),
             ErrorCode::NetworkError
         ))
+    }
+}
+
+// --- Trusted reverse proxies -------------------------------------------------
+
+/// A single CIDR block used to describe a trusted reverse proxy.
+///
+/// Parsing accepts a bare address (`127.0.0.1`, `::1`) as a host route, or an
+/// address plus prefix (`10.0.0.0/8`, `2001:db8::/32`). IPv4-mapped IPv6
+/// addresses are normalised to IPv4 before matching, so `::ffff:127.0.0.1`
+/// and `127.0.0.1` are the same peer.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Cidr {
+    network: IpAddr,
+    prefix: u8,
+}
+
+impl Cidr {
+    pub fn parse(value: &str) -> Result<Self, String> {
+        let value = value.trim();
+        if value.is_empty() {
+            return Err("empty network entry".to_string());
+        }
+        let (addr_part, prefix_part) = match value.split_once('/') {
+            Some((addr, prefix)) => (addr.trim(), Some(prefix.trim())),
+            None => (value, None),
+        };
+        let addr: IpAddr = addr_part
+            .parse()
+            .map_err(|_| format!("invalid IP address '{addr_part}'"))?;
+        let addr = normalize_ip(addr);
+        let max_prefix = if addr.is_ipv4() { 32 } else { 128 };
+        let prefix = match prefix_part {
+            Some(prefix) => prefix
+                .parse::<u8>()
+                .map_err(|_| format!("invalid prefix length '{prefix}'"))?,
+            None => max_prefix,
+        };
+        if prefix > max_prefix {
+            return Err(format!(
+                "prefix length {prefix} is too large for address {addr}"
+            ));
+        }
+        Ok(Self {
+            network: mask_ip(addr, prefix),
+            prefix,
+        })
+    }
+
+    pub fn contains(&self, ip: IpAddr) -> bool {
+        let ip = normalize_ip(ip);
+        match (self.network, ip) {
+            (IpAddr::V4(network), IpAddr::V4(ip)) => {
+                let mask = ipv4_mask(self.prefix);
+                (u32::from(network) & mask) == (u32::from(ip) & mask)
+            }
+            (IpAddr::V6(network), IpAddr::V6(ip)) => {
+                let mask = ipv6_mask(self.prefix);
+                (u128::from(network) & mask) == (u128::from(ip) & mask)
+            }
+            _ => false,
+        }
+    }
+}
+
+/// The set of peers whose forwarding headers may be believed.
+///
+/// `trust_all` exists only for backwards compatibility with deployments that
+/// cannot enumerate their proxies; `*` is deliberately explicit because it
+/// restores the old (spoofable) behaviour.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct TrustedProxies {
+    cidrs: Vec<Cidr>,
+    trust_all: bool,
+}
+
+impl TrustedProxies {
+    pub fn parse<I, S>(entries: I) -> Result<Self, String>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<str>,
+    {
+        let mut cidrs = Vec::new();
+        let mut trust_all = false;
+        for entry in entries {
+            let entry = entry.as_ref().trim();
+            if entry.is_empty() {
+                continue;
+            }
+            if entry == "*" {
+                trust_all = true;
+            } else {
+                cidrs.push(Cidr::parse(entry)?);
+            }
+        }
+        Ok(Self { cidrs, trust_all })
+    }
+
+    pub fn with_trust_all(trust_all: bool) -> Self {
+        Self {
+            cidrs: Vec::new(),
+            trust_all,
+        }
+    }
+
+    pub fn is_trust_all(&self) -> bool {
+        self.trust_all
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.cidrs.is_empty() && !self.trust_all
+    }
+
+    pub fn is_trusted(&self, ip: IpAddr) -> bool {
+        self.trust_all || self.cidrs.iter().any(|cidr| cidr.contains(ip))
+    }
+}
+
+/// Fold IPv4-mapped IPv6 addresses (`::ffff:a.b.c.d`) into IPv4 so the same
+/// client cannot occupy two rate-limit buckets.
+pub fn normalize_ip(ip: IpAddr) -> IpAddr {
+    match ip {
+        IpAddr::V6(v6) => match v6.to_ipv4_mapped() {
+            Some(v4) => IpAddr::V4(v4),
+            None => IpAddr::V6(v6),
+        },
+        v4 => v4,
+    }
+}
+
+fn ipv4_mask(prefix: u8) -> u32 {
+    if prefix == 0 {
+        0
+    } else {
+        u32::MAX << (32 - prefix)
+    }
+}
+
+fn ipv6_mask(prefix: u8) -> u128 {
+    if prefix == 0 {
+        0
+    } else {
+        u128::MAX << (128 - prefix)
+    }
+}
+
+fn mask_ip(ip: IpAddr, prefix: u8) -> IpAddr {
+    match ip {
+        IpAddr::V4(v4) => IpAddr::V4(Ipv4Addr::from(u32::from(v4) & ipv4_mask(prefix))),
+        IpAddr::V6(v6) => IpAddr::V6(Ipv6Addr::from(u128::from(v6) & ipv6_mask(prefix))),
+    }
+}
+
+#[cfg(test)]
+mod trusted_proxy_tests {
+    use super::*;
+
+    fn ip(value: &str) -> IpAddr {
+        value.parse().unwrap()
+    }
+
+    #[test]
+    fn bare_addresses_are_full_length_routes() {
+        let v4 = Cidr::parse("127.0.0.1").unwrap();
+        assert!(v4.contains(ip("127.0.0.1")));
+        assert!(!v4.contains(ip("127.0.0.2")));
+
+        let v6 = Cidr::parse("::1").unwrap();
+        assert!(v6.contains(ip("::1")));
+        assert!(!v6.contains(ip("::2")));
+    }
+
+    #[test]
+    fn cidr_blocks_match_only_their_network() {
+        let private = Cidr::parse("10.0.0.0/8").unwrap();
+        assert!(private.contains(ip("10.1.2.3")));
+        assert!(!private.contains(ip("11.1.2.3")));
+
+        let docker = Cidr::parse("172.17.0.0/16").unwrap();
+        assert!(docker.contains(ip("172.17.255.254")));
+        assert!(!docker.contains(ip("172.18.0.1")));
+
+        let v6 = Cidr::parse("2001:db8::/32").unwrap();
+        assert!(v6.contains(ip("2001:db8:1::1")));
+        assert!(!v6.contains(ip("2001:db9::1")));
+    }
+
+    #[test]
+    fn host_bits_in_the_network_are_masked() {
+        let cidr = Cidr::parse("10.1.2.3/8").unwrap();
+        assert!(cidr.contains(ip("10.200.0.1")));
+        assert!(!cidr.contains(ip("11.0.0.1")));
+    }
+
+    #[test]
+    fn zero_prefix_matches_every_address_of_that_family() {
+        let v4 = Cidr::parse("0.0.0.0/0").unwrap();
+        assert!(v4.contains(ip("1.2.3.4")));
+        assert!(!v4.contains(ip("::1")));
+    }
+
+    #[test]
+    fn ipv4_mapped_ipv6_is_normalised() {
+        let cidr = Cidr::parse("127.0.0.1").unwrap();
+        assert!(cidr.contains(ip("::ffff:127.0.0.1")));
+        assert_eq!(normalize_ip(ip("::ffff:10.0.0.1")), ip("10.0.0.1"));
+    }
+
+    #[test]
+    fn invalid_entries_are_rejected() {
+        assert!(Cidr::parse("not-an-ip").is_err());
+        assert!(Cidr::parse("10.0.0.0/33").is_err());
+        assert!(Cidr::parse("2001:db8::/129").is_err());
+        assert!(Cidr::parse("10.0.0.0/not-a-number").is_err());
+        assert!(TrustedProxies::parse(["10.0.0.0/8", "bogus"]).is_err());
+    }
+
+    #[test]
+    fn multiple_entries_and_trust_all() {
+        let trusted = TrustedProxies::parse(["127.0.0.1", "10.0.0.0/8"]).unwrap();
+        assert!(!trusted.is_empty());
+        assert!(trusted.is_trusted(ip("127.0.0.1")));
+        assert!(trusted.is_trusted(ip("10.9.8.7")));
+        assert!(!trusted.is_trusted(ip("192.0.2.1")));
+
+        let all = TrustedProxies::parse(["*"]).unwrap();
+        assert!(all.is_trust_all());
+        assert!(all.is_trusted(ip("203.0.113.9")));
+
+        assert!(TrustedProxies::default().is_empty());
     }
 }

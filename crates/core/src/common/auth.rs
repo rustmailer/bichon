@@ -11,7 +11,12 @@ use crate::{
 
 #[derive(Clone, Debug)]
 pub struct ClientContext {
+    /// Effective client address after the trusted-proxy resolution.
     pub ip_addr: Option<IpAddr>,
+    /// The socket peer. Kept separately so callers can tell whether the
+    /// forwarded chain was actually honoured (for example, when guarding a
+    /// trusted-proxy change against locking out the current proxy).
+    pub peer_ip: Option<IpAddr>,
     pub user: UserModel,
 }
 

@@ -30,9 +30,10 @@ use governor::{
     Quota, RateLimiter,
 };
 use poem::{
-    http::header, web::RealIp, Endpoint, FromRequest, IntoResponse, Middleware, Request, Response,
-    Result,
+    http::header, Endpoint, IntoResponse, Middleware, Request, Response, Result,
 };
+
+use super::client_ip;
 use tracing::{error, info, warn, Instrument};
 
 
@@ -88,10 +89,7 @@ impl<E: Endpoint> Endpoint for TracingEndpoint<E> {
     type Output = Response;
 
     async fn call(&self, req: Request) -> Result<Self::Output> {
-        let remote_addr = RealIp::from_request_without_body(&req)
-            .await
-            .ok()
-            .and_then(|real_ip| real_ip.0)
+        let remote_addr = client_ip::client_ip(&req)
             .map(|addr| addr.to_string())
             .unwrap_or_else(|| req.remote_addr().to_string());
         let method = req.method().clone();

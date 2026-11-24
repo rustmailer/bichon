@@ -3003,12 +3003,14 @@
   },
   "systemConfig": {
     "runtime": {
-      "desc": "Verdier lagret i databasen. De har forrang for oppstartskonfigurasjonen; endringer av lyttere gjelder etter en omstart.",
+      "desc": "Kjøretidsverdier lagres i databasen og har forrang for startkonfigurasjonen; sensitive felt låses av en eksplisitt startverdi og vises skrivebeskyttet. Endringer i lyttere gjelder etter omstart.",
       "invalid": "Noen verdier er utenfor det tillatte området. Sjekk de merkede feltene.",
+      "lockedByStartup": "Styres av startkonfigurasjonen. Endre miljøvariabelen eller CLI-flagget, og start på nytt.",
       "resetDone": "Kjøretidsoverstyringer fjernet",
       "restartRequired": "Start tjenesten på nytt for å bruke SMTP- og synkroniseringsinnstillingene.",
       "saved": "Kjøretidsinnstillinger lagret",
-      "title": "Kjøretidsinnstillinger"
+      "title": "Kjøretidsinnstillinger",
+      "trustedProxiesHelp": "IP-adresser eller CIDR-blokker for omvendte proxyer der X-Forwarded-For-, Forwarded- eller X-Real-IP-hoder er klarert. La feltet stå tomt hvis Bichon er direkte eksponert; en eksplisitt BICHON_TRUSTED_PROXIES har forrang over dette feltet."
     },
     "sections": {
       "cors": {

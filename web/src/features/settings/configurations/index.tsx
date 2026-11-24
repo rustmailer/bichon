@@ -38,7 +38,8 @@ import {
   Database,
   Activity,
   Zap,
-  SlidersHorizontal
+  SlidersHorizontal,
+  Lock
 } from "lucide-react"
 import {
   get_runtime_settings,
@@ -46,6 +47,7 @@ import {
   reset_runtime_settings,
   update_runtime_settings,
   type RuntimeSettings,
+  type RuntimeSettingsUpdate,
 } from "@/api/system/api"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { useTranslation } from "react-i18next"
@@ -138,17 +140,32 @@ function PageSkeleton() {
 
 function SettingField({
   label,
+  locked = false,
   children,
 }: {
   label: string
+  locked?: boolean
   children: React.ReactNode
 }) {
+  const { t } = useTranslation()
   return (
     <div className="flex items-center justify-between gap-4 py-2.5 border-b border-border/40 last:border-0">
-      <span className="text-xs font-medium text-muted-foreground font-mono">
+      <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground font-mono">
         {label}
+        {locked && (
+          <span
+            className="inline-flex shrink-0"
+            title={t("systemConfig.runtime.lockedByStartup")}
+            aria-label={t("systemConfig.runtime.lockedByStartup")}
+            role="img"
+          >
+            <Lock className="h-3 w-3" />
+          </span>
+        )}
       </span>
-      <div className="shrink-0">{children}</div>
+      <div className={locked ? "shrink-0 opacity-60" : "shrink-0"}>
+        {children}
+      </div>
     </div>
   )
 }
@@ -162,10 +179,14 @@ function RuntimeSettingsCard() {
     queryFn: get_runtime_settings,
   })
   const [form, setForm] = React.useState<RuntimeSettings | null>(null)
+  const [proxyText, setProxyText] = React.useState("")
   const [saving, setSaving] = React.useState(false)
 
   React.useEffect(() => {
-    if (data) setForm(data)
+    if (data) {
+      setForm(data)
+      setProxyText(data.trusted_proxies.join(", "))
+    }
   }, [data])
 
   if (!form) {
@@ -192,8 +213,19 @@ function RuntimeSettingsCard() {
     return Number.isFinite(n) ? n : fallback
   }
 
+  const locked = new Set(form.locked_by_startup)
+  const splitProxies = (raw: string) =>
+    raw
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter(Boolean)
+  // A light pre-check only; the server validates the full IP/CIDR grammar.
+  const proxyEntryLooksValid = (entry: string) =>
+    entry === "*" || /^[0-9a-fA-F:.]+(\/\d{1,3})?$/.test(entry)
+
   // Mirror the server-side bounds so a bad value is caught before the request.
   const valid = {
+    proxies: splitProxies(proxyText).every(proxyEntryLooksValid),
     smtp_port: form.smtp_port >= 1 && form.smtp_port <= 65535,
     token:
       form.webui_token_expiration_hours >= 1 &&
@@ -219,6 +251,7 @@ function RuntimeSettingsCard() {
     savedKey: string
   ) => {
     setForm(result.settings)
+    setProxyText(result.settings.trusted_proxies.join(", "))
     // The response already carries the effective values; refresh the cache in
     // the background instead of making Save wait for a second round trip.
     void queryClient.invalidateQueries({ queryKey: ["runtime-settings"] })
@@ -240,8 +273,23 @@ function RuntimeSettingsCard() {
       return
     }
     setSaving(true)
+    const payload: RuntimeSettingsUpdate = {
+      smtp_enabled: form.smtp_enabled,
+      smtp_port: form.smtp_port,
+      smtp_encryption: form.smtp_encryption,
+      smtp_auth_required: form.smtp_auth_required,
+      webui_token_expiration_hours: form.webui_token_expiration_hours,
+      sync_concurrency: form.sync_concurrency,
+      imap_timeout_seconds: form.imap_timeout_seconds,
+      web_mbox_upload_limit_mb: form.web_mbox_upload_limit_mb,
+      web_pst_upload_limit_mb: form.web_pst_upload_limit_mb,
+      trusted_proxies: splitProxies(proxyText),
+    }
     try {
-      await applyResult(await update_runtime_settings(form), "systemConfig.runtime.saved")
+      await applyResult(
+        await update_runtime_settings(payload),
+        "systemConfig.runtime.saved"
+      )
     } catch (err) {
       toast({
         variant: "destructive",
@@ -275,26 +323,38 @@ function RuntimeSettingsCard() {
       description={t("systemConfig.runtime.desc")}
     >
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8">
-        <SettingField label="BICHON_ENABLE_SMTP">
+        <SettingField
+          label="BICHON_ENABLE_SMTP"
+          locked={locked.has("smtp_enabled")}
+        >
           <Switch
             checked={form.smtp_enabled}
+            disabled={locked.has("smtp_enabled")}
             onCheckedChange={(checked) => patch({ smtp_enabled: checked })}
           />
         </SettingField>
-        <SettingField label="BICHON_SMTP_PORT">
+        <SettingField
+          label="BICHON_SMTP_PORT"
+          locked={locked.has("smtp_port")}
+        >
           <Input
             type="number"
             min={1}
             max={65535}
+            disabled={locked.has("smtp_port")}
             aria-invalid={!valid.smtp_port}
             className={fieldClass(valid.smtp_port)}
             value={form.smtp_port}
             onChange={(e) => patch({ smtp_port: num(e.target.value, form.smtp_port) })}
           />
         </SettingField>
-        <SettingField label="BICHON_SMTP_ENCRYPTION">
+        <SettingField
+          label="BICHON_SMTP_ENCRYPTION"
+          locked={locked.has("smtp_encryption")}
+        >
           <Select
             value={form.smtp_encryption}
+            disabled={locked.has("smtp_encryption")}
             onValueChange={(value) =>
               patch({ smtp_encryption: value as RuntimeSettings["smtp_encryption"] })
             }
@@ -309,17 +369,25 @@ function RuntimeSettingsCard() {
             </SelectContent>
           </Select>
         </SettingField>
-        <SettingField label="BICHON_SMTP_AUTH_REQUIRED">
+        <SettingField
+          label="BICHON_SMTP_AUTH_REQUIRED"
+          locked={locked.has("smtp_auth_required")}
+        >
           <Switch
             checked={form.smtp_auth_required}
+            disabled={locked.has("smtp_auth_required")}
             onCheckedChange={(checked) => patch({ smtp_auth_required: checked })}
           />
         </SettingField>
-        <SettingField label="BICHON_WEBUI_TOKEN_EXPIRATION_HOURS">
+        <SettingField
+          label="BICHON_WEBUI_TOKEN_EXPIRATION_HOURS"
+          locked={locked.has("webui_token_expiration_hours")}
+        >
           <Input
             type="number"
             min={1}
             max={8760}
+            disabled={locked.has("webui_token_expiration_hours")}
             aria-invalid={!valid.token}
             className={fieldClass(valid.token)}
             value={form.webui_token_expiration_hours}
@@ -404,6 +472,36 @@ function RuntimeSettingsCard() {
             }
           />
         </SettingField>
+      </div>
+      <div className="py-2.5 border-b border-border/40">
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs font-medium text-muted-foreground font-mono">
+            BICHON_TRUSTED_PROXIES
+          </span>
+          {locked.has("trusted_proxies") && (
+            <span
+              className="inline-flex shrink-0"
+              title={t("systemConfig.runtime.lockedByStartup")}
+              aria-label={t("systemConfig.runtime.lockedByStartup")}
+              role="img"
+            >
+              <Lock className="h-3 w-3" />
+            </span>
+          )}
+        </div>
+        <Input
+          disabled={locked.has("trusted_proxies")}
+          aria-invalid={!valid.proxies}
+          className={`mt-1.5 h-8 ${
+            valid.proxies ? "" : "border-destructive focus-visible:ring-destructive"
+          }`.trim()}
+          placeholder="127.0.0.1, 10.0.0.0/8"
+          value={proxyText}
+          onChange={(e) => setProxyText(e.target.value)}
+        />
+        <p className="mt-1 text-[11px] text-muted-foreground">
+          {t("systemConfig.runtime.trustedProxiesHelp")}
+        </p>
       </div>
       <div className="flex items-center justify-end gap-2 border-t py-3">
         <Button variant="outline" size="sm" onClick={reset} disabled={saving}>

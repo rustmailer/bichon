@@ -19,6 +19,7 @@
 use crate::common::auth::WrappedContext;
 use crate::rest::api::ApiTags;
 use crate::rest::ApiResult;
+use bichon_core::common::auth::ClientContext;
 use bichon_core::dashboard::DashboardStats;
 use bichon_core::error::code::ErrorCode;
 use bichon_core::ext::event_bus::{emit, Event};
@@ -27,6 +28,7 @@ use bichon_core::settings::cli::SETTINGS;
 use bichon_core::settings::proxy::{Proxy, ProxyTestResult};
 use bichon_core::settings::{runtime, SystemConfigurations};
 use bichon_core::users::permissions::Permission;
+use bichon_core::utils::net::TrustedProxies;
 use bichon_core::version::{fetch_notifications, Notifications};
 use poem_openapi::param::Path;
 use poem_openapi::payload::{Json, PlainText};
@@ -44,6 +46,11 @@ pub struct RuntimeSettingsView {
     pub imap_timeout_seconds: u64,
     pub web_mbox_upload_limit_mb: u64,
     pub web_pst_upload_limit_mb: u64,
+    pub trusted_proxies: Vec<String>,
+    /// Fields whose startup value was provided explicitly (CLI or environment)
+    /// and therefore cannot be changed from the WebUI. The corresponding
+    /// environment variable must be changed instead.
+    pub locked_by_startup: Vec<String>,
 }
 
 /// Full replacement of the runtime overrides.
@@ -59,6 +66,45 @@ pub struct RuntimeSettingsUpdate {
     pub imap_timeout_seconds: u64,
     pub web_mbox_upload_limit_mb: u64,
     pub web_pst_upload_limit_mb: u64,
+    /// Omitted by older clients: keep the existing override instead of
+    /// clearing it as a side effect of an unrelated settings save.
+    pub trusted_proxies: Option<Vec<String>>,
+}
+
+/// Runtime fields where an explicitly provided startup value wins over the
+/// WebUI. These are the settings that define the trust boundary or session
+/// policy; letting a WebUI value silently defeat the operator's environment
+/// variable would be a policy bypass (and, for trusted proxies, can lock an
+/// administrator out).
+const STARTUP_AUTHORITATIVE_FIELDS: &[(&str, &str)] = &[
+    ("smtp_enabled", "bichon_enable_smtp"),
+    ("smtp_port", "bichon_smtp_port"),
+    ("smtp_encryption", "bichon_smtp_encryption"),
+    ("smtp_auth_required", "bichon_smtp_auth_required"),
+    (
+        "webui_token_expiration_hours",
+        "bichon_webui_token_expiration_hours",
+    ),
+    ("trusted_proxies", "bichon_trusted_proxies"),
+];
+
+fn locked_by_startup() -> Vec<String> {
+    STARTUP_AUTHORITATIVE_FIELDS
+        .iter()
+        .filter(|(_, arg)| SETTINGS.is_explicitly_set(arg))
+        .map(|(field, _)| (*field).to_string())
+        .collect()
+}
+
+fn normalized_proxies(entries: &[String]) -> Vec<String> {
+    let mut entries: Vec<String> = entries
+        .iter()
+        .map(|entry| entry.trim().to_string())
+        .filter(|entry| !entry.is_empty())
+        .collect();
+    entries.sort();
+    entries.dedup();
+    entries
 }
 
 #[derive(Debug, Clone, poem_openapi::Object)]
@@ -80,11 +126,49 @@ fn runtime_settings_view() -> RuntimeSettingsView {
         imap_timeout_seconds: runtime::imap_timeout_seconds(),
         web_mbox_upload_limit_mb: runtime::web_mbox_upload_limit_mb(),
         web_pst_upload_limit_mb: runtime::web_pst_upload_limit_mb(),
+        trusted_proxies: runtime::trusted_proxies(),
+        locked_by_startup: locked_by_startup(),
     }
+}
+
+fn locked_change_error(field: &str, arg: &str) -> bichon_core::error::BichonError {
+    raise_error!(
+        format!(
+            "{field} is controlled by the startup configuration ({}). Change the environment variable or CLI flag and restart.",
+            arg.to_uppercase()
+        ),
+        ErrorCode::InvalidParameter
+    )
+}
+
+/// Reject a request that would stop trusting the proxy the caller is
+/// currently connected through. `context.ip_addr` differs from
+/// `context.peer_ip` only when the forwarded chain was honoured, so a direct
+/// client (or one already behind an unconfigured proxy) is unaffected.
+fn would_lock_out(context: &ClientContext, entries: &[String]) -> bool {
+    would_lock_out_peer(context.peer_ip, context.ip_addr, entries)
+}
+
+fn would_lock_out_peer(
+    peer: Option<std::net::IpAddr>,
+    resolved: Option<std::net::IpAddr>,
+    entries: &[String],
+) -> bool {
+    let Some(peer) = peer else {
+        return false;
+    };
+    if resolved == Some(peer) {
+        return false;
+    }
+    let Ok(trusted) = TrustedProxies::parse(entries.iter().map(String::as_str)) else {
+        return false;
+    };
+    !trusted.is_trusted(peer)
 }
 
 fn apply_runtime_settings(
     update: RuntimeSettingsUpdate,
+    context: &ClientContext,
 ) -> bichon_core::error::BichonResult<RuntimeSettingsResult> {
     if update.smtp_port < 1 {
         return Err(raise_error!(
@@ -124,35 +208,103 @@ fn apply_runtime_settings(
             ErrorCode::InvalidParameter
         ));
     }
+    if let Some(entries) = &update.trusted_proxies {
+        TrustedProxies::parse(entries.iter().map(String::as_str)).map_err(|reason| {
+            raise_error!(
+                format!("Invalid trusted proxy entry: {reason}"),
+                ErrorCode::InvalidParameter
+            )
+        })?;
+    }
 
-    // 0 from an API client means "auto", same as an empty field in the UI.
-    let sync_concurrency = update.sync_concurrency.filter(|n| *n > 0);
+    let locked = locked_by_startup();
+    let is_locked = |field: &str| locked.iter().any(|entry| entry == field);
+
+    // A locked field cannot be changed from the WebUI. Compare against the
+    // effective startup value so an unrelated form save (which re-submits the
+    // same values) still succeeds, but a real change is reported instead of
+    // being silently ignored.
+    if is_locked("smtp_enabled") && update.smtp_enabled != SETTINGS.bichon_enable_smtp {
+        return Err(locked_change_error("smtp_enabled", "bichon_enable_smtp"));
+    }
+    if is_locked("smtp_port") && update.smtp_port != SETTINGS.bichon_smtp_port {
+        return Err(locked_change_error("smtp_port", "bichon_smtp_port"));
+    }
+    if is_locked("smtp_encryption")
+        && update.smtp_encryption != SETTINGS.bichon_smtp_encryption.to_string()
+    {
+        return Err(locked_change_error(
+            "smtp_encryption",
+            "bichon_smtp_encryption",
+        ));
+    }
+    if is_locked("smtp_auth_required")
+        && update.smtp_auth_required != SETTINGS.bichon_smtp_auth_required
+    {
+        return Err(locked_change_error(
+            "smtp_auth_required",
+            "bichon_smtp_auth_required",
+        ));
+    }
+    if is_locked("webui_token_expiration_hours")
+        && update.webui_token_expiration_hours != SETTINGS.bichon_webui_token_expiration_hours
+    {
+        return Err(locked_change_error(
+            "webui_token_expiration_hours",
+            "bichon_webui_token_expiration_hours",
+        ));
+    }
+    let trusted_proxies = update
+        .trusted_proxies
+        .as_ref()
+        .map(|entries| normalized_proxies(entries));
+    if is_locked("trusted_proxies") {
+        if let Some(entries) = &trusted_proxies {
+            if *entries != runtime::trusted_proxies() {
+                return Err(locked_change_error(
+                    "trusted_proxies",
+                    "bichon_trusted_proxies",
+                ));
+            }
+        }
+    } else if let Some(entries) = &trusted_proxies {
+        if would_lock_out(context, entries) {
+            return Err(raise_error!(
+                "This change would stop trusting the reverse proxy you are connected through. Keep its address in the list."
+                    .into(),
+                ErrorCode::InvalidParameter
+            ));
+        }
+    }
+
     let before = runtime_settings_view();
     // One encrypted document per Save: the memdb encryption derives a key per
     // value, so writing nine entries was nine PBKDF2 rounds (~seconds).
     runtime::store(&runtime::Overrides {
-        smtp_enabled: Some(update.smtp_enabled),
-        smtp_port: Some(update.smtp_port),
-        smtp_encryption: Some(update.smtp_encryption.clone()),
-        smtp_auth_required: Some(update.smtp_auth_required),
-        webui_token_expiration_hours: Some(update.webui_token_expiration_hours),
+        smtp_enabled: (!is_locked("smtp_enabled")).then_some(update.smtp_enabled),
+        smtp_port: (!is_locked("smtp_port")).then_some(update.smtp_port),
+        smtp_encryption: (!is_locked("smtp_encryption"))
+            .then(|| update.smtp_encryption.clone()),
+        smtp_auth_required: (!is_locked("smtp_auth_required"))
+            .then_some(update.smtp_auth_required),
+        webui_token_expiration_hours: (!is_locked("webui_token_expiration_hours"))
+            .then_some(update.webui_token_expiration_hours),
         sync_concurrency: Some(update.sync_concurrency.unwrap_or(0)),
         imap_timeout_seconds: Some(update.imap_timeout_seconds),
         web_mbox_upload_limit_mb: Some(update.web_mbox_upload_limit_mb),
         web_pst_upload_limit_mb: Some(update.web_pst_upload_limit_mb),
+        trusted_proxies: if is_locked("trusted_proxies") {
+            None
+        } else {
+            match trusted_proxies {
+                Some(entries) => Some(entries),
+                None => runtime::trusted_proxies_from_webui()
+                    .map(|entries| normalized_proxies(&entries)),
+            }
+        },
     })?;
 
-    let settings = RuntimeSettingsView {
-        smtp_enabled: update.smtp_enabled,
-        smtp_port: update.smtp_port,
-        smtp_encryption: update.smtp_encryption.clone(),
-        smtp_auth_required: update.smtp_auth_required,
-        webui_token_expiration_hours: update.webui_token_expiration_hours,
-        sync_concurrency,
-        imap_timeout_seconds: update.imap_timeout_seconds,
-        web_mbox_upload_limit_mb: update.web_mbox_upload_limit_mb,
-        web_pst_upload_limit_mb: update.web_pst_upload_limit_mb,
-    };
+    let settings = runtime_settings_view();
     let restart_required = before.smtp_enabled != settings.smtp_enabled
         || before.smtp_port != settings.smtp_port
         || before.smtp_encryption != settings.smtp_encryption
@@ -339,7 +491,7 @@ impl SystemApi {
         Json(update): Json<RuntimeSettingsUpdate>,
     ) -> ApiResult<Json<RuntimeSettingsResult>> {
         context.require_permission(None, Permission::ROOT)?;
-        Ok(Json(apply_runtime_settings(update)?))
+        Ok(Json(apply_runtime_settings(update, &context.0)?))
     }
 
     /// Clear every runtime override and fall back to the startup values.
@@ -358,5 +510,69 @@ impl SystemApi {
             restart_required: true,
             settings: runtime_settings_view(),
         }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::net::IpAddr;
+
+    fn ip(value: &str) -> IpAddr {
+        value.parse().unwrap()
+    }
+
+    #[test]
+    fn proxy_change_is_rejected_when_it_would_remove_the_current_proxy() {
+        let peer = ip("10.0.0.2");
+        let client = ip("203.0.113.9");
+
+        // The caller reached us through 10.0.0.2 (resolved != peer). A list
+        // without the peer would immediately stop honouring the chain.
+        assert!(would_lock_out_peer(
+            Some(peer),
+            Some(client),
+            &["203.0.113.9".to_string()],
+        ));
+        assert!(!would_lock_out_peer(
+            Some(peer),
+            Some(client),
+            &["10.0.0.0/8".to_string()],
+        ));
+        assert!(!would_lock_out_peer(
+            Some(peer),
+            Some(client),
+            &["*".to_string()],
+        ));
+    }
+
+    #[test]
+    fn direct_clients_and_untrusted_chains_are_not_blocked() {
+        let peer = ip("203.0.113.77");
+        // Direct connection: resolved address IS the peer.
+        assert!(!would_lock_out_peer(
+            Some(peer),
+            Some(peer),
+            &["10.0.0.0/8".to_string()],
+        ));
+        // No socket peer (in-process transports) cannot be locked out.
+        assert!(!would_lock_out_peer(
+            None,
+            Some(peer),
+            &["10.0.0.0/8".to_string()],
+        ));
+    }
+
+    #[test]
+    fn normalized_entries_are_trimmed_sorted_and_deduplicated() {
+        assert_eq!(
+            normalized_proxies(&[
+                " 10.0.0.0/8 ".to_string(),
+                "127.0.0.1".to_string(),
+                "10.0.0.0/8".to_string(),
+                "".to_string(),
+            ]),
+            vec!["10.0.0.0/8".to_string(), "127.0.0.1".to_string()]
+        );
     }
 }
