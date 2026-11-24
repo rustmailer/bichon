@@ -25,6 +25,7 @@ use crate::common::timeout::{Timeout, TIMEOUT_HEADER};
 use crate::error::handler::error_handler;
 use crate::rest::public::features::get_features;
 use crate::rest::public::login::login;
+use crate::rest::public::logout::logout;
 use crate::rest::public::mfa::mfa_verify;
 use crate::rest::public::status::get_status;
 use bichon_core::common::signal::SIGNAL_MANAGER;
@@ -129,6 +130,7 @@ pub fn build_routes() -> impl Endpoint {
         .nest("/api/v1/features", get(get_features))
         .nest("/api/status", get(get_status))
         .nest("/api/login", post(login))
+        .nest("/api/auth/logout", post(logout))
         .nest("/api/auth/mfa/verify", post(mfa_verify))
         .at(
             "/api/v1/exports/download/:ticket",

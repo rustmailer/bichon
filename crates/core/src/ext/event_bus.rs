@@ -241,6 +241,13 @@ pub enum Event {
         user: String,
         ip: IpAddr,
     },
+    /// A WebUI session token was revoked through `POST /api/auth/logout`.
+    /// Callers may not have a resolvable client IP (the endpoint accepts an
+    /// already-expired token), hence the optional address.
+    UserLoggedOut {
+        user: String,
+        ip: Option<IpAddr>,
+    },
     /// TOTP two-factor authentication was enabled for a user.
     MfaEnabled {
         user: String,

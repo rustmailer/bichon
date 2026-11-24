@@ -979,6 +979,7 @@
       "timestampAnchored": "Корню Меркла присвоена метка времени",
       "userCreated": "Создание пользователя",
       "userLogin": "Вход пользователя",
+      "userLogout": "Выход пользователя из системы",
       "userRemoved": "Удаление пользователя",
       "userUpdated": "Обновление пользователя"
     },
@@ -2900,7 +2901,7 @@
       "catExport": "Экспорт",
       "catExportHint": "export.*, email.exported",
       "catLogin": "Вход",
-      "catLoginHint": "user.login, ldap.*, sso.*, mfa.*",
+      "catLoginHint": "user.login, user.logout, ldap.*, sso.*, mfa.*",
       "catRepair": "Исправление",
       "catRepairHint": "email.repaired",
       "categories": "Категории событий",

@@ -979,6 +979,7 @@
       "timestampAnchored": "Merkle-juuri aikaleimattu",
       "userCreated": "Käyttäjä luotu",
       "userLogin": "Käyttäjän kirjautuminen",
+      "userLogout": "Käyttäjä kirjautui ulos",
       "userRemoved": "Käyttäjä poistettu",
       "userUpdated": "Käyttäjä päivitetty"
     },
@@ -2900,7 +2901,7 @@
       "catExport": "Vienti",
       "catExportHint": "export.*, email.exported",
       "catLogin": "Kirjautuminen",
-      "catLoginHint": "user.login, ldap.*, sso.*, mfa.*",
+      "catLoginHint": "user.login, user.logout, ldap.*, sso.*, mfa.*",
       "catRepair": "Korjaus",
       "catRepairHint": "email.repaired",
       "categories": "Tapahtumaluokat",

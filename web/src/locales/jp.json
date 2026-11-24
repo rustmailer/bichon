@@ -979,6 +979,7 @@
       "timestampAnchored": "マークルルートにタイムスタンプ付与",
       "userCreated": "ユーザー作成",
       "userLogin": "ユーザーログイン",
+      "userLogout": "ユーザーログアウト",
       "userRemoved": "ユーザー削除",
       "userUpdated": "ユーザー更新"
     },
@@ -2900,7 +2901,7 @@
       "catExport": "エクスポート",
       "catExportHint": "export.*、email.exported",
       "catLogin": "ログイン",
-      "catLoginHint": "user.login, ldap.*, sso.*, mfa.*",
+      "catLoginHint": "user.login, user.logout, ldap.*, sso.*, mfa.*",
       "catRepair": "修復",
       "catRepairHint": "email.repaired",
       "categories": "イベントカテゴリ",

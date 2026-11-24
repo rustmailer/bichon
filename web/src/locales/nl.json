@@ -979,6 +979,7 @@
       "timestampAnchored": "Merkle-wortel voorzien van tijdstempel",
       "userCreated": "Gebruiker aangemaakt",
       "userLogin": "Gebruikersinlog",
+      "userLogout": "Afmelden van gebruiker",
       "userRemoved": "Gebruiker verwijderd",
       "userUpdated": "Gebruiker bijgewerkt"
     },
@@ -2900,7 +2901,7 @@
       "catExport": "Exporteren",
       "catExportHint": "export.*, email.exported",
       "catLogin": "Aanmelden",
-      "catLoginHint": "user.login, ldap.*, sso.*, mfa.*",
+      "catLoginHint": "user.login, user.logout, ldap.*, sso.*, mfa.*",
       "catRepair": "Herstellen",
       "catRepairHint": "email.repaired",
       "categories": "Gebeurteniscategorieën",

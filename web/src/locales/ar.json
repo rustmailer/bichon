@@ -979,6 +979,7 @@
       "timestampAnchored": "تم توقيع جذر ميركل زمنياً",
       "userCreated": "إنشاء مستخدم",
       "userLogin": "تسجيل دخول المستخدم",
+      "userLogout": "تسجيل خروج المستخدم",
       "userRemoved": "إزالة مستخدم",
       "userUpdated": "تحديث مستخدم"
     },
@@ -2900,7 +2901,7 @@
       "catExport": "التصدير",
       "catExportHint": "export.*، email.exported",
       "catLogin": "تسجيل الدخول",
-      "catLoginHint": "user.login، ldap.*، sso.*، mfa.*",
+      "catLoginHint": "user.login, user.logout, ldap.*, sso.*, mfa.*",
       "catRepair": "الإصلاح",
       "catRepairHint": "email.repaired",
       "categories": "فئات الأحداث",

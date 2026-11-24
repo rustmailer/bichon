@@ -979,6 +979,7 @@
       "timestampAnchored": "Kořen Merkleova stromu opatřen časovým razítkem",
       "userCreated": "Uživatel vytvořen",
       "userLogin": "Přihlášení uživatele",
+      "userLogout": "Odhlášení uživatele",
       "userRemoved": "Uživatel odebrán",
       "userUpdated": "Uživatel aktualizován"
     },
@@ -2900,7 +2901,7 @@
       "catExport": "Export",
       "catExportHint": "export.*, email.exported",
       "catLogin": "Přihlášení",
-      "catLoginHint": "user.login, ldap.*, sso.*, mfa.*",
+      "catLoginHint": "user.login, user.logout, ldap.*, sso.*, mfa.*",
       "catRepair": "Oprava",
       "catRepairHint": "email.repaired",
       "categories": "Kategorie událostí",

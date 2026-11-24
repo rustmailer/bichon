@@ -979,6 +979,7 @@
       "timestampAnchored": "Merkle-Wurzel mit Zeitstempel",
       "userCreated": "Benutzer erstellt",
       "userLogin": "Benutzeranmeldung",
+      "userLogout": "Benutzerabmeldung",
       "userRemoved": "Benutzer entfernt",
       "userUpdated": "Benutzer aktualisiert"
     },
@@ -2900,7 +2901,7 @@
       "catExport": "Export",
       "catExportHint": "export.*, email.exported",
       "catLogin": "Anmeldung",
-      "catLoginHint": "user.login, ldap.*, sso.*, mfa.*",
+      "catLoginHint": "user.login, user.logout, ldap.*, sso.*, mfa.*",
       "catRepair": "Reparatur",
       "catRepairHint": "email.repaired",
       "categories": "Ereigniskategorien",

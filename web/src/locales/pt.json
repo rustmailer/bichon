@@ -979,6 +979,7 @@
       "timestampAnchored": "Raiz de Merkle com carimbo de tempo",
       "userCreated": "Usuário criado",
       "userLogin": "Login de usuário",
+      "userLogout": "Logout do usuário",
       "userRemoved": "Usuário removido",
       "userUpdated": "Usuário atualizado"
     },
@@ -2900,7 +2901,7 @@
       "catExport": "Exportação",
       "catExportHint": "export.*, email.exported",
       "catLogin": "Início de sessão",
-      "catLoginHint": "user.login, ldap.*, sso.*, mfa.*",
+      "catLoginHint": "user.login, user.logout, ldap.*, sso.*, mfa.*",
       "catRepair": "Reparação",
       "catRepairHint": "email.repaired",
       "categories": "Categorias de eventos",

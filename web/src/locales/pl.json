@@ -979,6 +979,7 @@
       "timestampAnchored": "Korzeń Merkle opatrzony znacznikiem czasu",
       "userCreated": "Utworzenie użytkownika",
       "userLogin": "Logowanie użytkownika",
+      "userLogout": "Wylogowanie użytkownika",
       "userRemoved": "Usunięcie użytkownika",
       "userUpdated": "Aktualizacja użytkownika"
     },
@@ -2900,7 +2901,7 @@
       "catExport": "Eksport",
       "catExportHint": "export.*, email.exported",
       "catLogin": "Logowanie",
-      "catLoginHint": "user.login, ldap.*, sso.*, mfa.*",
+      "catLoginHint": "user.login, user.logout, ldap.*, sso.*, mfa.*",
       "catRepair": "Naprawa",
       "catRepairHint": "email.repaired",
       "categories": "Kategorie zdarzeń",

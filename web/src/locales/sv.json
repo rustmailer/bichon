@@ -979,6 +979,7 @@
       "timestampAnchored": "Merkle-roten tidsstämplad",
       "userCreated": "Användare skapad",
       "userLogin": "Användarinloggning",
+      "userLogout": "Användaren loggade ut",
       "userRemoved": "Användare borttagen",
       "userUpdated": "Användare uppdaterad"
     },
@@ -2900,7 +2901,7 @@
       "catExport": "Export",
       "catExportHint": "export.*, email.exported",
       "catLogin": "Inloggning",
-      "catLoginHint": "user.login, ldap.*, sso.*, mfa.*",
+      "catLoginHint": "user.login, user.logout, ldap.*, sso.*, mfa.*",
       "catRepair": "Reparation",
       "catRepairHint": "email.repaired",
       "categories": "Händelsekategorier",

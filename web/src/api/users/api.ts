@@ -225,6 +225,13 @@ export const list_access_tokens = async () => {
     return response.data;
 };
 
+// Revoke the WebUI session token on the server. Short timeout: a slow or
+// unreachable server must not keep the user stuck on the logout dialog.
+export const logout = async () => {
+    const response = await axiosInstance.post('api/auth/logout', null, { timeout: 5000 });
+    return response.data;
+}
+
 export const create_access_token = async (data: Record<string, any>) => {
     const response = await axiosInstance.post("api/v1/access-token", data);
     return response.data;

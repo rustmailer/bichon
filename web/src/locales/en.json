@@ -979,6 +979,7 @@
       "timestampAnchored": "Merkle root timestamped",
       "userCreated": "User created",
       "userLogin": "User login",
+      "userLogout": "User logout",
       "userRemoved": "User removed",
       "userUpdated": "User updated"
     },
@@ -2900,7 +2901,7 @@
       "catExport": "Export",
       "catExportHint": "export.*, email.exported",
       "catLogin": "Login",
-      "catLoginHint": "user.login, ldap.*, sso.*, mfa.*",
+      "catLoginHint": "user.login, user.logout, ldap.*, sso.*, mfa.*",
       "catRepair": "Repair",
       "catRepairHint": "email.repaired",
       "categories": "Event categories",

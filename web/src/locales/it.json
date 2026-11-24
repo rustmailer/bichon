@@ -979,6 +979,7 @@
       "timestampAnchored": "Radice Merkle timestampata",
       "userCreated": "Utente creato",
       "userLogin": "Accesso utente",
+      "userLogout": "Disconnessione utente",
       "userRemoved": "Utente rimosso",
       "userUpdated": "Utente aggiornato"
     },
@@ -2900,7 +2901,7 @@
       "catExport": "Esportazione",
       "catExportHint": "export.*, email.exported",
       "catLogin": "Accesso",
-      "catLoginHint": "user.login, ldap.*, sso.*, mfa.*",
+      "catLoginHint": "user.login, user.logout, ldap.*, sso.*, mfa.*",
       "catRepair": "Riparazione",
       "catRepairHint": "email.repaired",
       "categories": "Categorie di eventi",

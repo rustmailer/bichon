@@ -979,6 +979,7 @@
       "timestampAnchored": "Merkle 樹根已加蓋時間戳",
       "userCreated": "建立使用者",
       "userLogin": "使用者登入",
+      "userLogout": "使用者登出",
       "userRemoved": "刪除使用者",
       "userUpdated": "更新使用者"
     },
@@ -2900,7 +2901,7 @@
       "catExport": "匯出",
       "catExportHint": "export.*、email.exported",
       "catLogin": "登入",
-      "catLoginHint": "user.login、ldap.*、sso.*、mfa.*",
+      "catLoginHint": "user.login, user.logout, ldap.*, sso.*, mfa.*",
       "catRepair": "修復",
       "catRepairHint": "email.repaired",
       "categories": "事件類別",

@@ -979,6 +979,7 @@
       "timestampAnchored": "Racine de Merkle horodatée",
       "userCreated": "Utilisateur créé",
       "userLogin": "Connexion utilisateur",
+      "userLogout": "Déconnexion de l'utilisateur",
       "userRemoved": "Utilisateur supprimé",
       "userUpdated": "Utilisateur mis à jour"
     },
@@ -2900,7 +2901,7 @@
       "catExport": "Exportation",
       "catExportHint": "export.*, email.exported",
       "catLogin": "Connexion",
-      "catLoginHint": "user.login, ldap.*, sso.*, mfa.*",
+      "catLoginHint": "user.login, user.logout, ldap.*, sso.*, mfa.*",
       "catRepair": "Réparation",
       "catRepairHint": "email.repaired",
       "categories": "Catégories d'événements",

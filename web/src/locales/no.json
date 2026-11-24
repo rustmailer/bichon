@@ -979,6 +979,7 @@
       "timestampAnchored": "Merkle-rot tidsstemplet",
       "userCreated": "Bruker opprettet",
       "userLogin": "Brukerinnlogging",
+      "userLogout": "Brukeren logget ut",
       "userRemoved": "Bruker fjernet",
       "userUpdated": "Bruker oppdatert"
     },
@@ -2900,7 +2901,7 @@
       "catExport": "Eksport",
       "catExportHint": "export.*, email.exported",
       "catLogin": "Innlogging",
-      "catLoginHint": "user.login, ldap.*, sso.*, mfa.*",
+      "catLoginHint": "user.login, user.logout, ldap.*, sso.*, mfa.*",
       "catRepair": "Reparasjon",
       "catRepairHint": "email.repaired",
       "categories": "Hendelseskategorier",

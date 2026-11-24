@@ -979,6 +979,7 @@
       "timestampAnchored": "머클 루트에 타임스탬프 적용됨",
       "userCreated": "사용자 생성",
       "userLogin": "사용자 로그인",
+      "userLogout": "사용자 로그아웃",
       "userRemoved": "사용자 삭제",
       "userUpdated": "사용자 수정"
     },
@@ -2900,7 +2901,7 @@
       "catExport": "내보내기",
       "catExportHint": "export.*, email.exported",
       "catLogin": "로그인",
-      "catLoginHint": "user.login, ldap.*, sso.*, mfa.*",
+      "catLoginHint": "user.login, user.logout, ldap.*, sso.*, mfa.*",
       "catRepair": "복구",
       "catRepairHint": "email.repaired",
       "categories": "이벤트 카테고리",

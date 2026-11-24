@@ -979,6 +979,7 @@
       "timestampAnchored": "Merkle-roden tidsstemplet",
       "userCreated": "Bruger oprettet",
       "userLogin": "Brugerlogin",
+      "userLogout": "Brugeren loggede ud",
       "userRemoved": "Bruger fjernet",
       "userUpdated": "Bruger opdateret"
     },
@@ -2900,7 +2901,7 @@
       "catExport": "Eksport",
       "catExportHint": "export.*, email.exported",
       "catLogin": "Login",
-      "catLoginHint": "user.login, ldap.*, sso.*, mfa.*",
+      "catLoginHint": "user.login, user.logout, ldap.*, sso.*, mfa.*",
       "catRepair": "Reparation",
       "catRepairHint": "email.repaired",
       "categories": "Hændelseskategorier",

@@ -20,6 +20,7 @@
 import { useNavigate, useLocation } from '@tanstack/react-router'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { resetToken } from '@/stores/authStore'
+import { logout as revokeSessionOnServer } from '@/api/users/api'
 import { useTranslation } from 'react-i18next'
 import { useCurrentUser } from '@/hooks/use-current-user'
 import { useEdition } from '@/hooks/use-edition'
@@ -54,12 +55,25 @@ export function SignOutDialog({ open, onOpenChange }: SignOutDialogProps) {
     goToSignIn(location.href)
   }
 
-  const handleConfirm = () => {
+  // Deleting the server-side record is best-effort: if the request fails
+  // (offline, server restarting), the user must still be able to leave the
+  // page. The token keeps its normal idle expiry in that case.
+  const revokeServerSession = async () => {
+    try {
+      await revokeSessionOnServer()
+    } catch {
+      // ignored on purpose
+    }
+  }
+
+  const handleConfirm = async () => {
+    setIsLoading(true)
+    await revokeServerSession()
     if (!isSsoUser) {
+      setIsLoading(false)
       localSignOut()
       return
     }
-    setIsLoading(true)
     // Only sign out of bichon; keep the SSO session for one-click sign-in.
     fetch('/api/auth/oidc/local-logout', { redirect: 'follow' })
       .catch(() => {})
@@ -101,7 +115,11 @@ export function SignOutDialog({ open, onOpenChange }: SignOutDialogProps) {
             type='button'
             className='inline-flex h-10 items-center justify-center gap-2 rounded-md border border-destructive/50 bg-background px-4 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10'
             disabled={isLoading}
-            onClick={() => {
+            onClick={async () => {
+              setIsLoading(true)
+              // Keep the bichon_webui_token cookie until the redirect: the
+              // OIDC logout handler reads it for the id_token_hint.
+              await revokeServerSession()
               resetToken()
               window.location.href = '/api/auth/oidc/logout'
             }}
