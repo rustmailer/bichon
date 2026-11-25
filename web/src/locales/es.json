@@ -3020,6 +3020,7 @@
       "lockedByStartup": "Controlado por la configuración de inicio. Cambie la variable de entorno o la opción de CLI y reinicie.",
       "resetDone": "Valores de ejecución restablecidos",
       "restartRequired": "Reinicia el servicio para aplicar la configuración de SMTP y sincronización.",
+      "sanitizeEmailHtmlHelp": "Limpia el cuerpo HTML de los correos en el servidor antes de la vista previa con una lista de permitidos: conserva el diseño, las tablas y los estilos; elimina scripts, marcos y formularios. Desactívalo solo si un mensaje se muestra incorrectamente.",
       "saved": "Configuración en tiempo de ejecución guardada",
       "title": "Configuración en tiempo de ejecución",
       "trustedProxiesHelp": "IP o bloques CIDR de los proxies inversos cuyas cabeceras X-Forwarded-For, Forwarded o X-Real-IP son de confianza. Déjelo vacío si Bichon está expuesto directamente; un BICHON_TRUSTED_PROXIES explícito prevalece sobre este campo."

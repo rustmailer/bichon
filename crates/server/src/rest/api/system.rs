@@ -46,6 +46,8 @@ pub struct RuntimeSettingsView {
     pub imap_timeout_seconds: u64,
     pub web_mbox_upload_limit_mb: u64,
     pub web_pst_upload_limit_mb: u64,
+    /// HTML email bodies are sanitised server-side before preview.
+    pub sanitize_email_html: bool,
     pub trusted_proxies: Vec<String>,
     /// Fields whose startup value was provided explicitly (CLI or environment)
     /// and therefore cannot be changed from the WebUI. The corresponding
@@ -66,6 +68,9 @@ pub struct RuntimeSettingsUpdate {
     pub imap_timeout_seconds: u64,
     pub web_mbox_upload_limit_mb: u64,
     pub web_pst_upload_limit_mb: u64,
+    /// Omitted by older clients: keep the existing override instead of
+    /// resetting the field as a side effect of an unrelated settings save.
+    pub sanitize_email_html: Option<bool>,
     /// Omitted by older clients: keep the existing override instead of
     /// clearing it as a side effect of an unrelated settings save.
     pub trusted_proxies: Option<Vec<String>>,
@@ -126,6 +131,7 @@ fn runtime_settings_view() -> RuntimeSettingsView {
         imap_timeout_seconds: runtime::imap_timeout_seconds(),
         web_mbox_upload_limit_mb: runtime::web_mbox_upload_limit_mb(),
         web_pst_upload_limit_mb: runtime::web_pst_upload_limit_mb(),
+        sanitize_email_html: runtime::sanitize_email_html(),
         trusted_proxies: runtime::trusted_proxies(),
         locked_by_startup: locked_by_startup(),
     }
@@ -293,6 +299,10 @@ fn apply_runtime_settings(
         imap_timeout_seconds: Some(update.imap_timeout_seconds),
         web_mbox_upload_limit_mb: Some(update.web_mbox_upload_limit_mb),
         web_pst_upload_limit_mb: Some(update.web_pst_upload_limit_mb),
+        // Omitted by older clients: keep the stored override.
+        sanitize_email_html: update
+            .sanitize_email_html
+            .or(runtime::overrides().sanitize_email_html),
         trusted_proxies: if is_locked("trusted_proxies") {
             None
         } else {

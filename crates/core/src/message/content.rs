@@ -23,9 +23,10 @@ use crate::envelope::extractor::{
     part_contents, reattach_eml_content_self_healing,
 };
 use crate::error::code::ErrorCode;
+use crate::settings::runtime;
 use crate::store::envelope::Envelope;
 use crate::utils::compute_content_hash;
-use crate::utils::html::block_remote_content;
+use crate::utils::html::{block_remote_content, sanitize_email_html};
 use crate::{error::BichonResult, raise_error};
 use mail_parser::{Message, MessageParser, MessagePart};
 use tracing::debug;
@@ -223,6 +224,11 @@ pub async fn retrieve_email_content(
             html = Some(filtered);
         }
     }
+    if runtime::sanitize_email_html() {
+        if let Some(body) = html {
+            html = Some(sanitize_email_html(&body));
+        }
+    }
     Ok(FullMessageContent {
         text,
         html,
@@ -396,6 +402,11 @@ pub async fn retrieve_nested_eml_content(
         has_remote_content = *html_body != filtered;
         if block_remote {
             html = Some(filtered);
+        }
+    }
+    if runtime::sanitize_email_html() {
+        if let Some(body) = html {
+            html = Some(sanitize_email_html(&body));
         }
     }
     Ok(FullNestedMessageContent {

@@ -3020,6 +3020,7 @@
       "lockedByStartup": "Styres av startkonfigurasjonen. Endre miljøvariabelen eller CLI-flagget, og start på nytt.",
       "resetDone": "Kjøretidsoverstyringer fjernet",
       "restartRequired": "Start tjenesten på nytt for å bruke SMTP- og synkroniseringsinnstillingene.",
+      "sanitizeEmailHtmlHelp": "Renser HTML-e-postens brødtekst på serveren før forhåndsvisning med en tillatelsesliste: beholder layout, tabeller og stiler; fjerner skript, rammer og skjemaer. Slå bare av hvis en melding vises feil.",
       "saved": "Kjøretidsinnstillinger lagret",
       "title": "Kjøretidsinnstillinger",
       "trustedProxiesHelp": "IP-adresser eller CIDR-blokker for omvendte proxyer der X-Forwarded-For-, Forwarded- eller X-Real-IP-hoder er klarert. La feltet stå tomt hvis Bichon er direkte eksponert; en eksplisitt BICHON_TRUSTED_PROXIES har forrang over dette feltet."

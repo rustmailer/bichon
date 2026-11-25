@@ -3020,6 +3020,7 @@
       "lockedByStartup": "Styres af startkonfigurationen. Ændr miljøvariablen eller CLI-flaget, og genstart.",
       "resetDone": "Runtime-tilsidesættelser ryddet",
       "restartRequired": "Genstart tjenesten for at anvende SMTP- og synkroniseringsindstillingerne.",
+      "sanitizeEmailHtmlHelp": "Renser HTML-e-mailens brødtekst på serveren før forhåndsvisning med en tilladelsesliste: bevarer layout, tabeller og typografi; fjerner scripts, frames og formularer. Slå kun fra, hvis en meddelelse vises forkert.",
       "saved": "Runtime-indstillinger gemt",
       "title": "Runtime-indstillinger",
       "trustedProxiesHelp": "IP-adresser eller CIDR-blokke for omvendte proxyer, hvis X-Forwarded-For-, Forwarded- eller X-Real-IP-headere er betroet. Lad feltet være tomt, hvis Bichon er direkte eksponeret; en eksplicit BICHON_TRUSTED_PROXIES har forrang."

@@ -3020,6 +3020,7 @@
       "lockedByStartup": "시작 구성에서 제어합니다. 환경 변수나 명령줄 인수를 변경한 후 재시작하세요.",
       "resetDone": "런타임 재정의가 지워졌습니다",
       "restartRequired": "SMTP 및 동기화 설정을 적용하려면 서비스를 재시작하세요.",
+      "sanitizeEmailHtmlHelp": "미리보기 전에 서버에서 HTML 메일 본문을 허용 목록 방식으로 정리합니다. 레이아웃, 표, 스타일은 유지하고 스크립트, 프레임, 양식은 제거합니다. 메시지가 잘못 표시될 때만 끄세요.",
       "saved": "런타임 설정이 저장되었습니다",
       "title": "런타임 설정",
       "trustedProxiesHelp": "X-Forwarded-For, Forwarded 또는 X-Real-IP 헤더를 신뢰할 리버스 프록시 IP 또는 CIDR입니다. Bichon을 직접 노출하는 경우 비워 두세요. 명시적으로 설정한 BICHON_TRUSTED_PROXIES가 이 필드보다 우선합니다."

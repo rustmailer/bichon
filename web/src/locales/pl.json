@@ -3020,6 +3020,7 @@
       "lockedByStartup": "Sterowane przez konfigurację startową. Zmień zmienną środowiskową lub opcję CLI i uruchom ponownie.",
       "resetDone": "Wyczyszczono nadpisania czasu działania",
       "restartRequired": "Uruchom usługę ponownie, aby zastosować ustawienia SMTP i synchronizacji.",
+      "sanitizeEmailHtmlHelp": "Czyści treść HTML wiadomości na serwerze przed podglądem według listy dozwolonych elementów: zachowuje układ, tabele i style, usuwa skrypty, ramki i formularze. Wyłącz tylko wtedy, gdy wiadomość wyświetla się nieprawidłowo.",
       "saved": "Zapisano ustawienia czasu działania",
       "title": "Ustawienia czasu działania",
       "trustedProxiesHelp": "Adresy IP lub bloki CIDR odwrotnych proxy, których nagłówki X-Forwarded-For, Forwarded lub X-Real-IP są zaufane. Pozostaw puste, jeśli Bichon jest wystawiony bezpośrednio; jawne BICHON_TRUSTED_PROXIES ma pierwszeństwo przed tym polem."

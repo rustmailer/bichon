@@ -3020,6 +3020,7 @@
       "lockedByStartup": "Käynnistysasetusten hallinnassa. Muuta ympäristömuuttujaa tai CLI-valitsinta ja käynnistä uudelleen.",
       "resetDone": "Ajonaikaiset ohitukset tyhjennetty",
       "restartRequired": "Käynnistä palvelu uudelleen, jotta SMTP- ja synkronointiasetukset tulevat voimaan.",
+      "sanitizeEmailHtmlHelp": "Puhdistaa HTML-sähköpostin rungon palvelimella ennen esikatselua sallittujen luettelon avulla: säilyttää asettelun, taulukot ja tyylit; poistaa skriptit, kehykset ja lomakkeet. Poista käytöstä vain, jos viesti näkyy väärin.",
       "saved": "Ajonaikaiset asetukset tallennettu",
       "title": "Ajonaikaiset asetukset",
       "trustedProxiesHelp": "Käänteisproxyn IP-osoitteet tai CIDR-lohkot, joiden X-Forwarded-For-, Forwarded- ja X-Real-IP-otsikoihin luotetaan. Jätä tyhjäksi, jos Bichon on suoraan julkinen; eksplisiittinen BICHON_TRUSTED_PROXIES ohittaa tämän kentän."

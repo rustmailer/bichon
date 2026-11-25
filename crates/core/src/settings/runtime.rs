@@ -57,6 +57,9 @@ pub struct Overrides {
     pub imap_timeout_seconds: Option<u64>,
     pub web_mbox_upload_limit_mb: Option<u64>,
     pub web_pst_upload_limit_mb: Option<u64>,
+    /// Sanitise HTML email bodies server-side before they are returned for
+    /// preview. `None` means "not configured": sanitisation is on.
+    pub sanitize_email_html: Option<bool>,
     /// Reverse proxies whose forwarding headers may be trusted. Only used when
     /// `BICHON_TRUSTED_PROXIES` was not provided at startup.
     pub trusted_proxies: Option<Vec<String>>,
@@ -246,6 +249,12 @@ pub fn web_pst_upload_limit_mb() -> u64 {
         .unwrap_or(SETTINGS.bichon_web_pst_upload_limit_mb)
 }
 
+/// Whether HTML email bodies are sanitised server-side before preview.
+/// Read per request; enabled unless the operator turned it off in the WebUI.
+pub fn sanitize_email_html() -> bool {
+    load().sanitize_email_html.unwrap_or(true)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -294,6 +303,7 @@ mod tests {
             imap_timeout_seconds: Some(0),
             web_mbox_upload_limit_mb: Some(2048),
             web_pst_upload_limit_mb: Some(4096),
+            sanitize_email_html: None,
             trusted_proxies: None,
         })
         .unwrap();
@@ -328,6 +338,24 @@ mod tests {
         .unwrap();
         assert_eq!(sync_concurrency(), None);
         cleanup();
+    }
+
+    #[tokio::test]
+    async fn email_sanitisation_defaults_to_on_and_can_be_disabled() {
+        let _guard = TEST_LOCK.lock().unwrap();
+        init_test_env();
+        cleanup();
+
+        assert!(sanitize_email_html(), "sanitisation must default to on");
+        store(&Overrides {
+            sanitize_email_html: Some(false),
+            ..Default::default()
+        })
+        .unwrap();
+        assert!(!sanitize_email_html());
+
+        cleanup();
+        assert!(sanitize_email_html(), "reset returns to the default");
     }
 
     #[test]

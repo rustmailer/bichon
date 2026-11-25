@@ -3020,6 +3020,7 @@
       "lockedByStartup": "Beheerd door de startconfiguratie. Wijzig de omgevingsvariabele of CLI-optie en herstart.",
       "resetDone": "Runtime-overschrijvingen gewist",
       "restartRequired": "Herstart de dienst om de SMTP- en synchronisatie-instellingen toe te passen.",
+      "sanitizeEmailHtmlHelp": "Reinigt HTML-e-mailinhoud op de server vóór de preview met een allowlist: lay-out, tabellen en stijlen blijven behouden; scripts, frames en formulieren worden verwijderd. Alleen uitschakelen als een bericht verkeerd wordt weergegeven.",
       "saved": "Runtime-instellingen opgeslagen",
       "title": "Runtime-instellingen",
       "trustedProxiesHelp": "IP's of CIDR-blokken van reverse proxies waarvan de X-Forwarded-For-, Forwarded- of X-Real-IP-headers worden vertrouwd. Laat leeg als Bichon direct bereikbaar is; een expliciete BICHON_TRUSTED_PROXIES gaat vóór dit veld."

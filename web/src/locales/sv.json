@@ -3020,6 +3020,7 @@
       "lockedByStartup": "Styrs av startkonfigurationen. Ändra miljövariabeln eller CLI-flaggan och starta om.",
       "resetDone": "Körtidsöverskridanden rensade",
       "restartRequired": "Starta om tjänsten för att tillämpa SMTP- och synkroniseringsinställningarna.",
+      "sanitizeEmailHtmlHelp": "Rensar HTML-e-postens brödtext på servern före förhandsgranskning med en tillåtelselista: behåller layout, tabeller och stilar; tar bort skript, ramar och formulär. Stäng endast av om ett meddelande visas fel.",
       "saved": "Körtidsinställningar sparade",
       "title": "Körtidsinställningar",
       "trustedProxiesHelp": "IP-adresser eller CIDR-block för omvända proxyservrar vars X-Forwarded-For-, Forwarded- eller X-Real-IP-rubriker är betrodda. Lämna tomt om Bichon är direkt exponerad; ett explicit BICHON_TRUSTED_PROXIES har företräde."

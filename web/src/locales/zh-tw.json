@@ -3020,6 +3020,7 @@
       "lockedByStartup": "由啟動設定控制。請修改環境變數或命令列參數並重新啟動。",
       "resetDone": "已清除執行時覆寫值",
       "restartRequired": "重啟服務後 SMTP 與同步設定才會生效。",
+      "sanitizeEmailHtmlHelp": "在伺服器端對 HTML 郵件內文做白名單清理後再回傳預覽：保留排版、表格和樣式，移除腳本、框架和表單。除非某封郵件渲染異常，否則請保持開啟。",
       "saved": "執行時設定已儲存",
       "title": "執行時設定",
       "trustedProxiesHelp": "可信任其 X-Forwarded-For、Forwarded 或 X-Real-IP 標頭的反向代理 IP 或 CIDR。Bichon 直接對外時留空；明確設定的 BICHON_TRUSTED_PROXIES 優先於此。"

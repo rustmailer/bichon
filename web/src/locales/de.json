@@ -3020,6 +3020,7 @@
       "lockedByStartup": "Wird durch die Startkonfiguration gesteuert. Ändern Sie die Umgebungsvariable oder das CLI-Flag und starten Sie neu.",
       "resetDone": "Laufzeit-Überschreibungen gelöscht",
       "restartRequired": "Dienst neu starten, damit SMTP- und Synchronisierungseinstellungen wirksam werden.",
+      "sanitizeEmailHtmlHelp": "Bereinigt HTML-Mailtexte serverseitig vor der Vorschau mit einer Positivliste: Layout, Tabellen und Stile bleiben erhalten; Skripte, Frames und Formulare werden entfernt. Nur deaktivieren, wenn eine Nachricht falsch dargestellt wird.",
       "saved": "Laufzeiteinstellungen gespeichert",
       "title": "Laufzeiteinstellungen",
       "trustedProxiesHelp": "IP-Adressen oder CIDR-Blöcke von Reverse-Proxys, deren X-Forwarded-For-, Forwarded- oder X-Real-IP-Header vertraut wird. Leer lassen, wenn Bichon direkt erreichbar ist. Ein explizit gesetztes BICHON_TRUSTED_PROXIES hat Vorrang vor diesem Feld."

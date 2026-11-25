@@ -3020,6 +3020,7 @@
       "lockedByStartup": "Řídí se startovní konfigurací. Změňte proměnnou prostředí nebo parametr CLI a restartujte.",
       "resetDone": "Přepisy za běhu vymazány",
       "restartRequired": "Restartujte službu, aby se použila nastavení SMTP a synchronizace.",
+      "sanitizeEmailHtmlHelp": "Čistí HTML tělo e-mailu na serveru před náhledem pomocí seznamu povolených prvků: zachová rozvržení, tabulky a styly, odstraní skripty, rámce a formuláře. Vypněte jen tehdy, když se zpráva zobrazuje nesprávně.",
       "saved": "Nastavení za běhu uloženo",
       "title": "Nastavení za běhu",
       "trustedProxiesHelp": "IP adresy nebo bloky CIDR reverzních proxy, jejichž hlavičkám X-Forwarded-For, Forwarded a X-Real-IP se důvěřuje. Ponechte prázdné, pokud je Bichon přímo vystaven; explicitní BICHON_TRUSTED_PROXIES má přednost před tímto polem."

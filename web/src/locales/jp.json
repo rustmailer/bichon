@@ -3020,6 +3020,7 @@
       "lockedByStartup": "起動設定によって制御されています。環境変数またはコマンドライン引数を変更して再起動してください。",
       "resetDone": "実行時の上書きをクリアしました",
       "restartRequired": "SMTP と同期の設定を反映するにはサービスを再起動してください。",
+      "sanitizeEmailHtmlHelp": "プレビュー前に HTML メール本文をサーバー側で許可リスト方式により無害化します。レイアウト・表・スタイルは保持し、スクリプト・フレーム・フォームは削除します。表示が崩れる場合のみ無効にしてください。",
       "saved": "実行時設定を保存しました",
       "title": "実行時設定",
       "trustedProxiesHelp": "X-Forwarded-For、Forwarded、X-Real-IP ヘッダーを信頼するリバースプロキシの IP または CIDR。Bichon を直接公開する場合は空にしてください。明示的な BICHON_TRUSTED_PROXIES はこの項目より優先されます。"

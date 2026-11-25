@@ -371,6 +371,11 @@ export default function AttachmentPreview({
           ) : isPdf && blobUrl ? (
             <iframe
               src={blobUrl}
+              // No `sandbox`: Chrome and Edge refuse to render PDFs in a
+              // sandboxed frame at all (the built-in viewer runs out of
+              // process), so sandboxing the preview would just blank it.
+              // The content is the browser's own PDF viewer over a local blob;
+              // it cannot navigate the top page or touch the app's DOM.
               className="w-full h-full border-0"
               title={resolved.fileName}
             />

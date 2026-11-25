@@ -283,6 +283,7 @@ function RuntimeSettingsCard() {
       imap_timeout_seconds: form.imap_timeout_seconds,
       web_mbox_upload_limit_mb: form.web_mbox_upload_limit_mb,
       web_pst_upload_limit_mb: form.web_pst_upload_limit_mb,
+      sanitize_email_html: form.sanitize_email_html,
       trusted_proxies: splitProxies(proxyText),
     }
     try {
@@ -472,6 +473,24 @@ function RuntimeSettingsCard() {
             }
           />
         </SettingField>
+      </div>
+      <div className="py-2.5 border-b border-border/40">
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <span className="text-xs font-medium text-muted-foreground font-mono">
+              SANITIZE_EMAIL_HTML
+            </span>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              {t("systemConfig.runtime.sanitizeEmailHtmlHelp")}
+            </p>
+          </div>
+          <Switch
+            checked={form.sanitize_email_html}
+            onCheckedChange={(checked) =>
+              patch({ sanitize_email_html: checked })
+            }
+          />
+        </div>
       </div>
       <div className="py-2.5 border-b border-border/40">
         <div className="flex items-center gap-1.5">

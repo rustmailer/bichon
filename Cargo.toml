@@ -43,6 +43,7 @@ reqwest = { version = "0.12.24", default-features = false, features = [
 ] }
 tokio-socks = "0.5.3"
 http = "1.5"
+lol_html = "3.0.3"
 regex = "1.13"
 email_address = "0.2.9"
 futures = "0.3"

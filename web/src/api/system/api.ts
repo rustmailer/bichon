@@ -225,6 +225,8 @@ export type RuntimeSettings = {
   imap_timeout_seconds: number
   web_mbox_upload_limit_mb: number
   web_pst_upload_limit_mb: number
+  /** Server-side allowlist cleaning of HTML email bodies before preview. */
+  sanitize_email_html: boolean
   trusted_proxies: string[]
   /** Fields pinned by an explicit BICHON_* startup value; read-only in the WebUI. */
   locked_by_startup: string[]
