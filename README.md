@@ -94,7 +94,7 @@ docker run -d \
 Open **[http://localhost:15630](http://localhost:15630)**.
 
 > [!IMPORTANT]
-> Default login: username `admin`, password `admin@bichon`. **Change this immediately** via Settings → Profile.
+> Default login: username `admin`, password `admin@bichon`. On the first local sign-in the default password grants no session: the WebUI requires you to set a new administrator password before it opens. If you are locked out, reset it with `bichon-admin`.
 
 Docker Compose, binary installation, source builds and the full setup guide are in **[Quick Start](https://bichon.rustmailer.com/docs/quick-start)**.
 

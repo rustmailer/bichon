@@ -195,7 +195,9 @@ impl UsersApi {
             update_data.account_access_map = None;
             update_data.acl = None;
         }
-        UserModel::update(target_id, update_data)?;
+        // An administrator resetting someone else's password must sign that
+        // account out; a user editing their own profile keeps the session.
+        UserModel::update(target_id, update_data, current_user_id != target_id)?;
         let target_username = UserModel::find(target_id)?
             .map(|u| u.username)
             .unwrap_or_else(|| format!("user-{target_id}"));

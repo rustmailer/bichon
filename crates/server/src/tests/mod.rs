@@ -9,6 +9,7 @@ pub mod backup_tests;
 pub mod cleanup_tests;
 pub mod metrics_tests;
 pub mod oauth2_tests;
+pub mod password_change_tests;
 pub mod proxy_tests;
 pub mod role_tests;
 pub mod system_tests;
@@ -33,7 +34,7 @@ use bichon_core::{
         blob::BLOB_MANAGER,
         tantivy::{attachment::ATTACHMENT_MANAGER, envelope::ENVELOPE_MANAGER},
     },
-    users::manager::UserManager,
+    users::{manager::UserManager, payload::UserUpdateRequest, UserModel},
 };
 use poem::{EndpointExt, Route};
 use serde::{Deserialize, Serialize};
@@ -49,6 +50,10 @@ use crate::{
 };
 
 static INIT: Mutex<bool> = Mutex::new(false);
+
+/// Admin password used by the test suite. `setup` replaces the built-in
+/// default so the forced first-login change does not block login helpers.
+pub const TEST_ADMIN_PASSWORD: &str = "test-admin-password";
 
 /// Initialize the test environment. Safe to call multiple times — only runs once.
 pub async fn setup() {
@@ -80,6 +85,19 @@ pub async fn setup() {
     SignalManager::initialize().await.unwrap();
     DataDirManager::initialize().await.unwrap();
     UserManager::initialize().await.unwrap();
+    // A local login with the built-in default password intentionally grants no
+    // session — it only returns a password-change ticket. Give the test admin
+    // a normal password so every authenticated test keeps working; the forced
+    // flow has its own tests.
+    UserModel::update(
+        bichon_core::users::DEFAULT_ADMIN_USER_ID,
+        UserUpdateRequest {
+            password: Some(TEST_ADMIN_PASSWORD.into()),
+            ..Default::default()
+        },
+        false,
+    )
+    .expect("test admin password must be set");
     BichonContext::initialize().await.unwrap();
     LazyLock::force(&BLOB_MANAGER);
     LazyLock::force(&ENVELOPE_MANAGER);
@@ -140,7 +158,7 @@ pub async fn admin_token() -> String {
         .post("/api/login")
         .body_json(&LoginPayload {
             username: "admin".into(),
-            password: "admin@bichon".into(),
+            password: TEST_ADMIN_PASSWORD.into(),
         })
         .send()
         .await;

@@ -27,6 +27,7 @@ use crate::rest::public::features::get_features;
 use crate::rest::public::login::login;
 use crate::rest::public::logout::logout;
 use crate::rest::public::mfa::mfa_verify;
+use crate::rest::public::password::change_password;
 use crate::rest::public::status::get_status;
 use bichon_core::common::signal::SIGNAL_MANAGER;
 use bichon_core::error::code::ErrorCode;
@@ -132,6 +133,7 @@ pub fn build_routes() -> impl Endpoint {
         .nest("/api/login", post(login))
         .nest("/api/auth/logout", post(logout))
         .nest("/api/auth/mfa/verify", post(mfa_verify))
+        .nest("/api/auth/password/change", post(change_password))
         .at(
             "/api/v1/exports/download/:ticket",
             get(crate::rest::api::export::download_export_ticket_handler),

@@ -66,6 +66,15 @@ pub struct LoginResult {
     /// One-time challenge token for the MFA verification step.
     #[serde(default)]
     pub mfa_challenge: Option<String>,
+    /// When true, the credentials were accepted but the password must be
+    /// changed before any session is granted. No access token is issued;
+    /// `change_ticket` unlocks the change-password endpoint only. Only the
+    /// local password login path can produce this.
+    #[serde(default)]
+    pub must_change_password: bool,
+    /// One-time ticket for the forced password change step.
+    #[serde(default)]
+    pub change_ticket: Option<String>,
 }
 
 pub const DEFAULT_ADMIN_USER_ID: u64 = 100000000000000;
@@ -73,8 +82,9 @@ pub const DEFAULT_ADMIN_USER_ID: u64 = 100000000000000;
 /// Username of the default administrator created on first startup.
 pub const DEFAULT_ADMIN_USERNAME: &str = "admin";
 
-/// The password the default administrator is created with. The WebUI shows a
-/// notifications-bell reminder for as long as this password still works.
+/// The password the default administrator is created with. While this
+/// password still works, a successful local-password login grants no session:
+/// it returns a one-time ticket that only allows setting a new password.
 pub const DEFAULT_ADMIN_PASSWORD: &str = "admin@bichon";
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
@@ -362,20 +372,18 @@ impl BichonUserV2 {
                 totp_recovery_codes: Vec::new(),
             };
 
-            // 3. Generate and insert an initial access token for the first-time setup
-            let (mut access_token, _plaintext) =
-                AccessTokenModel::new_webui_token(DEFAULT_ADMIN_USER_ID);
-            access_token.name = Some("Initial Setup Token".into());
-            access_token.expire_at = None; // Admin setup token usually persistent until changed
-
             with_transaction(DB_MANAGER.db(), move |txn| {
-                let txn = txn
-                    .insert("users", DEFAULT_ADMIN_USER_ID.to_string(), &user)
-                    .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?
-                    .upsert("tokens", access_token.key(), &access_token)
-                    .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;
-                Ok(txn)
+                txn.insert("users", DEFAULT_ADMIN_USER_ID.to_string(), &user)
+                    .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))
             })?;
+        }
+
+        // A session opened before the forced-change rule existed must not
+        // outlive a restart. If the administrator still uses the default
+        // password, drop the persisted WebUI token so the next visit lands on
+        // the forced change instead of continuing an old session.
+        if Self::default_admin_password_active() {
+            AccessTokenModel::revoke_user_webui_tokens(DEFAULT_ADMIN_USER_ID)?;
         }
 
         Ok(())
@@ -404,6 +412,8 @@ impl BichonUserV2 {
                             language: None,
                             mfa_required: false,
                             mfa_challenge: None,
+                            must_change_password: false,
+                            change_ticket: None,
                         });
                     }
                 }
@@ -454,6 +464,12 @@ impl BichonUserV2 {
                             }
                         }
                     }
+                    // Two-factor first. This order matters for an upgraded
+                    // deployment where the admin enabled TOTP before this
+                    // change and never replaced the default password: the
+                    // second factor must still be presented before the
+                    // password can be changed (the MFA verify endpoint hands
+                    // out the password-change ticket instead of a session).
                     if user.totp_enabled {
                         let challenge = AccessTokenModel::new_mfa_challenge(user.id)?;
                         return Ok(LoginResult {
@@ -464,6 +480,30 @@ impl BichonUserV2 {
                             language: user.language.clone(),
                             mfa_required: true,
                             mfa_challenge: Some(challenge),
+                            must_change_password: false,
+                            change_ticket: None,
+                        });
+                    }
+                    // The built-in administrator still signs in with the
+                    // well-known default password: accept the credentials but
+                    // grant no session. A one-time ticket unlocks only the
+                    // password change endpoint. Only this local-password path
+                    // can trigger it — LDAP and SSO logins issue their own
+                    // tokens and are never asked to change a password.
+                    if user.id == DEFAULT_ADMIN_USER_ID
+                        && stored_password_matches(stored_password, DEFAULT_ADMIN_PASSWORD)
+                    {
+                        let ticket = AccessTokenModel::new_password_change_ticket(user.id)?;
+                        return Ok(LoginResult {
+                            success: true,
+                            error_message: None,
+                            access_token: None,
+                            theme: user.theme.clone(),
+                            language: user.language.clone(),
+                            mfa_required: false,
+                            mfa_challenge: None,
+                            must_change_password: true,
+                            change_ticket: Some(ticket),
                         });
                     }
                     let new_token = AccessTokenModel::reset_webui_token(user.id)?;
@@ -475,6 +515,8 @@ impl BichonUserV2 {
                         language: user.language,
                         mfa_required: false,
                         mfa_challenge: None,
+                        must_change_password: false,
+                        change_ticket: None,
                     })
                 } else {
                     warn!(
@@ -489,6 +531,8 @@ impl BichonUserV2 {
                         language: None,
                         mfa_required: false,
                         mfa_challenge: None,
+                        must_change_password: false,
+                        change_ticket: None,
                     })
                 }
             }
@@ -510,9 +554,73 @@ impl BichonUserV2 {
                     language: None,
                     mfa_required: false,
                     mfa_challenge: None,
+                    must_change_password: false,
+                    change_ticket: None,
                 })
             }
         }
+    }
+
+    /// Complete the forced password change begun by a login that returned
+    /// `must_change_password`. Consumes the one-time ticket, stores the new
+    /// password, and issues a normal WebUI token so the caller enters the app
+    /// without signing in again.
+    pub fn complete_password_change(
+        ticket: &str,
+        new_password: &str,
+    ) -> BichonResult<LoginResult> {
+        // Validate the new password first: these checks do not need the
+        // ticket, and a validation error must not burn the one-time ticket.
+        let password_len = new_password.len();
+        if password_len < 8 {
+            return Err(raise_error!(
+                "Password must be at least 8 characters long.".into(),
+                ErrorCode::InvalidParameter
+            ));
+        }
+        if password_len > 256 {
+            return Err(raise_error!(
+                "Password cannot exceed 256 characters.".into(),
+                ErrorCode::InvalidParameter
+            ));
+        }
+        // This path only exists for the built-in administrator; keeping the
+        // well-known default as the "new" password would defeat the point.
+        if bool::from(new_password.as_bytes().ct_eq(DEFAULT_ADMIN_PASSWORD.as_bytes())) {
+            return Err(raise_error!(
+                "The new password must be different from the initial administrator password."
+                    .into(),
+                ErrorCode::InvalidParameter
+            ));
+        }
+
+        let user_id = AccessTokenModel::consume_password_change_ticket(ticket)?;
+        let user = Self::find(user_id)?.ok_or_else(|| {
+            raise_error!(
+                "The user for this password change ticket no longer exists.".into(),
+                ErrorCode::ResourceNotFound
+            )
+        })?;
+        let new_password = new_password.to_string();
+        update_impl::<UserModel>(DB_MANAGER.db(), &user_id.to_string(), move |current| {
+            let mut updated = current.clone();
+            updated.password = Some(hash_login_password(&new_password)?);
+            updated.updated_at = utc_now!();
+            Ok(updated)
+        })?;
+
+        let access_token = AccessTokenModel::reset_webui_token(user_id)?;
+        Ok(LoginResult {
+            success: true,
+            error_message: None,
+            access_token: Some(access_token),
+            theme: user.theme,
+            language: user.language,
+            mfa_required: false,
+            mfa_challenge: None,
+            must_change_password: false,
+            change_ticket: None,
+        })
     }
 
     pub fn find(user_id: u64) -> BichonResult<Option<UserModel>> {
@@ -523,7 +631,7 @@ impl BichonUserV2 {
     /// well-known initial password. Read-only: verifies the stored hash
     /// directly instead of going through `authenticate_user`, so probing never
     /// touches login bookkeeping (lockout counters, audit events, token
-    /// issuance). Drives the WebUI notifications-bell reminder.
+    /// issuance).
     pub fn default_admin_password_active() -> bool {
         match Self::find(DEFAULT_ADMIN_USER_ID) {
             Ok(Some(user)) => match user.password.as_deref() {
@@ -750,7 +858,17 @@ impl BichonUserV2 {
         Ok(())
     }
 
-    pub fn update(id: u64, request: UserUpdateRequest) -> BichonResult<()> {
+    /// Apply a user update. `revoke_sessions` controls what a password change
+    /// does to the target's existing WebUI session: an administrator changing
+    /// someone else's password must sign that account out, while users
+    /// changing their own password from the profile page keep their current
+    /// session (rotating the token there made the next request 401 and bounced
+    /// the user to the sign-in page).
+    pub fn update(
+        id: u64,
+        request: UserUpdateRequest,
+        revoke_sessions: bool,
+    ) -> BichonResult<()> {
         let _ = &request.validate()?;
         let password_changed = request.password.is_some();
         let is_default_admin = id == DEFAULT_ADMIN_USER_ID;
@@ -863,8 +981,8 @@ impl BichonUserV2 {
             Ok(updated)
         })?;
 
-        if password_changed {
-            AccessTokenModel::reset_webui_token(id)?;
+        if password_changed && revoke_sessions {
+            AccessTokenModel::revoke_user_webui_tokens(id)?;
         }
 
         Ok(())
@@ -962,8 +1080,9 @@ mod tests {
         );
     }
 
-    /// The bell reminder hinges on this check: a fresh default-admin hash
-    /// must match the well-known initial password, and nothing else.
+    /// The forced first-login change hinges on this check: a fresh
+    /// default-admin hash must match the well-known initial password, and
+    /// nothing else.
     #[test]
     fn stored_password_matches_recognises_the_initial_password_only() {
         let hash = hash_login_password(DEFAULT_ADMIN_PASSWORD).unwrap();

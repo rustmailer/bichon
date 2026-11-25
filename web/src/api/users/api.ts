@@ -143,6 +143,10 @@ export interface LoginResult {
     language?: string,
     mfa_required?: boolean,
     mfa_challenge?: string | null,
+    /** The credentials were accepted, but a new password is required before
+     *  any session is granted. `change_ticket` unlocks only the change endpoint. */
+    must_change_password?: boolean,
+    change_ticket?: string | null,
 }
 
 
@@ -155,6 +159,16 @@ export interface MinimalUser {
 
 export const login = async (data: Record<string, any>) => {
     const response = await axiosInstance.post<LoginResult>(`api/login`, data);
+    return response.data;
+};
+
+// Forced first-login password change for the built-in administrator. The
+// ticket comes from the login response; success returns a normal session.
+export const changePassword = async (ticket: string, new_password: string) => {
+    const response = await axiosInstance.post<LoginResult>(
+        `api/auth/password/change`,
+        { ticket, new_password },
+    );
     return response.data;
 };
 

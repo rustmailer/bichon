@@ -61,6 +61,10 @@ pub enum TokenType {
     Api,
     /// Short-lived, one-time challenge issued for the MFA login step.
     MfaChallenge,
+    /// Short-lived, one-time ticket issued when a password login must change
+    /// the password before any session is granted. It only unlocks the
+    /// change-password endpoint and is never a valid access token.
+    PasswordChange,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
@@ -258,12 +262,84 @@ impl AccessTokenModel {
         Ok(plaintext)
     }
 
+    /// Issue a short-lived, one-time ticket that only allows setting a new
+    /// password. Used when a password login must change the password before
+    /// any session is granted. Expires after 10 minutes and is consumed by the
+    /// change-password endpoint.
+    pub fn new_password_change_ticket(user_id: u64) -> BichonResult<String> {
+        let now = utc_now!();
+        let expire_at = now + 10 * 60 * 1000;
+
+        // Garbage-collect this user's expired tickets to avoid unbounded growth.
+        let stale = filter_impl::<AccessTokenModel, _>(DB_MANAGER.db(), move |t| {
+            t.user_id == user_id && t.token_type == TokenType::PasswordChange
+        })?;
+        for stale_token in stale {
+            if stale_token.expire_at.map_or(false, |e| e < now) {
+                let _ = delete_impl::<AccessTokenModel>(DB_MANAGER.db(), &stale_token.key());
+            }
+        }
+
+        let plaintext = generate_token!(128);
+        let token = AccessTokenModel::from_plaintext(
+            &plaintext,
+            user_id,
+            Some("Password Change".into()),
+            TokenType::PasswordChange,
+            Some(expire_at),
+            false,
+        );
+        insert_impl(DB_MANAGER.db(), token)?;
+        Ok(plaintext)
+    }
+
+    /// Validate and consume a password-change ticket, returning the owning
+    /// user id. The ticket is deleted whether or not it has expired so a
+    /// replayed value cannot be retried.
+    pub fn consume_password_change_ticket(ticket: &str) -> BichonResult<u64> {
+        let invalid = || {
+            raise_error!(
+                "Invalid or expired password change ticket.".into(),
+                ErrorCode::PermissionDenied
+            )
+        };
+
+        let token = Self::find_by_secret(ticket)?.ok_or_else(invalid)?;
+        if !matches!(token.token_type, TokenType::PasswordChange) {
+            return Err(invalid());
+        }
+        // One-time: remove it before doing any other work.
+        delete_impl::<AccessTokenModel>(DB_MANAGER.db(), &token.key())?;
+
+        if let Some(expire_at) = token.expire_at {
+            if utc_now!() > expire_at {
+                return Err(invalid());
+            }
+        }
+        Ok(token.user_id)
+    }
+
     pub fn get_user_webui_token(user_id: u64) -> BichonResult<Option<AccessTokenModel>> {
         let tokens =
             filter_impl::<AccessTokenModel, _>(DB_MANAGER.db(), move |t| t.user_id == user_id)?;
         Ok(tokens
             .into_iter()
             .find(|t| t.token_type == TokenType::WebUI))
+    }
+
+    /// Delete every WebUI session token owned by the user. Used when an
+    /// administrator changes someone else's password (the account must sign
+    /// in again) and at startup when the default admin still uses the
+    /// well-known initial password. All rows are removed, not just the first:
+    /// older installs can carry more than one WebUI token.
+    pub fn revoke_user_webui_tokens(user_id: u64) -> BichonResult<()> {
+        let tokens = filter_impl::<AccessTokenModel, _>(DB_MANAGER.db(), move |t| {
+            t.user_id == user_id && t.token_type == TokenType::WebUI
+        })?;
+        for token in tokens {
+            delete_impl::<AccessTokenModel>(DB_MANAGER.db(), &token.key())?;
+        }
+        Ok(())
     }
 
     /// API tokens owned by `user_id`, in the masked shape the WebUI renders.
@@ -338,6 +414,14 @@ impl AccessTokenModel {
         if matches!(token_model.token_type, TokenType::MfaChallenge) {
             return Err(raise_error!(
                 "Permission denied: MFA challenge tokens cannot be used as access tokens."
+                    .into(),
+                ErrorCode::PermissionDenied
+            ));
+        }
+
+        if matches!(token_model.token_type, TokenType::PasswordChange) {
+            return Err(raise_error!(
+                "Permission denied: password change tickets cannot be used as access tokens."
                     .into(),
                 ErrorCode::PermissionDenied
             ));

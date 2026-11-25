@@ -22,4 +22,5 @@ pub mod login;
 pub mod logout;
 pub mod mfa;
 pub mod oauth2;
+pub mod password;
 pub mod status;

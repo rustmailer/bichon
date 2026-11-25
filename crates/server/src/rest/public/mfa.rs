@@ -8,7 +8,7 @@
 use bichon_core::database::{manager::DB_MANAGER, MemDbModel};
 use bichon_core::ext::event_bus::{emit, Event};
 use bichon_core::token::{AccessTokenModel, TokenType};
-use bichon_core::users::{LoginResult, UserModel};
+use bichon_core::users::{LoginResult, UserModel, DEFAULT_ADMIN_USER_ID};
 use bichon_core::utils::rate_limit::LOGIN_RATE_LIMITER_MANAGER;
 use crate::common::client_ip;
 use poem::web::Json;
@@ -104,6 +104,31 @@ pub async fn mfa_verify(payload: Json<MfaVerifyPayload>, req: &Request) -> Respo
         &token.key(),
     );
 
+    // The second factor is verified; if the administrator is still on the
+    // default password, grant only a password-change ticket, never a session.
+    if user.id == DEFAULT_ADMIN_USER_ID && UserModel::default_admin_password_active() {
+        return match AccessTokenModel::new_password_change_ticket(user.id) {
+            Ok(ticket) => login_result_response(&LoginResult {
+                success: true,
+                error_message: None,
+                access_token: None,
+                theme: user.theme.clone(),
+                language: user.language.clone(),
+                mfa_required: false,
+                mfa_challenge: None,
+                must_change_password: true,
+                change_ticket: Some(ticket),
+            }),
+            Err(e) => {
+                error!(
+                    "MFA login failed to issue password change ticket: {:#?}",
+                    e
+                );
+                failure("Failed to issue password change ticket.")
+            }
+        };
+    }
+
     let new_token = match AccessTokenModel::reset_webui_token(user.id) {
         Ok(token) => token,
         Err(e) => {
@@ -127,6 +152,8 @@ pub async fn mfa_verify(payload: Json<MfaVerifyPayload>, req: &Request) -> Respo
         language: user.language.clone(),
         mfa_required: false,
         mfa_challenge: None,
+        must_change_password: false,
+        change_ticket: None,
     };
     login_result_response(&result)
 }

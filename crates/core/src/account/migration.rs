@@ -857,6 +857,7 @@ impl Account {
                 theme: None,
                 language: None,
             },
+            false,
         )?;
 
         if matches!(cloned.account_type, AccountType::IMAP) {

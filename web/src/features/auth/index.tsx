@@ -16,6 +16,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import { useState } from 'react'
 import {
   Card,
   CardContent,
@@ -24,25 +25,43 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { UserAuthForm } from './user-auth-form'
+import { ChangePasswordForm } from './change-password-form'
 import { useTranslation } from 'react-i18next'
 import { AuthLayout } from './auth-layout'
 
 export default function SignIn() {
   const { t } = useTranslation()
+  // Set when the server accepted the credentials but demands a new password
+  // before granting any session. While set, the app chrome is never rendered.
+  const [changeTicket, setChangeTicket] = useState<string | null>(null)
 
   return (
     <AuthLayout>
       <Card className='overflow-hidden rounded-2xl border-border/60 shadow-xl shadow-black/5 dark:shadow-black/20'>
         <CardHeader className='space-y-2 p-8 pb-6'>
           <CardTitle className='text-2xl tracking-tight'>
-            {t('auth.signInTitle', 'Sign in to your account')}
+            {changeTicket
+              ? t('auth.changePasswordTitle', 'Set a new administrator password')
+              : t('auth.signInTitle', 'Sign in to your account')}
           </CardTitle>
           <CardDescription className='leading-relaxed'>
-            {t('auth.signInDescription', 'Enter your credentials to continue.')}
+            {changeTicket
+              ? t(
+                  'auth.changePasswordDescription',
+                  'The default administrator password is still in use. Set a new password to continue.',
+                )
+              : t('auth.signInDescription', 'Enter your credentials to continue.')}
           </CardDescription>
         </CardHeader>
         <CardContent className='p-8 pt-0'>
-          <UserAuthForm />
+          {changeTicket ? (
+            <ChangePasswordForm
+              ticket={changeTicket}
+              onCancel={() => setChangeTicket(null)}
+            />
+          ) : (
+            <UserAuthForm onMustChangePassword={setChangeTicket} />
+          )}
         </CardContent>
       </Card>
     </AuthLayout>

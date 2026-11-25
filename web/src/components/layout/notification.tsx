@@ -59,8 +59,8 @@ export function NotificationPopover() {
     queryKey: ['system-notifications'],
     queryFn: get_notifications,
     staleTime: 1000 * 60 * 30, // 30 minutes
-    // Alerts can appear/disappear between sessions (e.g. the default admin
-    // password was changed elsewhere); always refetch on mount.
+    // Alerts can appear/disappear between sessions (e.g. a backup warning
+    // was cleared elsewhere); always refetch on mount.
     refetchOnMount: 'always',
   })
 

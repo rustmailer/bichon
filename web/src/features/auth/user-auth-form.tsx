@@ -78,7 +78,11 @@ import { useTheme } from '@/context/theme-context'
 import { isTheme } from '@/lib/theme'
 import { useEdition } from '@/hooks/use-edition'
 
-type UserAuthFormProps = HTMLAttributes<HTMLDivElement>
+type UserAuthFormProps = HTMLAttributes<HTMLDivElement> & {
+  /** Called instead of granting a session when the server demands a password
+   *  change (built-in administrator still on the default password). */
+  onMustChangePassword?: (ticket: string) => void
+}
 
 /** Input with a leading icon; the ref goes to the input so FormControl can
  *  still wire the label and the field. */
@@ -115,7 +119,11 @@ const PasswordField = forwardRef<
 ))
 PasswordField.displayName = 'PasswordField'
 
-export function UserAuthForm({ className, ...props }: UserAuthFormProps) {
+export function UserAuthForm({
+  className,
+  onMustChangePassword,
+  ...props
+}: UserAuthFormProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [mfaChallenge, setMfaChallenge] = useState<string | null>(null)
   const { setTheme } = useTheme();
@@ -199,6 +207,13 @@ export function UserAuthForm({ className, ...props }: UserAuthFormProps) {
   });
 
   function handleLoginSuccess(result: LoginResult) {
+    // Forced first-login change: the credentials are right, but no session was
+    // issued. Only the one-time ticket can unlock the change-password form.
+    if (result.must_change_password && result.change_ticket) {
+      onMustChangePassword?.(result.change_ticket)
+      return
+    }
+
     // Two-factor step: the server asks for a TOTP code before issuing a token.
     if (result.mfa_required && result.mfa_challenge) {
       setMfaChallenge(result.mfa_challenge)
