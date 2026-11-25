@@ -94,6 +94,23 @@ async fn same_origin_is_not_reflected_and_needs_no_list_entry() {
     resp.assert_header_is_not_exist(header::ACCESS_CONTROL_ALLOW_ORIGIN);
 }
 
+/// The Vite dev server runs on a loopback origin with a different port. Debug
+/// builds accept it without a `BICHON_CORS_ORIGINS` entry; release builds do
+/// not, and a remote page cannot forge a loopback `Origin`.
+#[cfg(debug_assertions)]
+#[tokio::test]
+async fn debug_build_allows_the_vite_dev_origin() {
+    let cli = TestClient::new(app(None));
+    let resp = cli
+        .get("/")
+        .header(header::ORIGIN, "http://localhost:5173")
+        .header(header::HOST, BACKEND)
+        .send()
+        .await;
+    resp.assert_status_is_ok();
+    resp.assert_header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "http://localhost:5173");
+}
+
 #[tokio::test]
 async fn forwarded_host_is_recognised_as_same_origin() {
     let cli = TestClient::new(app(None));

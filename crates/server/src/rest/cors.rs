@@ -41,6 +41,9 @@ use crate::common::timeout::TIMEOUT_HEADER;
 /// - Otherwise: only exact matches are allowed, and only they may carry
 ///   credentials. The request `Origin` is echoed back for those matches; it is
 ///   never reflected for an origin that is not on the list.
+/// - Debug builds additionally accept loopback origins so the Vite dev server
+///   (`localhost:5173` and friends) works without configuring CORS. Release
+///   builds never do; a remote site cannot forge a loopback `Origin`.
 pub fn cors_middleware(origins: Option<HashSet<String>>, max_age: i32) -> Cors {
     let origins: Vec<String> = origins.unwrap_or_default().into_iter().collect();
     if origins.is_empty() {
@@ -50,10 +53,19 @@ pub fn cors_middleware(origins: Option<HashSet<String>>, max_age: i32) -> Cors {
     } else {
         tracing::debug!("CORS: allowed origins = {:?}", origins);
     }
+    let allow_dev_loopback = cfg!(debug_assertions);
+    if allow_dev_loopback {
+        tracing::info!(
+            "debug build: loopback origins are allowed (Vite dev server support)"
+        );
+    }
 
     let allow_credentials = !origins.is_empty();
     Cors::new()
-        .allow_origins_fn(move |origin| origins.iter().any(|allowed| allowed == origin))
+        .allow_origins_fn(move |origin| {
+            origins.iter().any(|allowed| allowed == origin)
+                || (allow_dev_loopback && is_loopback_origin(origin))
+        })
         .allow_credentials(allow_credentials)
         .allow_methods(&[
             Method::GET,
@@ -129,6 +141,34 @@ impl SameOriginPassthrough {
             None => false,
         }
     }
+}
+
+/// True for `http(s)://localhost[:port]`, `http(s)://127.0.0.1[:port]`,
+/// `http(s)://[::1][:port]` and `*.localhost`. Used only in debug builds, to
+/// let the Vite dev server talk to the API without a CORS entry.
+fn is_loopback_origin(origin: &str) -> bool {
+    let Some((scheme, rest)) = origin.split_once("://") else {
+        return false;
+    };
+    if !matches!(scheme.to_ascii_lowercase().as_str(), "http" | "https") {
+        return false;
+    }
+    let authority = rest.trim_end_matches('/');
+    let host = if let Some(stripped) = authority.strip_prefix('[') {
+        stripped.split(']').next().unwrap_or("")
+    } else {
+        match authority.rsplit_once(':') {
+            Some((host, port)) if !port.is_empty() && port.chars().all(|c| c.is_ascii_digit()) => {
+                host
+            }
+            _ => authority,
+        }
+    };
+    let host = host.to_ascii_lowercase();
+    host == "localhost"
+        || host == "127.0.0.1"
+        || host == "::1"
+        || host.ends_with(".localhost")
 }
 
 fn authority_matches(scheme: &str, origin_authority: &str, candidate: &str) -> bool {
@@ -222,6 +262,28 @@ mod tests {
         assert!(same_origin("http://localhost", "https://archive.example.com", Some("10.0.0.5:15630"), Some("archive.example.com")));
         assert!(same_origin("https://archive.example.com", "https://archive.example.com", Some("10.0.0.5:15630"), None));
         assert!(!same_origin("https://archive.example.com", "http://archive.example.com", Some("10.0.0.5:15630"), None));
+    }
+
+    #[test]
+    fn loopback_origins_are_recognised_precisely() {
+        for origin in [
+            "http://localhost:5173",
+            "https://localhost",
+            "http://127.0.0.1:4173",
+            "http://[::1]:5173",
+            "http://vite.localhost:5173",
+        ] {
+            assert!(is_loopback_origin(origin), "{origin} must be loopback");
+        }
+        for origin in [
+            "https://app.example",
+            "http://localhost.evil.com",
+            "http://10.0.0.5:5173",
+            "http://evil.example:5173",
+            "file://localhost/x",
+        ] {
+            assert!(!is_loopback_origin(origin), "{origin} must not be loopback");
+        }
     }
 
     #[test]
