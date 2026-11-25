@@ -16,10 +16,16 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+use std::time::Duration;
+
 use crate::account::entity::Encryption;
 use crate::autoconfig::client::{IncomingServer, MailConfig};
 use crate::imap::client::Client;
+use crate::utils::ssrf;
 use tracing::{debug, info};
+
+/// A guess is a connectivity probe, not a real sync session; fail fast.
+const PROBE_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// A single host:port:encryption combination to probe.
 struct Guess {
@@ -61,13 +67,22 @@ fn make_guesses(domain: &str) -> Vec<Guess> {
 /// Try to open a connection, read the IMAP banner, and close.
 /// Returns `true` if the server responds with an IMAP greeting.
 async fn probe(hostname: &str, port: u16, encryption: &Encryption) -> bool {
-    match Client::connection(hostname, encryption, port, None, true).await {
-        Ok(_) => {
+    match tokio::time::timeout(
+        PROBE_TIMEOUT,
+        Client::connection(hostname, encryption, port, None, true),
+    )
+    .await
+    {
+        Ok(Ok(_)) => {
             debug!("GuessConfig probe succeeded: {hostname}:{port} ({encryption:?})");
             true
         }
-        Err(e) => {
+        Ok(Err(e)) => {
             debug!("GuessConfig probe failed for {hostname}:{port}: {e:?}");
+            false
+        }
+        Err(_) => {
+            debug!("GuessConfig probe timed out for {hostname}:{port}");
             false
         }
     }
@@ -78,10 +93,21 @@ async fn probe(hostname: &str, port: u16, encryption: &Encryption) -> bool {
 ///
 /// Returns the first working `MailConfig`, or `None` if nothing works.
 pub async fn guess_config(domain: &str) -> Option<MailConfig> {
+    if !ssrf::hostname_is_acceptable(domain) {
+        return None;
+    }
     let guesses = make_guesses(domain);
     info!("GuessConfig: trying {} candidates for {domain}", guesses.len());
 
     for g in &guesses {
+        // A probe is a real TCP connection; never aim it at a local address.
+        // The name is checked again at connection time by the resolver, but
+        // requiring a public resolution up front keeps internal hosts out of
+        // the candidate list in the first place.
+        if !ssrf::host_resolves_public(&g.hostname, g.port).await {
+            debug!("GuessConfig: skipping non-public host {}", g.hostname);
+            continue;
+        }
         if probe(&g.hostname, g.port, &g.encryption).await {
             info!(
                 "GuessConfig: found working IMAP at {}:{} ({})",

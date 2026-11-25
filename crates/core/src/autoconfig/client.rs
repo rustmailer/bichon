@@ -16,16 +16,30 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+use std::net::SocketAddr;
+use std::time::Duration;
+
 use hickory_resolver::net::runtime::TokioRuntimeProvider;
 use hickory_resolver::proto::rr::RData;
 use hickory_resolver::TokioResolver;
 use quick_xml::de::from_str;
-use reqwest::Client;
+use reqwest::header::LOCATION;
+use reqwest::{Client, Response, Url};
 use serde::Deserialize;
 
 use crate::error::code::ErrorCode;
 use crate::error::BichonResult;
 use crate::raise_error;
+use crate::utils::ssrf;
+
+/// Discovery is a short, human-triggered operation; three redirects are far
+/// more than any real provider uses.
+const MAX_REDIRECTS: usize = 3;
+/// Per-URL budget covering DNS-pinned address attempts. Autoconfig providers
+/// answer quickly; a black-holed address should not consume the whole walk.
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
+/// Whole discovery walk budget; keeps a slow provider from stalling the API.
+const DISCOVERY_BUDGET: Duration = Duration::from_secs(30);
 
 /// Parsed result from Thunderbird-style autoconfig XML or DNS SRV fallback.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -97,13 +111,75 @@ pub(crate) fn parse_autoconfig_xml(xml: &str) -> Option<MailConfig> {
 // Network helpers
 // ---------------------------------------------------------------------------
 
-async fn fetch_xml(client: &Client, url: &str) -> Option<MailConfig> {
-    let resp = client.get(url).send().await.ok()?;
-    if !resp.status().is_success() {
+/// Fetch one autoconfig URL, following at most [`MAX_REDIRECTS`] hops.
+///
+/// Every hop goes through [`send_pinned`], which validates the scheme and
+/// hostname, resolves the name and refuses private/loopback/link-local/
+/// metadata addresses. Redirects are handled manually so a public URL cannot
+/// `302` the server into the internal network.
+async fn fetch_xml(url: &str) -> Option<MailConfig> {
+    let mut current = Url::parse(url).ok()?;
+    for _ in 0..=MAX_REDIRECTS {
+        tracing::debug!("autoconfig: GET {current}");
+        let resp = send_pinned(&current).await?;
+        let status = resp.status();
+        if status.is_redirection() {
+            let location = resp.headers().get(LOCATION)?.to_str().ok()?;
+            current = current.join(location).ok()?;
+            tracing::debug!("autoconfig: redirect -> {current}");
+            continue;
+        }
+        if !status.is_success() {
+            return None;
+        }
+        let text = resp.text().await.ok()?;
+        return parse_autoconfig_xml(&text);
+    }
+    None
+}
+
+/// Send one request to a validated, public destination.
+///
+/// The name is resolved here, checked, and then pinned with
+/// `ClientBuilder::resolve`, so the connection cannot be re-resolved to a
+/// private address between the check and the connect (DNS rebinding). Proxies
+/// are disabled for the same reason: an environment proxy would do its own
+/// resolution and bypass the pin.
+async fn send_pinned(url: &Url) -> Option<Response> {
+    if !matches!(url.scheme(), "http" | "https") {
         return None;
     }
-    let text = resp.text().await.ok()?;
-    parse_autoconfig_xml(&text)
+    if !url.username().is_empty() || url.password().is_some() {
+        return None;
+    }
+    let host = url.host_str()?.to_string();
+    let port = url.port_or_known_default()?;
+    let addrs = ssrf::resolve_public_addrs(&host, port).await?;
+    let url = url.clone();
+
+    // One budget for all address attempts: a black-holed CDN address must not
+    // multiply the per-URL timeout by the size of the A record set.
+    tokio::time::timeout(REQUEST_TIMEOUT, async move {
+        for addr in addrs {
+            let client = match Client::builder()
+                .timeout(REQUEST_TIMEOUT)
+                .redirect(reqwest::redirect::Policy::none())
+                .no_proxy()
+                .resolve(&host, SocketAddr::new(addr, port))
+                .build()
+            {
+                Ok(client) => client,
+                Err(_) => continue,
+            };
+            if let Ok(resp) = client.get(url.clone()).send().await {
+                return Some(resp);
+            }
+        }
+        None
+    })
+    .await
+    .ok()
+    .flatten()
 }
 
 async fn lookup_srv(domain: &str) -> Option<MailConfig> {
@@ -133,6 +209,14 @@ async fn lookup_srv(domain: &str) -> Option<MailConfig> {
         }
         _ => return None,
     };
+
+    // The discovered hosts are later connected to by the archiver, so they
+    // must not point at loopback/private/link-local addresses either.
+    if !ssrf::host_resolves_public(&imap_host, imap_port).await
+        || !ssrf::host_resolves_public(&smtp_host, smtp_port).await
+    {
+        return None;
+    }
 
     Some(MailConfig {
         incoming: vec![IncomingServer {
@@ -171,69 +255,74 @@ async fn lookup_srv(domain: &str) -> Option<MailConfig> {
 /// 8. MX lookup → ISP autoconfig for MX domain
 /// 9. GuessConfig — probe common hostnames + ports
 pub async fn fetch(domain: &str) -> BichonResult<MailConfig> {
-    let client = Client::builder()
-        .timeout(std::time::Duration::from_secs(10))
-        .build()
-        .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;
+    let domain = domain.trim().trim_end_matches('.').to_ascii_lowercase();
+    // Refuse obviously local or malformed names before doing any network work.
+    if !ssrf::hostname_is_acceptable(&domain) {
+        return Err(raise_error!(
+            format!("No autoconfig found for domain: {domain}"),
+            ErrorCode::ResourceNotFound
+        ));
+    }
+    // A whole discovery walk is six HTTP candidates, SRV, MX and up to six TCP
+    // probes. Bound it so a slow or black-holed host cannot hold the request
+    // open indefinitely.
+    match tokio::time::timeout(DISCOVERY_BUDGET, discover(&domain)).await {
+        Ok(result) => result,
+        Err(_) => Err(raise_error!(
+            format!("Autoconfig discovery timed out for domain: {domain}"),
+            ErrorCode::InternalError
+        )),
+    }
+}
 
+async fn discover(domain: &str) -> BichonResult<MailConfig> {
     // ── ISP autoconfig (HTTPS, then HTTP) ──────────────────────────
-    if let Some(config) = fetch_xml(
-        &client,
-        &format!("https://autoconfig.{domain}/mail/config-v1.1.xml"),
-    )
-    .await
+    if let Some(config) =
+        fetch_xml(&format!("https://autoconfig.{domain}/mail/config-v1.1.xml")).await
     {
         return Ok(config);
     }
-    if let Some(config) = fetch_xml(
-        &client,
-        &format!("http://autoconfig.{domain}/mail/config-v1.1.xml"),
-    )
-    .await
+    if let Some(config) =
+        fetch_xml(&format!("http://autoconfig.{domain}/mail/config-v1.1.xml")).await
     {
         return Ok(config);
     }
 
     // ── Well-known path (HTTPS, then HTTP) ─────────────────────────
-    if let Some(config) = fetch_xml(
-        &client,
-        &format!("https://{domain}/.well-known/autoconfig/mail/config-v1.1.xml"),
-    )
+    if let Some(config) = fetch_xml(&format!(
+        "https://{domain}/.well-known/autoconfig/mail/config-v1.1.xml"
+    ))
     .await
     {
         return Ok(config);
     }
-    if let Some(config) = fetch_xml(
-        &client,
-        &format!("http://{domain}/.well-known/autoconfig/mail/config-v1.1.xml"),
-    )
+    if let Some(config) = fetch_xml(&format!(
+        "http://{domain}/.well-known/autoconfig/mail/config-v1.1.xml"
+    ))
     .await
     {
         return Ok(config);
     }
 
     // ── DNS SRV records ────────────────────────────────────────────
-    if let Some(config) = lookup_srv(domain).await {
+    if let Some(config) = lookup_srv(&domain).await {
         return Ok(config);
     }
 
     // ── Thunderbird central ISPDB ──────────────────────────────────
-    if let Some(config) = fetch_xml(
-        &client,
-        &format!("https://autoconfig.thunderbird.net/v1.1/{domain}"),
-    )
-    .await
+    if let Some(config) =
+        fetch_xml(&format!("https://autoconfig.thunderbird.net/v1.1/{domain}")).await
     {
         return Ok(config);
     }
 
     // ── MX fallback ────────────────────────────────────────────────
-    if let Some(config) = fetch_for_mx(&client, domain).await {
+    if let Some(config) = fetch_for_mx(&domain).await {
         return Ok(config);
     }
 
     // ── GuessConfig ────────────────────────────────────────────────
-    if let Some(config) = crate::autoconfig::guess::guess_config(domain).await {
+    if let Some(config) = crate::autoconfig::guess::guess_config(&domain).await {
         return Ok(config);
     }
 
@@ -247,36 +336,27 @@ pub async fn fetch(domain: &str) -> BichonResult<MailConfig> {
 ///
 /// Many self-hosted domains have their MX pointed at Google, Microsoft, etc.
 /// The MX domain's ISPDB entry covers the original domain.
-async fn fetch_for_mx(client: &Client, domain: &str) -> Option<MailConfig> {
+async fn fetch_for_mx(domain: &str) -> Option<MailConfig> {
     let mx_domain = lookup_mx_domain(domain).await?;
     if mx_domain == domain.to_ascii_lowercase() {
         return None; // same domain, already tried above
     }
 
     // Try ISPDB for the MX domain
-    if let Some(config) = fetch_xml(
-        client,
-        &format!("https://autoconfig.thunderbird.net/v1.1/{mx_domain}"),
-    )
-    .await
+    if let Some(config) =
+        fetch_xml(&format!("https://autoconfig.thunderbird.net/v1.1/{mx_domain}")).await
     {
         return Some(config);
     }
 
     // Try ISP autoconfig for the MX domain (HTTPS then HTTP)
-    if let Some(config) = fetch_xml(
-        client,
-        &format!("https://autoconfig.{mx_domain}/mail/config-v1.1.xml"),
-    )
-    .await
+    if let Some(config) =
+        fetch_xml(&format!("https://autoconfig.{mx_domain}/mail/config-v1.1.xml")).await
     {
         return Some(config);
     }
-    if let Some(config) = fetch_xml(
-        client,
-        &format!("http://autoconfig.{mx_domain}/mail/config-v1.1.xml"),
-    )
-    .await
+    if let Some(config) =
+        fetch_xml(&format!("http://autoconfig.{mx_domain}/mail/config-v1.1.xml")).await
     {
         return Some(config);
     }
@@ -317,7 +397,29 @@ fn extract_base_domain(host: &str) -> Option<String> {
 mod tests {
     use super::*;
 
-        #[test]
+    /// These are refused before any DNS lookup or socket is opened.
+    #[tokio::test]
+    async fn fetch_xml_refuses_non_public_targets() {
+        for url in [
+            "http://127.0.0.1/mail/config-v1.1.xml",
+            "http://localhost/mail/config-v1.1.xml",
+            "http://169.254.169.254/latest/meta-data/",
+            "http://[::1]/mail/config-v1.1.xml",
+            "ftp://example.com/mail/config-v1.1.xml",
+            "http://user:pass@example.com/x",
+        ] {
+            assert!(fetch_xml(url).await.is_none(), "{url} must be refused");
+        }
+    }
+
+    #[tokio::test]
+    async fn fetch_rejects_local_domains_without_network() {
+        for domain in ["localhost", "127.0.0.1", "intranet", "mail.local"] {
+            assert!(fetch(domain).await.is_err(), "{domain} must be refused");
+        }
+    }
+
+    #[test]
     fn test_parse_autoconfig_xml() {
         let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
 <clientConfig version="1.1">

@@ -31,6 +31,7 @@ pub mod net;
 pub mod rate_limit;
 pub mod totp;
 pub mod shutdown;
+pub mod ssrf;
 pub mod tls;
 
 /// Collapse every run of whitespace to a single space.
