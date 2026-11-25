@@ -10,12 +10,16 @@ interface ScrollAreaProps
   viewportClassName?: string
   /** The scrolling viewport itself, for consumers that virtualize its content. */
   viewportRef?: React.Ref<React.ElementRef<typeof ScrollAreaPrimitive.Viewport>>
+  /** Classes for the scrollbar track. */
+  scrollbarClassName?: string
+  /** Classes for the scrollbar thumb, e.g. a lighter colour on a dark panel. */
+  thumbClassName?: string
 }
 
 const ScrollArea = React.forwardRef<
   React.ElementRef<typeof ScrollAreaPrimitive.Root>,
   ScrollAreaProps
->(({ className, viewportClassName, viewportRef, children, orientation = 'vertical', ...props }, ref) => (
+>(({ className, viewportClassName, viewportRef, scrollbarClassName, thumbClassName, children, orientation = 'vertical', ...props }, ref) => (
   <ScrollAreaPrimitive.Root
     ref={ref}
     className={cn('relative overflow-hidden', className)}
@@ -33,10 +37,24 @@ const ScrollArea = React.forwardRef<
     </ScrollAreaPrimitive.Viewport>
     {orientation === "both" ? (
       <>
-        <ScrollBar orientation="vertical" />
-        <ScrollBar orientation="horizontal" />
+        <ScrollBar
+          orientation="vertical"
+          className={scrollbarClassName}
+          thumbClassName={thumbClassName}
+        />
+        <ScrollBar
+          orientation="horizontal"
+          className={scrollbarClassName}
+          thumbClassName={thumbClassName}
+        />
       </>
-    ) : <ScrollBar orientation={orientation} />}
+    ) : (
+      <ScrollBar
+        orientation={orientation}
+        className={scrollbarClassName}
+        thumbClassName={thumbClassName}
+      />
+    )}
     <ScrollAreaPrimitive.Corner />
   </ScrollAreaPrimitive.Root>
 ))
@@ -44,8 +62,11 @@ ScrollArea.displayName = ScrollAreaPrimitive.Root.displayName
 
 const ScrollBar = React.forwardRef<
   React.ElementRef<typeof ScrollAreaPrimitive.ScrollAreaScrollbar>,
-  React.ComponentPropsWithoutRef<typeof ScrollAreaPrimitive.ScrollAreaScrollbar>
->(({ className, orientation = 'vertical', ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof ScrollAreaPrimitive.ScrollAreaScrollbar> & {
+    /** Classes for the thumb, e.g. a lighter colour on a dark panel. */
+    thumbClassName?: string
+  }
+>(({ className, thumbClassName, orientation = 'vertical', ...props }, ref) => (
   <ScrollAreaPrimitive.ScrollAreaScrollbar
     ref={ref}
     orientation={orientation}
@@ -59,7 +80,9 @@ const ScrollBar = React.forwardRef<
     )}
     {...props}
   >
-    <ScrollAreaPrimitive.ScrollAreaThumb className='relative flex-1 rounded-full bg-border' />
+    <ScrollAreaPrimitive.ScrollAreaThumb
+      className={cn('relative flex-1 rounded-full bg-border', thumbClassName)}
+    />
   </ScrollAreaPrimitive.ScrollAreaScrollbar>
 ))
 ScrollBar.displayName = ScrollAreaPrimitive.ScrollAreaScrollbar.displayName

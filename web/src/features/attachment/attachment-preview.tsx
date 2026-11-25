@@ -25,6 +25,7 @@ import {
 
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -227,7 +228,7 @@ export default function AttachmentPreview({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent aria-describedby={undefined}
-        className="w-screen h-screen max-w-none rounded-none p-0 gap-0 border-0 bg-slate-700/10"
+        className="w-screen h-screen max-w-none rounded-none p-0 gap-0 border-0 bg-slate-900/95"
         hideClose
         hideFullscreen
         onInteractOutside={(e) => {
@@ -348,8 +349,10 @@ export default function AttachmentPreview({
           </>
         )}
 
-        {/* Preview body */}
-        <div className="w-full h-full flex items-center justify-center">
+        {/* Preview body. Positioned against the dialog so `h-full` resolves
+            to the viewport instead of the grid row's content height — the
+            text pane needs a definite height to scroll. */}
+        <div className="absolute inset-0 flex items-center justify-center">
           {previewMutation.isPending ? (
             <div className="flex flex-col items-center gap-3">
               <Skeleton className="w-64 h-4 bg-white/10" />
@@ -380,9 +383,15 @@ export default function AttachmentPreview({
               title={resolved.fileName}
             />
           ) : isText && textContent !== null ? (
-            <pre className="w-full h-full overflow-auto whitespace-pre-wrap text-sm font-mono p-6 text-white/90">
-              {textContent}
-            </pre>
+            <ScrollArea
+              type="always"
+              className="mx-auto h-full w-full max-w-[1100px]"
+              thumbClassName="bg-white/25 hover:bg-white/40"
+            >
+              <pre className="whitespace-pre-wrap break-words px-6 pt-16 pb-10 text-sm font-mono leading-relaxed text-slate-100">
+                {textContent}
+              </pre>
+            </ScrollArea>
           ) : !previewMutation.isPending ? (
             <div className="flex flex-col items-center gap-4 text-white/60">
               <FileIcon className="h-16 w-16 opacity-30" />
