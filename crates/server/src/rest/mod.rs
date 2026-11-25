@@ -21,7 +21,7 @@ use crate::common::error::ErrorCapture;
 use crate::common::log::Tracing;
 use crate::common::recorder::Recorder;
 use crate::common::tls::rustls_config;
-use crate::common::timeout::{Timeout, TIMEOUT_HEADER};
+use crate::common::timeout::Timeout;
 use crate::error::handler::error_handler;
 use crate::rest::public::features::get_features;
 use crate::rest::public::login::login;
@@ -36,13 +36,12 @@ use bichon_core::raise_error;
 use bichon_core::settings::cli::SETTINGS;
 
 use api::create_openapi_service;
-use http::Method;
+use cors::{cors_middleware, SameOriginPassthrough};
 use poem::listener::{Listener, TcpListener};
-use poem::middleware::{CatchPanic, Compression, Cors};
+use poem::middleware::{CatchPanic, Compression};
 use security_headers::SecurityHeaders;
 use poem::{get, post, Endpoint, EndpointExt, Route, Server};
 use public::oauth2::oauth2_callback;
-use std::collections::HashSet;
 use std::time::Duration;
 
 #[cfg(feature = "embed-web")]
@@ -55,6 +54,7 @@ use {
 
 pub mod api;
 pub mod assets;
+pub mod cors;
 pub mod health;
 pub mod maintenance;
 pub mod metrics;
@@ -85,33 +85,6 @@ pub fn build_routes() -> impl Endpoint {
         .with(Timeout)
         .with(Tracing)
         .with(Recorder);
-
-    let cors_origins: Option<HashSet<String>> = SETTINGS.bichon_cors_origins.clone();
-    let cors_origins: Vec<String> = cors_origins.unwrap_or_default().into_iter().collect();
-
-    let cors = Cors::new()
-        .allow_origins_fn(move |origin| {
-            tracing::debug!("CORS: Incoming Origin = {:?}", origin);
-            tracing::debug!("CORS: Configured origins = {:?}", cors_origins);
-            if cors_origins.is_empty() {
-                tracing::debug!("CORS: No origins configured, allowing all");
-                return true;
-            }
-            cors_origins.iter().any(|o| o == origin)
-        })
-        .allow_credentials(true)
-        .allow_methods(&[
-            Method::GET,
-            Method::POST,
-            Method::PUT,
-            Method::DELETE,
-            Method::OPTIONS,
-            Method::HEAD,
-            Method::PATCH,
-        ])
-        .allow_headers(vec!["Content-Type", "Authorization", TIMEOUT_HEADER])
-        .expose_headers(vec!["Accept"])
-        .max_age(SETTINGS.bichon_cors_max_age);
 
     let app_logic = Route::new()
         .nest("/api-docs/swagger", swagger)
@@ -148,7 +121,13 @@ pub fn build_routes() -> impl Endpoint {
         // `/api/status`, which is intentionally 503 in maintenance mode.
         .at("/healthz", get(health::healthz))
         .nest(&SETTINGS.bichon_base_url, app_logic)
-        .with(cors)
+        .with(cors_middleware(
+            SETTINGS.bichon_cors_origins.clone(),
+            SETTINGS.bichon_cors_max_age,
+        ))
+        // Outer of CORS: same-origin requests drop `Origin` and are treated as
+        // non-CORS, so a strict policy never rejects the WebUI's own requests.
+        .with(SameOriginPassthrough::from_settings())
         .with_if(SETTINGS.bichon_http_compression_enabled, Compression::new())
         .with(CatchPanic::new())
         // Outermost: even panic and error responses get the hardening headers.

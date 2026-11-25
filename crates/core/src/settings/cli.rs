@@ -89,11 +89,11 @@ pub struct Settings {
     )]
     pub bichon_base_url: String,
 
-    /// CORS allowed origins (default: "*")
+    /// CORS allowed origins. Empty disables cross-origin API access.
     #[clap(
         long,
         env,
-        help = "Set the allowed CORS origins (comma-separated list, e.g., \"https://example.com, https://another.com\")",
+        help = "Set the allowed CORS origins (comma-separated list, e.g., \"https://example.com, https://another.com\"). Empty disables cross-origin API access.",
         value_parser = ValueParser::new(|s: &str| -> Result<HashSet<String>, String> {
             let set: HashSet<String> = s.split(',')
                 .map(|origin| origin.trim().to_string())
