@@ -740,3 +740,13 @@ fn every_export_format_round_trips_through_its_wire_name() {
     }
     assert_eq!(export_format_from_wire("unknown"), None);
 }
+
+#[test]
+fn escape_from_lines_quotes_body_from_lines() {
+    let raw =
+        b"Subject: plan\r\n\r\nHi,\r\nFrom Monday we switch.\r\n>From the old rota\r\nFromage\r\n";
+    assert_eq!(
+        escape_from_lines(raw),
+        b"Subject: plan\r\n\r\nHi,\r\n>From Monday we switch.\r\n>>From the old rota\r\nFromage\r\n"
+    );
+}
