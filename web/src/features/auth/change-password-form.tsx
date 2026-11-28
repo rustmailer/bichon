@@ -37,6 +37,7 @@ import { Button } from '@/components/button'
 import { toast } from '@/hooks/use-toast'
 import { setToken } from '@/stores/authStore'
 import { clearSessionState } from '@/lib/session'
+import { rememberNavLayout } from '@/context/nav-layout-context'
 import { changePassword } from '@/api/users/api'
 import { useTheme } from '@/context/theme-context'
 import { isTheme } from '@/lib/theme'
@@ -94,6 +95,7 @@ export function ChangePasswordForm({ ticket, onCancel }: ChangePasswordFormProps
         if (result.success && result.access_token) {
           // A new login must never inherit the previous account's cached data.
           clearSessionState(queryClient)
+          rememberNavLayout(result.nav_layout)
           setToken(result)
           if (isTheme(result.theme)) {
             setTheme(result.theme)

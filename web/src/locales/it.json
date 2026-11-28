@@ -2592,12 +2592,18 @@
       },
       "description": {
         "language": "Seleziona la lingua per l'interfaccia web.",
+        "nav_layout": "Dove si trova la navigazione principale. Gli schermi stretti usano sempre la barra laterale.",
         "theme": "Scegli tra la modalità chiara o scura.",
         "use_system": "Passa automaticamente dalla versione chiara a quella scura del tema selezionato in base alle impostazioni del dispositivo."
       },
       "field": {
         "language": "Lingua dell'interfaccia",
+        "nav_layout": "Navigazione",
         "theme": "Tema dell'interfaccia"
+      },
+      "nav_layout": {
+        "sidebar": "Barra laterale",
+        "top": "Barra superiore"
       },
       "placeholder": {
         "select_language": "Seleziona lingua"

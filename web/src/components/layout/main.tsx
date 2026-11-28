@@ -19,6 +19,7 @@
 
 import React from 'react'
 import { cn } from '@/lib/utils'
+import { useIsTopNav } from '@/context/nav-layout-context'
 
 interface MainProps extends React.HTMLAttributes<HTMLElement> {
   fixed?: boolean;
@@ -27,11 +28,14 @@ interface MainProps extends React.HTMLAttributes<HTMLElement> {
 }
 
 export const Main = ({ fixed, higher, ...props }: MainProps) => {
+  // The top bar replaces the fixed page header, so its 16 (or 12) unit
+  // clearance above the content is no longer needed.
+  const topNav = useIsTopNav();
   return (
     <main
       className={cn(
         'peer-[.header-fixed]/header',
-        higher ? 'mt-12' : 'mt-16', // Conditional class for 'higher'
+        topNav ? 'mt-0' : higher ? 'mt-12' : 'mt-16', // Conditional class for 'higher'
         'px-4 py-6',
         fixed && 'fixed-main flex flex-col flex-grow overflow-hidden'
       )}

@@ -20,6 +20,7 @@
 import React from 'react'
 import { cn } from '@/lib/utils'
 import { SidebarTrigger } from '@/components/ui/sidebar'
+import { useIsTopNav } from '@/context/nav-layout-context'
 
 interface HeaderProps extends React.HTMLAttributes<HTMLElement> {
   fixed?: boolean
@@ -33,6 +34,7 @@ export const Header = ({
   ...props
 }: HeaderProps) => {
   const [offset, setOffset] = React.useState(0)
+  const topNav = useIsTopNav()
 
   React.useEffect(() => {
     const onScroll = () => {
@@ -56,7 +58,9 @@ export const Header = ({
       )}
       {...props}
     >
-      <SidebarTrigger variant='outline' className='scale-125 sm:scale-100' />
+      {topNav ? null : (
+        <SidebarTrigger variant='outline' className='scale-125 sm:scale-100' />
+      )}
       {children}
     </header>
   )

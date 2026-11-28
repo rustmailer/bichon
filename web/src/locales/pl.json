@@ -2592,12 +2592,18 @@
       },
       "description": {
         "language": "Wybierz język interfejsu webowego.",
+        "nav_layout": "Gdzie znajduje się główna nawigacja. Na wąskich ekranach zawsze używany jest pasek boczny.",
         "theme": "Wybierz tryb jasny lub ciemny.",
         "use_system": "Automatycznie przełączaj między jasną a ciemną wersją wybranego motywu zgodnie z ustawieniami urządzenia."
       },
       "field": {
         "language": "Język interfejsu",
+        "nav_layout": "Nawigacja",
         "theme": "Motyw interfejsu"
+      },
+      "nav_layout": {
+        "sidebar": "Pasek boczny",
+        "top": "Górny pasek"
       },
       "placeholder": {
         "select_language": "Wybierz język"

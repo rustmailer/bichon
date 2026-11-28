@@ -19,35 +19,75 @@
 import { createFileRoute, Outlet } from '@tanstack/react-router'
 import { cn } from '@/lib/utils'
 import { SearchProvider } from '@/context/search-context'
+import {
+  NavLayoutProvider,
+  useIsTopNav,
+} from '@/context/nav-layout-context'
 import { SidebarProvider } from '@/components/ui/sidebar'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { AppSidebar } from '@/components/layout/app-sidebar'
+import { TopNav } from '@/components/layout/top-nav'
 
 export const Route = createFileRoute('/_authenticated')({
   component: RouteComponent,
 })
 
 function RouteComponent() {
-  const defaultOpen = localStorage.getItem('sidebar_state') === 'true';
   return (
-    <SearchProvider>
-      <SidebarProvider defaultOpen={defaultOpen}>
-        {/* <SkipToMain /> */}
-        <AppSidebar />
-        <div
-          id='content'
-          className={cn(
-            'max-w-full w-full ml-auto',
-            'peer-data-[state=collapsed]:w-[calc(100%-var(--sidebar-width-icon)-1rem)]',
-            'peer-data-[state=expanded]:w-[calc(100%-var(--sidebar-width))]',
-            'transition-[width] ease-linear duration-200',
-            'h-svh flex flex-col',
-            'group-data-[scroll-locked=1]/body:h-full',
-            'group-data-[scroll-locked=1]/body:has-[main.fixed-main]:h-svh'
-          )}
-        >
-          <Outlet />
+    <NavLayoutProvider>
+      <SearchProvider>
+        <AuthenticatedShell />
+      </SearchProvider>
+    </NavLayoutProvider>
+  )
+}
+
+function AuthenticatedShell() {
+  const defaultOpen = localStorage.getItem('sidebar_state') === 'true';
+  const topNav = useIsTopNav()
+
+  // Top navigation: a horizontal bar above the content, no sidebar rail. The
+  // provider stays mounted because it also hosts the tooltip context the
+  // pages rely on; `flex-col` turns its row wrapper into a column.
+  if (topNav) {
+    return (
+      <SidebarProvider className='flex h-svh flex-col overflow-hidden'>
+        <TopNav />
+        <div id='content' className='flex min-h-0 w-full flex-1 flex-col'>
+          <ScrollArea
+            className='min-h-0 flex-1'
+            viewportClassName='flex h-full w-full flex-col'
+          >
+            <Outlet />
+          </ScrollArea>
         </div>
       </SidebarProvider>
-    </SearchProvider>
+    )
+  }
+
+  return (
+    <SidebarProvider defaultOpen={defaultOpen}>
+      {/* <SkipToMain /> */}
+      <AppSidebar />
+      <div
+        id='content'
+        className={cn(
+          'max-w-full w-full ml-auto',
+          'peer-data-[state=collapsed]:w-[calc(100%-var(--sidebar-width-icon)-1rem)]',
+          'peer-data-[state=expanded]:w-[calc(100%-var(--sidebar-width))]',
+          'transition-[width] ease-linear duration-200',
+          'h-svh flex flex-col',
+          'group-data-[scroll-locked=1]/body:h-full',
+          'group-data-[scroll-locked=1]/body:has-[main.fixed-main]:h-svh'
+        )}
+      >
+        <ScrollArea
+          className='min-h-0 flex-1'
+          viewportClassName='flex h-full w-full flex-col'
+        >
+          <Outlet />
+        </ScrollArea>
+      </div>
+    </SidebarProvider>
   )
 }

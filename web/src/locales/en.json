@@ -2592,12 +2592,18 @@
       },
       "description": {
         "language": "Select the language used in the Web UI.",
+        "nav_layout": "Where the main navigation lives. Narrow screens always use the sidebar.",
         "theme": "Choose between light or dark mode for the interface.",
         "use_system": "Automatically switch between the light and dark version of the selected theme based on your device settings."
       },
       "field": {
         "language": "Language",
+        "nav_layout": "Navigation",
         "theme": "Interface Theme"
+      },
+      "nav_layout": {
+        "sidebar": "Sidebar",
+        "top": "Top bar"
       },
       "placeholder": {
         "select_language": "Select language"

@@ -2592,12 +2592,18 @@
       },
       "description": {
         "language": "Seleccione el idioma de la interfaz web.",
+        "nav_layout": "Dónde se muestra la navegación principal. Las pantallas estrechas siempre usan la barra lateral.",
         "theme": "Elija entre el modo claro u oscuro.",
         "use_system": "Cambia automáticamente entre la versión clara y oscura del tema seleccionado según la configuración de tu dispositivo."
       },
       "field": {
         "language": "Idioma de la interfaz",
+        "nav_layout": "Navegación",
         "theme": "Tema de la interfaz"
+      },
+      "nav_layout": {
+        "sidebar": "Barra lateral",
+        "top": "Barra superior"
       },
       "placeholder": {
         "select_language": "Seleccionar idioma"

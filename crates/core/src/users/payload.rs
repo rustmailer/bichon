@@ -85,6 +85,14 @@ fn validate_language(language: &Option<String>) -> BichonResult<()> {
     validate_option_in_set(language, &allowed_languages(), "language")
 }
 
+fn allowed_nav_layouts() -> HashSet<&'static str> {
+    ["sidebar", "top"].into_iter().collect()
+}
+
+fn validate_nav_layout(nav_layout: &Option<String>) -> BichonResult<()> {
+    validate_option_in_set(nav_layout, &allowed_nav_layouts(), "nav_layout")
+}
+
 #[derive(Clone, Debug, Default, Eq, PartialEq, Deserialize, Serialize)]
 #[cfg_attr(feature = "web-api", derive(poem_openapi::Object))]
 pub struct RoleCreateRequest {
@@ -236,6 +244,8 @@ pub struct UserCreateRequest {
     pub description: Option<String>,
     pub theme: Option<String>,
     pub language: Option<String>,
+    /// `sidebar` or `top`; absent means the sidebar.
+    pub nav_layout: Option<String>,
 }
 
 impl UserCreateRequest {
@@ -281,6 +291,7 @@ impl UserCreateRequest {
 
         validate_theme(&self.theme)?;
         validate_language(&self.language)?;
+        validate_nav_layout(&self.nav_layout)?;
 
         let all_roles = UserRole::list_all()?;
         let role_type_map: HashMap<u64, RoleType> =
@@ -373,6 +384,8 @@ pub struct UserUpdateRequest {
     pub description: Option<String>,
     pub theme: Option<String>,
     pub language: Option<String>,
+    /// `sidebar` or `top`; absent keeps the stored choice.
+    pub nav_layout: Option<String>,
 }
 
 impl UserUpdateRequest {
@@ -413,6 +426,7 @@ impl UserUpdateRequest {
 
         validate_theme(&self.theme)?;
         validate_language(&self.language)?;
+        validate_nav_layout(&self.nav_layout)?;
 
         let all_roles = UserRole::list_all()?;
         let role_type_map: HashMap<u64, RoleType> =
@@ -519,6 +533,14 @@ mod tests {
             ..Default::default()
         };
         assert!(request.check_avatar_update().is_ok());
+    }
+
+    #[test]
+    fn nav_layout_accepts_only_the_two_layouts() {
+        assert!(validate_nav_layout(&Some("sidebar".into())).is_ok());
+        assert!(validate_nav_layout(&Some("top".into())).is_ok());
+        assert!(validate_nav_layout(&None).is_ok());
+        assert!(validate_nav_layout(&Some("bottom".into())).is_err());
     }
 
     #[test]

@@ -2592,12 +2592,18 @@
       },
       "description": {
         "language": "Wählen Sie die Sprache für die Web-Oberfläche.",
+        "nav_layout": "Wo die Hauptnavigation erscheint. Auf schmalen Bildschirmen wird immer die Seitenleiste verwendet.",
         "theme": "Wählen Sie zwischen hellem oder dunklem Modus.",
         "use_system": "Wechselt anhand Ihrer Geräteeinstellungen automatisch zwischen der hellen und dunklen Variante des gewählten Designs."
       },
       "field": {
         "language": "Sprache der Benutzeroberfläche",
+        "nav_layout": "Navigation",
         "theme": "Design"
+      },
+      "nav_layout": {
+        "sidebar": "Seitenleiste",
+        "top": "Obere Leiste"
       },
       "placeholder": {
         "select_language": "Sprache wählen"

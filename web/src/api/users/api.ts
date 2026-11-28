@@ -132,6 +132,8 @@ export interface User {
     updated_at: number;
     sso_id?: string | null;
     sso_provider?: string | null;
+    /** Preferred WebUI navigation; absent means the sidebar. */
+    nav_layout?: 'sidebar' | 'top' | null;
 }
 
 export interface LoginResult {
@@ -141,6 +143,7 @@ export interface LoginResult {
     /** The profile's saved theme; check it with `isTheme` before applying. */
     theme?: string,
     language?: string,
+    nav_layout?: 'sidebar' | 'top' | null,
     mfa_required?: boolean,
     mfa_challenge?: string | null,
     /** The credentials were accepted, but a new password is required before

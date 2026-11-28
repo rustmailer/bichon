@@ -857,6 +857,7 @@ impl Account {
                 description: None,
                 theme: None,
                 language: None,
+                nav_layout: None,
             },
             false,
         )?;

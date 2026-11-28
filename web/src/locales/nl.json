@@ -2592,12 +2592,18 @@
       },
       "description": {
         "language": "Selecteer de taal voor de webinterface.",
+        "nav_layout": "Waar de hoofdnavigatie staat. Op smalle schermen wordt altijd de zijbalk gebruikt.",
         "theme": "Kies tussen de lichte of donkere modus voor de interface.",
         "use_system": "Schakel automatisch tussen de lichte en donkere versie van het geselecteerde thema op basis van je apparaatinstellingen."
       },
       "field": {
         "language": "Interfacetaal",
+        "nav_layout": "Navigatie",
         "theme": "Interfacethema"
+      },
+      "nav_layout": {
+        "sidebar": "Zijbalk",
+        "top": "Bovenbalk"
       },
       "placeholder": {
         "select_language": "Selecteer taal"

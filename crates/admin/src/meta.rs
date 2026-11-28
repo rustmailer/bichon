@@ -540,6 +540,7 @@ pub struct BichonUserV2 {
 
     pub theme: Option<String>,
     pub language: Option<String>,
+    pub nav_layout: Option<String>,
 }
 
 impl From<BichonUserV2> for BichonUser {
@@ -576,6 +577,7 @@ impl From<BichonUser> for BichonUserV2 {
             acl: value.acl,
             theme: None,
             language: None,
+            nav_layout: None,
         }
     }
 }
@@ -596,6 +598,7 @@ impl From<BichonUserV2> for bichon_core::users::BichonUserV2 {
             acl: value.acl,
             theme: value.theme,
             language: value.language,
+            nav_layout: value.nav_layout,
             sso_id: None,
             sso_provider: None,
             totp_secret: None,

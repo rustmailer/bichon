@@ -2592,12 +2592,18 @@
       },
       "description": {
         "language": "选择 Web 界面显示的语言。",
+        "nav_layout": "主菜单的展示位置。窄屏始终使用侧边栏。",
         "theme": "为界面选择浅色或深色显示模式。",
         "use_system": "根据设备设置，自动在所选主题的浅色和深色版本之间切换。"
       },
       "field": {
         "language": "语言",
+        "nav_layout": "导航",
         "theme": "界面主题"
+      },
+      "nav_layout": {
+        "sidebar": "侧边栏",
+        "top": "顶部栏"
       },
       "placeholder": {
         "select_language": "选择语言"

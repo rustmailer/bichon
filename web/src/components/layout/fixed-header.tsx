@@ -24,18 +24,30 @@ import { NotificationPopover } from "./notification";
 import { GithubLinkButton } from "./github";
 import { DocsLinkButton } from "./docs";
 import { LanguageSwitch } from "../language-switch";
+import { useIsTopNav } from '@/context/nav-layout-context';
+
+/** The utility cluster shared by the fixed page header and the top bar. */
+export const HeaderActions = () => {
+    return (
+        <div className='ml-auto flex items-center space-x-4'>
+            <NotificationPopover />
+            <GithubLinkButton />
+            <DocsLinkButton />
+            <LanguageSwitch />
+            <ThemeSwitch />
+            <ProfileDropdown />
+        </div>
+    );
+};
 
 export const FixedHeader = () => {
+    // With a top navigation bar these actions live in that bar instead, and
+    // a fixed page header would only cover the bar's dropdowns.
+    const topNav = useIsTopNav();
+    if (topNav) return null;
     return (
         <Header fixed>
-            <div className='ml-auto flex items-center space-x-4'>
-                <NotificationPopover />
-                <GithubLinkButton />
-                <DocsLinkButton />
-                <LanguageSwitch />
-                <ThemeSwitch />
-                <ProfileDropdown />
-            </div>
+            <HeaderActions />
         </Header>
     );
 };

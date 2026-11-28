@@ -2592,12 +2592,18 @@
       },
       "description": {
         "language": "Web UIで使用する言語を選択します。",
+        "nav_layout": "メインナビゲーションの表示位置。狭い画面では常にサイドバーを使用します。",
         "theme": "ライトモードまたはダークモードを選択します。",
         "use_system": "デバイスの設定に応じて、選択したテーマのライト版とダーク版を自動的に切り替えます。"
       },
       "field": {
         "language": "表示言語",
+        "nav_layout": "ナビゲーション",
         "theme": "インターフェーステーマ"
+      },
+      "nav_layout": {
+        "sidebar": "サイドバー",
+        "top": "トップバー"
       },
       "placeholder": {
         "select_language": "言語を選択"

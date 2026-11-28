@@ -2592,12 +2592,18 @@
       },
       "description": {
         "language": "Valitse Web-käyttöliittymässä käytettävä kieli.",
+        "nav_layout": "Missä päävalikko sijaitsee. Kapeilla näytöillä käytetään aina sivupalkkia.",
         "theme": "Valitse käyttöliittymän vaalea tai tumma tila.",
         "use_system": "Vaihda automaattisesti valitun teeman vaalean ja tumman version välillä laitteesi asetusten mukaan."
       },
       "field": {
         "language": "Käyttöliittymän kieli",
+        "nav_layout": "Navigointi",
         "theme": "Käyttöliittymän teema"
+      },
+      "nav_layout": {
+        "sidebar": "Sivupalkki",
+        "top": "Yläpalkki"
       },
       "placeholder": {
         "select_language": "Valitse kieli"

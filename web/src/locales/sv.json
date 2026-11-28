@@ -2592,12 +2592,18 @@
       },
       "description": {
         "language": "Välj språk för webbanvändargränssnittet.",
+        "nav_layout": "Var huvudnavigeringen visas. Smala skärmar använder alltid sidofältet.",
         "theme": "Välj mellan ljust eller mörkt läge för gränssnittet.",
         "use_system": "Växla automatiskt mellan ljus och mörk version av det valda temat utifrån dina enhetsinställningar."
       },
       "field": {
         "language": "Gränssnittsspråk",
+        "nav_layout": "Navigering",
         "theme": "Gränssnittstema"
+      },
+      "nav_layout": {
+        "sidebar": "Sidofält",
+        "top": "Övre fält"
       },
       "placeholder": {
         "select_language": "Välj språk"

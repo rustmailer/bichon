@@ -35,8 +35,10 @@ import {
 import { RadioGroup } from '@/components/ui/radio-group'
 import { LanguageFlag } from '@/components/language-flag'
 import { useTheme, Theme } from '@/context/theme-context'
+import { useNavLayout } from '@/context/nav-layout-context'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { useTranslation } from 'react-i18next'
 import { useCurrentUser } from '@/hooks/use-current-user'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
@@ -77,6 +79,39 @@ const languages = [
     { value: 'zh', label: '中文' },
     { value: 'zh-tw', label: '繁體中文' },
 ]
+
+/** A miniature wireframe of the two navigation layouts. */
+function NavLayoutPreview({ layout }: { layout: 'sidebar' | 'top' }) {
+    if (layout === 'sidebar') {
+        return (
+            <div className='flex h-16 w-full gap-1.5 rounded-md border bg-muted/30 p-1.5'>
+                <div className='flex w-1/4 flex-col gap-1 rounded-sm bg-primary/15 p-1'>
+                    <span className='h-1 w-full rounded-sm bg-primary/50' />
+                    <span className='h-1 w-3/4 rounded-sm bg-muted-foreground/30' />
+                    <span className='h-1 w-3/4 rounded-sm bg-muted-foreground/30' />
+                </div>
+                <div className='flex flex-1 flex-col gap-1'>
+                    <span className='h-1 w-2/3 rounded-sm bg-muted-foreground/25' />
+                    <span className='h-1 w-full rounded-sm bg-muted-foreground/15' />
+                    <span className='h-1 w-full rounded-sm bg-muted-foreground/15' />
+                </div>
+            </div>
+        )
+    }
+    return (
+        <div className='flex h-16 w-full flex-col gap-1.5 rounded-md border bg-muted/30 p-1.5'>
+            <div className='flex items-center gap-1 rounded-sm bg-primary/15 px-1.5 py-1'>
+                <span className='h-1 w-4 rounded-sm bg-primary/50' />
+                <span className='h-1 w-3 rounded-sm bg-muted-foreground/30' />
+                <span className='h-1 w-3 rounded-sm bg-muted-foreground/30' />
+            </div>
+            <div className='flex flex-1 flex-col gap-1'>
+                <span className='h-1 w-2/3 rounded-sm bg-muted-foreground/25' />
+                <span className='h-1 w-full rounded-sm bg-muted-foreground/15' />
+            </div>
+        </div>
+    )
+}
 
 const appearanceSchema = (t: (key: string) => string) => z.object({
     theme: z.custom<Theme>(isTheme, {
@@ -127,6 +162,7 @@ export function AppearanceForm() {
     const queryClient = useQueryClient()
     const { t, i18n } = useTranslation()
     const { theme, setTheme, followSystem, setFollowSystem, resolvedTheme } = useTheme()
+    const { layout: navLayout, setLayout: setNavLayout } = useNavLayout()
 
     const form = useForm<AppearanceFormValues>({
         resolver: zodResolver(appearanceSchema(t)),
@@ -144,7 +180,9 @@ export function AppearanceForm() {
 
     const mutation = useMutation({
         mutationFn: async (values: AppearanceFormValues) => {
-            return update_user(user!.id, values)
+            // The navigation choice is part of the user profile, like the
+            // theme and language above it.
+            return update_user(user!.id, { ...values, nav_layout: navLayout })
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['current-user'] })
@@ -198,28 +236,32 @@ export function AppearanceForm() {
                                     <PopoverContent className='w-[400px] p-0' align="start">
                                         <Command>
                                             <CommandInput placeholder={t('settings.appearance.command.search')} />
-                                            <CommandEmpty>{t('settings.appearance.command.no_results')}</CommandEmpty>
-                                            <CommandList>
-                                                <CommandGroup>
-                                                    {languages.map((language) => (
-                                                        <CommandItem
-                                                            value={language.label}
-                                                            key={language.value}
-                                                            onSelect={() => {
-                                                                form.setValue('language', language.value)
-                                                            }}
-                                                        >
-                                                            <CheckIcon
-                                                                className={cn(
-                                                                    'mr-2 h-4 w-4',
-                                                                    language.value === field.value ? 'opacity-100' : 'opacity-0'
-                                                                )}
-                                                            />
-                                                            <LanguageFlag code={language.value} />
-                                                            {language.label}
-                                                        </CommandItem>
-                                                    ))}
-                                                </CommandGroup>
+                                            <CommandList className='max-h-none overflow-visible'>
+                                                {/* ScrollArea instead of the native scrollbar; the
+                                                    viewport grows with the list up to 300px. */}
+                                                <ScrollArea viewportClassName='h-auto max-h-[300px]'>
+                                                    <CommandEmpty>{t('settings.appearance.command.no_results')}</CommandEmpty>
+                                                    <CommandGroup>
+                                                        {languages.map((language) => (
+                                                            <CommandItem
+                                                                value={language.label}
+                                                                key={language.value}
+                                                                onSelect={() => {
+                                                                    form.setValue('language', language.value)
+                                                                }}
+                                                            >
+                                                                <CheckIcon
+                                                                    className={cn(
+                                                                        'mr-2 h-4 w-4',
+                                                                        language.value === field.value ? 'opacity-100' : 'opacity-0'
+                                                                    )}
+                                                                />
+                                                                <LanguageFlag code={language.value} />
+                                                                {language.label}
+                                                            </CommandItem>
+                                                        ))}
+                                                    </CommandGroup>
+                                                </ScrollArea>
                                             </CommandList>
                                         </Command>
                                     </PopoverContent>
@@ -231,6 +273,53 @@ export function AppearanceForm() {
                             </FormItem>
                         )}
                     />
+
+                    <div className='flex max-w-xl flex-col gap-2'>
+                        <FormLabel className='text-base'>
+                            {t('settings.appearance.field.nav_layout')}
+                        </FormLabel>
+                        <div className='grid max-w-md grid-cols-2 gap-4 pt-2'>
+                            {(['sidebar', 'top'] as const).map((value) => {
+                                const selected = navLayout === value
+                                return (
+                                    <Card
+                                        key={value}
+                                        role='button'
+                                        tabIndex={0}
+                                        aria-pressed={selected}
+                                        onClick={() => setNavLayout(value)}
+                                        onKeyDown={(event) => {
+                                            if (event.key === 'Enter' || event.key === ' ') {
+                                                event.preventDefault()
+                                                setNavLayout(value)
+                                            }
+                                        }}
+                                        className={cn(
+                                            'cursor-pointer overflow-hidden border-2 transition-all hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                                            selected
+                                                ? 'border-primary shadow-md'
+                                                : 'border-muted opacity-80'
+                                        )}
+                                    >
+                                        <div className='p-2'>
+                                            <NavLayoutPreview layout={value} />
+                                            <div className='mt-2 flex items-center justify-between'>
+                                                <span className='text-[11px] font-medium uppercase'>
+                                                    {t(`settings.appearance.nav_layout.${value}`)}
+                                                </span>
+                                                {selected && (
+                                                    <CheckIcon className='h-3.5 w-3.5 text-primary' />
+                                                )}
+                                            </div>
+                                        </div>
+                                    </Card>
+                                )
+                            })}
+                        </div>
+                        <FormDescription>
+                            {t('settings.appearance.description.nav_layout')}
+                        </FormDescription>
+                    </div>
 
                     <FormField
                         control={form.control}

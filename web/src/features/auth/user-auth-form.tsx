@@ -43,6 +43,7 @@ import { OtpInput } from '@/components/otp-input'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { setToken } from '@/stores/authStore'
 import { clearSessionState } from '@/lib/session'
+import { rememberNavLayout } from '@/context/nav-layout-context'
 import { toast } from '@/hooks/use-toast'
 import { AxiosError } from 'axios'
 import { ToastAction } from '@/components/ui/toast'
@@ -223,6 +224,7 @@ export function UserAuthForm({
     if (result.success && result.access_token) {
       // A new login must never inherit the previous account's cached data.
       clearSessionState(queryClient)
+      rememberNavLayout(result.nav_layout)
       setToken(result);
 
       if (isTheme(result.theme)) {

@@ -2592,12 +2592,18 @@
       },
       "description": {
         "language": "選擇網頁介面顯示的语言。",
+        "nav_layout": "主選單的顯示位置。窄畫面一律使用側邊欄。",
         "theme": "為介面選擇淺色或深色顯示模式。",
         "use_system": "根據裝置設定，自動在所選主題的淺色與深色版本之間切換。"
       },
       "field": {
         "language": "介面语言",
+        "nav_layout": "導覽",
         "theme": "介面主題"
+      },
+      "nav_layout": {
+        "sidebar": "側邊欄",
+        "top": "頂部列"
       },
       "placeholder": {
         "select_language": "選擇語言"

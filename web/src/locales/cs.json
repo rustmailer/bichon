@@ -2592,12 +2592,18 @@
       },
       "description": {
         "language": "Vyberte jazyk webového rozhraní.",
+        "nav_layout": "Kde se nachází hlavní navigace. Na úzkých obrazovkách se vždy používá postranní panel.",
         "theme": "Zvolte světlý nebo tmavý režim rozhraní.",
         "use_system": "Automaticky přepínat mezi světlou a tmavou verzí zvoleného motivu podle nastavení zařízení."
       },
       "field": {
         "language": "Jazyk",
+        "nav_layout": "Navigace",
         "theme": "Motiv rozhraní"
+      },
+      "nav_layout": {
+        "sidebar": "Postranní panel",
+        "top": "Horní lišta"
       },
       "placeholder": {
         "select_language": "Vyberte jazyk"

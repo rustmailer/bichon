@@ -2592,12 +2592,18 @@
       },
       "description": {
         "language": "Choisissez la langue de l'interface web.",
+        "nav_layout": "Emplacement de la navigation principale. Les écrans étroits utilisent toujours la barre latérale.",
         "theme": "Choisissez entre le mode clair ou sombre.",
         "use_system": "Bascule automatiquement entre la version claire et sombre du thème sélectionné selon les paramètres de votre appareil."
       },
       "field": {
         "language": "Langue de l'interface",
+        "nav_layout": "Navigation",
         "theme": "Thème de l'interface"
+      },
+      "nav_layout": {
+        "sidebar": "Barre latérale",
+        "top": "Barre supérieure"
       },
       "placeholder": {
         "select_language": "Choisir une langue"

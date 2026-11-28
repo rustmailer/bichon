@@ -2592,12 +2592,18 @@
       },
       "description": {
         "language": "Vælg det sprog, der skal bruges i webbrugerfladen.",
+        "nav_layout": "Hvor hovednavigationen vises. Smalle skærme bruger altid sidepanelet.",
         "theme": "Vælg mellem lys eller mørk tilstand for brugerfladen.",
         "use_system": "Skift automatisk mellem den lyse og mørke version af det valgte tema baseret på dine enhedsindstillinger."
       },
       "field": {
         "language": "Grænsefladesprog",
+        "nav_layout": "Navigation",
         "theme": "Grænsefladetema"
+      },
+      "nav_layout": {
+        "sidebar": "Sidepanel",
+        "top": "Toplinje"
       },
       "placeholder": {
         "select_language": "Vælg sprog"

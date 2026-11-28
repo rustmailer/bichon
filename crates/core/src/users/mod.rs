@@ -60,6 +60,8 @@ pub struct LoginResult {
     pub access_token: Option<String>,
     pub theme: Option<String>,
     pub language: Option<String>,
+    /// `sidebar` or `top`; the WebUI applies it as soon as the user signs in.
+    pub nav_layout: Option<String>,
     /// When true, the password step succeeded and a TOTP code is required.
     #[serde(default)]
     pub mfa_required: bool,
@@ -140,6 +142,9 @@ pub struct BichonUserV2 {
 
     pub theme: Option<String>,
     pub language: Option<String>,
+    /// Preferred WebUI navigation: `sidebar` (default) or `top`.
+    #[serde(default)]
+    pub nav_layout: Option<String>,
 
     /// SSO identity: unique subject ID from the external IdP (e.g. OIDC `sub` claim).
     pub sso_id: Option<String>,
@@ -327,6 +332,7 @@ impl BichonUserV2 {
             global_permissions,
             theme: self.theme,
             language: self.language,
+            nav_layout: self.nav_layout,
             sso_id: self.sso_id,
             sso_provider: self.sso_provider,
         }
@@ -365,6 +371,7 @@ impl BichonUserV2 {
                 acl: None,
                 theme: None,
                 language: None,
+                nav_layout: None,
                 sso_id: None,
                 sso_provider: None,
                 totp_secret: None,
@@ -410,6 +417,7 @@ impl BichonUserV2 {
                             access_token: None,
                             theme: None,
                             language: None,
+                            nav_layout: None,
                             mfa_required: false,
                             mfa_challenge: None,
                             must_change_password: false,
@@ -478,6 +486,7 @@ impl BichonUserV2 {
                             access_token: None,
                             theme: user.theme.clone(),
                             language: user.language.clone(),
+                            nav_layout: user.nav_layout.clone(),
                             mfa_required: true,
                             mfa_challenge: Some(challenge),
                             must_change_password: false,
@@ -500,6 +509,7 @@ impl BichonUserV2 {
                             access_token: None,
                             theme: user.theme.clone(),
                             language: user.language.clone(),
+                            nav_layout: user.nav_layout.clone(),
                             mfa_required: false,
                             mfa_challenge: None,
                             must_change_password: true,
@@ -513,6 +523,7 @@ impl BichonUserV2 {
                         access_token: Some(new_token),
                         theme: user.theme,
                         language: user.language,
+                        nav_layout: user.nav_layout,
                         mfa_required: false,
                         mfa_challenge: None,
                         must_change_password: false,
@@ -529,6 +540,7 @@ impl BichonUserV2 {
                         access_token: None,
                         theme: None,
                         language: None,
+                        nav_layout: None,
                         mfa_required: false,
                         mfa_challenge: None,
                         must_change_password: false,
@@ -552,6 +564,7 @@ impl BichonUserV2 {
                     access_token: None,
                     theme: None,
                     language: None,
+                    nav_layout: None,
                     mfa_required: false,
                     mfa_challenge: None,
                     must_change_password: false,
@@ -616,6 +629,7 @@ impl BichonUserV2 {
             access_token: Some(access_token),
             theme: user.theme,
             language: user.language,
+            nav_layout: user.nav_layout,
             mfa_required: false,
             mfa_challenge: None,
             must_change_password: false,
@@ -791,6 +805,7 @@ impl BichonUserV2 {
             account_role_expiries: BTreeMap::new(),
             theme: request.theme,
             language: request.language,
+            nav_layout: request.nav_layout,
             sso_id: None,
             sso_provider: None,
             totp_secret: None,
@@ -980,6 +995,10 @@ impl BichonUserV2 {
 
             if let Some(language) = request.language {
                 updated.language = Some(language);
+            }
+
+            if let Some(nav_layout) = request.nav_layout {
+                updated.nav_layout = Some(nav_layout);
             }
 
             updated.updated_at = utc_now!();
