@@ -27,6 +27,12 @@ import { Column } from '@tanstack/react-table'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -46,11 +52,20 @@ export function DataTableColumnHeader<TData, TValue>({
   title,
   className,
 }: DataTableColumnHeaderProps<TData, TValue>) {
+  const { t } = useTranslation()
   if (!column.getCanSort()) {
-    return <div className={cn(className)}>{title}</div>
+    return (
+      <TooltipProvider delayDuration={0}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className={cn('min-w-0 truncate text-xs', className)}>{title}</div>
+          </TooltipTrigger>
+          <TooltipContent className='max-w-xs'>{title}</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    )
   }
 
-  const { t } = useTranslation()
   return (
     <div className={cn('flex items-center space-x-2', className)}>
       <DropdownMenu>
@@ -58,9 +73,16 @@ export function DataTableColumnHeader<TData, TValue>({
           <Button
             variant='ghost'
             size='sm'
-            className=' h-8 data-[state=open]:bg-accent'
+            className=' h-8 min-w-0 data-[state=open]:bg-accent'
           >
-            <span>{title}</span>
+                        <TooltipProvider delayDuration={0}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className='min-w-0 truncate'>{title}</span>
+                </TooltipTrigger>
+                <TooltipContent className='max-w-xs'>{title}</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
             {column.getIsSorted() === 'desc' ? (
               <ArrowDownIcon className='ml-2 h-4 w-4' />
             ) : column.getIsSorted() === 'asc' ? (

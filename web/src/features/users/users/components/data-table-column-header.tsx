@@ -59,7 +59,7 @@ export function DataTableColumnHeader<TData, TValue>({
       <TooltipProvider delayDuration={0}>
         <Tooltip>
           <TooltipTrigger asChild>
-            <div className={cn('min-w-0 truncate', className)}>{title}</div>
+            <div className={cn('min-w-0 truncate text-xs', className)}>{title}</div>
           </TooltipTrigger>
           <TooltipContent className='max-w-xs'>{title}</TooltipContent>
         </Tooltip>
