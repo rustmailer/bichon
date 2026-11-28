@@ -236,11 +236,15 @@ function readNpmLicenses() {
     )
   }
 
+  // On Windows pnpm is a .cmd shim, which Node refuses to spawn directly.
+  const pnpm = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
+
   const raw = JSON.parse(
-    execFileSync('pnpm', ['licenses', 'list', '--prod', '--json'], {
+    execFileSync(pnpm, ['licenses', 'list', '--prod', '--json'], {
       cwd: WEB_DIR,
       encoding: 'utf8',
       maxBuffer: 64 * 1024 * 1024,
+      shell: process.platform === 'win32',
     }),
   )
 

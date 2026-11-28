@@ -19,7 +19,7 @@ regenerate the file after dependency changes.
 
 Summary:
   Rust:   515 third-party crates, 10 license identifiers, 141 license-text variants
-  Web UI: 543 third-party packages, 8 license identifiers, 197 license-text variants
+  Web UI: 544 third-party packages, 8 license identifiers, 198 license-text variants
 
 Contents:
   1. Rust / Cargo dependencies
@@ -13937,7 +13937,7 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 MIT
 ================================================================================
 
-Used by 491 package(s):
+Used by 492 package(s):
   - @alloc/quick-lru@5.2.0
   - @babel/code-frame@7.26.2
   - @babel/generator@7.26.2
@@ -14193,6 +14193,7 @@ Used by 491 package(s):
   - commander@4.1.1
   - convert-source-map@1.9.0
   - cosmiconfig@7.1.0
+  - country-flag-icons@1.6.20
   - cross-spawn@7.0.5
   - cssesc@3.0.0
   - csstype@3.1.3
@@ -14431,7 +14432,7 @@ Used by 491 package(s):
   - zwitch@2.0.4
 
 --------------------------------------------------------------------------------
-License text variant 1 of 157 (used by 1 package(s)):
+License text variant 1 of 158 (used by 1 package(s)):
   - cosmiconfig@7.1.0
 
 The MIT License (MIT)
@@ -14457,7 +14458,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 2 of 157 (used by 1 package(s)):
+License text variant 2 of 158 (used by 1 package(s)):
   - convert-source-map@1.9.0
 
 Copyright 2013 Thorsten Lorenz. 
@@ -14485,7 +14486,7 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 3 of 157 (used by 83 package(s); canonical SPDX text, no license file in the package):
+License text variant 3 of 158 (used by 83 package(s); canonical SPDX text, no license file in the package):
   - @esbuild/linux-x64@0.23.1
   - @radix-ui/number@1.1.0
   - @radix-ui/number@1.1.1
@@ -14590,7 +14591,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTI
 USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 4 of 157 (used by 8 package(s)):
+License text variant 4 of 158 (used by 8 package(s)):
   - aria-hidden@1.2.4
   - react-remove-scroll@2.6.0
   - react-remove-scroll@2.7.2
@@ -14623,7 +14624,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 5 of 157 (used by 13 package(s)):
+License text variant 5 of 158 (used by 13 package(s)):
   - estree-util-is-identifier-name@3.0.0
   - mdast-util-gfm-autolink-literal@2.0.1
   - mdast-util-gfm-strikethrough@2.0.0
@@ -14662,7 +14663,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 6 of 157 (used by 1 package(s)):
+License text variant 6 of 158 (used by 1 package(s)):
   - is-glob@4.0.3
 
 The MIT License (MIT)
@@ -14688,7 +14689,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 7 of 157 (used by 1 package(s)):
+License text variant 7 of 158 (used by 1 package(s)):
   - @base-ui-components/utils@0.1.2
 
 The MIT License (MIT)
@@ -14714,7 +14715,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 8 of 157 (used by 1 package(s)):
+License text variant 8 of 158 (used by 1 package(s)):
   - shebang-command@2.0.0
 
 MIT License
@@ -14728,7 +14729,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 9 of 157 (used by 9 package(s)):
+License text variant 9 of 158 (used by 9 package(s)):
   - ansi-regex@6.1.0
   - escape-string-regexp@4.0.0
   - escape-string-regexp@5.0.0
@@ -14750,7 +14751,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 10 of 157 (used by 1 package(s)):
+License text variant 10 of 158 (used by 1 package(s)):
   - devlop@1.1.0
 
 (The MIT License)
@@ -14777,7 +14778,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 11 of 157 (used by 1 package(s)):
+License text variant 11 of 158 (used by 1 package(s)):
   - binary-extensions@2.3.0
 
 MIT License
@@ -14792,7 +14793,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 12 of 157 (used by 1 package(s)):
+License text variant 12 of 158 (used by 1 package(s)):
   - dom-helpers@5.2.1
 
 The MIT License (MIT)
@@ -14818,7 +14819,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 13 of 157 (used by 1 package(s)):
+License text variant 13 of 158 (used by 1 package(s)):
   - sucrase@3.35.0
 
 The MIT License (MIT)
@@ -14844,7 +14845,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 14 of 157 (used by 1 package(s)):
+License text variant 14 of 158 (used by 1 package(s)):
   - style-to-object@1.0.8
 
 The MIT License (MIT)
@@ -14871,7 +14872,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 15 of 157 (used by 1 package(s)):
+License text variant 15 of 158 (used by 1 package(s)):
   - zod@3.23.8
 
 MIT License
@@ -14897,7 +14898,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 16 of 157 (used by 1 package(s)):
+License text variant 16 of 158 (used by 1 package(s)):
   - dijkstrajs@1.0.3
 
 ```
@@ -14921,7 +14922,7 @@ THE SOFTWARE.
 ```
 
 --------------------------------------------------------------------------------
-License text variant 17 of 157 (used by 1 package(s)):
+License text variant 17 of 158 (used by 1 package(s)):
   - object-hash@3.0.0
 
 The MIT License (MIT)
@@ -14947,7 +14948,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 18 of 157 (used by 1 package(s)):
+License text variant 18 of 158 (used by 1 package(s)):
   - supports-preserve-symlinks-flag@1.0.0
 
 MIT License
@@ -14973,7 +14974,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 19 of 157 (used by 1 package(s)):
+License text variant 19 of 158 (used by 1 package(s)):
   - lodash@4.17.21
 
 Copyright OpenJS Foundation and other contributors <https://openjsf.org/>
@@ -15025,7 +15026,7 @@ licenses; we recommend you read them, as their terms may differ from the
 terms above.
 
 --------------------------------------------------------------------------------
-License text variant 20 of 157 (used by 4 package(s)):
+License text variant 20 of 158 (used by 4 package(s)):
   - @nodelib/fs.scandir@2.1.5
   - @nodelib/fs.stat@2.0.5
   - @nodelib/fs.walk@1.2.8
@@ -15054,7 +15055,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 21 of 157 (used by 1 package(s)):
+License text variant 21 of 158 (used by 1 package(s)):
   - react-day-picker@9.13.0
 
 The MIT License (MIT)
@@ -15080,7 +15081,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 22 of 157 (used by 8 package(s)):
+License text variant 22 of 158 (used by 8 package(s)):
   - @tanstack/history@1.85.3
   - @tanstack/query-core@5.62.3
   - @tanstack/react-query@5.62.3
@@ -15113,7 +15114,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 23 of 157 (used by 2 package(s)):
+License text variant 23 of 158 (used by 2 package(s)):
   - invariant@2.2.4
   - prop-types@15.8.1
 
@@ -15140,7 +15141,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 24 of 157 (used by 3 package(s)):
+License text variant 24 of 158 (used by 3 package(s)):
   - decamelize@1.2.0
   - object-assign@4.1.1
   - pify@2.3.0
@@ -15168,7 +15169,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 25 of 157 (used by 2 package(s)):
+License text variant 25 of 158 (used by 2 package(s)):
   - minimist@1.2.8
   - wordwrap@1.0.0
 
@@ -15192,7 +15193,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 26 of 157 (used by 1 package(s)):
+License text variant 26 of 158 (used by 1 package(s)):
   - html-url-attributes@3.0.1
 
 (The MIT License)
@@ -15218,7 +15219,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 27 of 157 (used by 1 package(s)):
+License text variant 27 of 158 (used by 1 package(s)):
   - nanoid@3.3.8
 
 The MIT License (MIT)
@@ -15243,7 +15244,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 28 of 157 (used by 1 package(s)):
+License text variant 28 of 158 (used by 1 package(s)):
   - @jridgewell/sourcemap-codec@1.5.0
 
 The MIT License
@@ -15269,7 +15270,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 29 of 157 (used by 1 package(s)):
+License text variant 29 of 158 (used by 1 package(s)):
   - zustand@5.0.2
 
 MIT License
@@ -15295,7 +15296,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 30 of 157 (used by 1 package(s)):
+License text variant 30 of 158 (used by 1 package(s)):
   - fast-equals@5.0.1
 
 MIT License
@@ -15321,7 +15322,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 31 of 157 (used by 1 package(s)):
+License text variant 31 of 158 (used by 1 package(s)):
   - balanced-match@1.0.2
 
 (MIT)
@@ -15347,7 +15348,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 32 of 157 (used by 1 package(s)):
+License text variant 32 of 158 (used by 1 package(s)):
   - clsx@2.1.1
 
 MIT License
@@ -15361,7 +15362,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 33 of 157 (used by 1 package(s)):
+License text variant 33 of 158 (used by 1 package(s)):
   - normalize-path@3.0.0
 
 The MIT License (MIT)
@@ -15387,7 +15388,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 34 of 157 (used by 1 package(s)):
+License text variant 34 of 158 (used by 1 package(s)):
   - @pkgjs/parseargs@0.11.0
 
                                  Apache License
@@ -15593,7 +15594,7 @@ License text variant 34 of 157 (used by 1 package(s)):
    limitations under the License.
 
 --------------------------------------------------------------------------------
-License text variant 35 of 157 (used by 1 package(s)):
+License text variant 35 of 158 (used by 1 package(s)):
   - read-cache@1.0.0
 
 The MIT License (MIT)
@@ -15618,7 +15619,34 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 36 of 157 (used by 1 package(s)):
+License text variant 36 of 158 (used by 1 package(s)):
+  - country-flag-icons@1.6.20
+
+(The MIT License)
+
+Copyright (c) 2020 @catamphetamine <purecatamphetamine@gmail.com>
+
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software and associated documentation files (the
+'Software'), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
+
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+--------------------------------------------------------------------------------
+License text variant 37 of 158 (used by 1 package(s)):
   - loose-envify@1.4.0
 
 The MIT License (MIT)
@@ -15644,7 +15672,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 37 of 157 (used by 3 package(s)):
+License text variant 38 of 158 (used by 3 package(s)):
   - longest-streak@3.1.0
   - stringify-entities@4.0.4
   - trim-lines@3.0.1
@@ -15673,7 +15701,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 38 of 157 (used by 1 package(s)):
+License text variant 39 of 158 (used by 1 package(s)):
   - commander@4.1.1
 
 (The MIT License)
@@ -15700,7 +15728,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 39 of 157 (used by 7 package(s)):
+License text variant 40 of 158 (used by 7 package(s)):
   - @mui/core-downloads-tracker@7.3.5
   - @mui/material@7.3.5
   - @mui/private-theming@7.3.5
@@ -15732,7 +15760,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 40 of 157 (used by 1 package(s)):
+License text variant 41 of 158 (used by 1 package(s)):
   - color-convert@2.0.1
 
 Copyright (c) 2011-2016 Heather Arthur <fayearthur@gmail.com>
@@ -15757,7 +15785,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 41 of 157 (used by 2 package(s)):
+License text variant 42 of 158 (used by 2 package(s)):
   - @jridgewell/gen-mapping@0.3.5
   - @jridgewell/set-array@1.2.1
 
@@ -15782,7 +15810,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 42 of 157 (used by 1 package(s)):
+License text variant 43 of 158 (used by 1 package(s)):
   - chokidar@3.6.0
 
 The MIT License (MIT)
@@ -15808,7 +15836,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 43 of 157 (used by 1 package(s)):
+License text variant 44 of 158 (used by 1 package(s)):
   - @babel/parser@7.26.2
 
 Copyright (C) 2012-2014 by various contributors (see AUTHORS)
@@ -15832,7 +15860,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 44 of 157 (used by 1 package(s)):
+License text variant 45 of 158 (used by 1 package(s)):
   - @popperjs/core@2.11.8
 
 The MIT License (MIT)
@@ -15857,7 +15885,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 45 of 157 (used by 1 package(s)):
+License text variant 46 of 158 (used by 1 package(s)):
   - micromark-extension-gfm-footnote@2.1.0
 
 (The MIT License)
@@ -15884,7 +15912,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 46 of 157 (used by 1 package(s)):
+License text variant 47 of 158 (used by 1 package(s)):
   - is-core-module@2.15.1
 
 The MIT License (MIT)
@@ -15909,7 +15937,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 47 of 157 (used by 1 package(s)):
+License text variant 48 of 158 (used by 1 package(s)):
   - detect-node-es@1.1.0
 
 MIT License
@@ -15935,7 +15963,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 48 of 157 (used by 1 package(s)):
+License text variant 49 of 158 (used by 1 package(s)):
   - cross-spawn@7.0.5
 
 The MIT License (MIT)
@@ -15961,7 +15989,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 49 of 157 (used by 1 package(s)):
+License text variant 50 of 158 (used by 1 package(s)):
   - prettier@3.4.2
 
 # Prettier license
@@ -20346,7 +20374,7 @@ Author: Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)
 > THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 50 of 157 (used by 1 package(s)):
+License text variant 51 of 158 (used by 1 package(s)):
   - postcss-js@4.0.1
 
 The MIT License (MIT)
@@ -20371,7 +20399,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 51 of 157 (used by 1 package(s)):
+License text variant 52 of 158 (used by 1 package(s)):
   - stylis@4.2.0
 
 MIT License
@@ -20397,7 +20425,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 52 of 157 (used by 1 package(s)):
+License text variant 53 of 158 (used by 1 package(s)):
   - csstype@3.1.3
 
 Copyright (c) 2017-2018 Fredrik Nicol
@@ -20421,7 +20449,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 53 of 157 (used by 5 package(s)):
+License text variant 54 of 158 (used by 5 package(s)):
   - @floating-ui/core@1.6.8
   - @floating-ui/dom@1.6.12
   - @floating-ui/react-dom@2.1.2
@@ -20450,7 +20478,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 54 of 157 (used by 1 package(s)):
+License text variant 55 of 158 (used by 1 package(s)):
   - file-saver@2.0.5
 
 The MIT License
@@ -20466,7 +20494,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
   [1]: http://eligrey.com
 
 --------------------------------------------------------------------------------
-License text variant 55 of 157 (used by 1 package(s)):
+License text variant 56 of 158 (used by 1 package(s)):
   - proxy-from-env@1.1.0
 
 The MIT License
@@ -20491,7 +20519,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 56 of 157 (used by 1 package(s)):
+License text variant 57 of 158 (used by 1 package(s)):
   - postcss-value-parser@4.2.0
 
 Copyright (c) Bogdan Chadkin <trysound@yandex.ru>
@@ -20518,7 +20546,7 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 57 of 157 (used by 6 package(s)):
+License text variant 58 of 158 (used by 6 package(s)):
   - @react-spring/animated@10.0.3
   - @react-spring/core@10.0.3
   - @react-spring/rafz@10.0.3
@@ -20549,7 +20577,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 58 of 157 (used by 1 package(s)):
+License text variant 59 of 158 (used by 1 package(s)):
   - postcss-load-config@4.0.2
 
 The MIT License (MIT)
@@ -20574,7 +20602,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 59 of 157 (used by 1 package(s)):
+License text variant 60 of 158 (used by 1 package(s)):
   - postcss-selector-parser@6.1.2
 
 Copyright (c) Ben Briggs <beneb.info@gmail.com> (http://beneb.info)
@@ -20601,7 +20629,7 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 60 of 157 (used by 13 package(s)):
+License text variant 61 of 158 (used by 13 package(s)):
   - @emotion/babel-plugin@11.13.5
   - @emotion/cache@11.14.0
   - @emotion/hash@0.9.2
@@ -20639,7 +20667,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 61 of 157 (used by 1 package(s)):
+License text variant 62 of 158 (used by 1 package(s)):
   - color-name@1.1.4
 
 The MIT License (MIT)
@@ -20652,7 +20680,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 62 of 157 (used by 54 package(s)):
+License text variant 63 of 158 (used by 54 package(s)):
   - @radix-ui/primitive@1.1.3
   - @radix-ui/react-accessible-icon@1.1.7
   - @radix-ui/react-accordion@1.2.12
@@ -20731,7 +20759,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 63 of 157 (used by 1 package(s)):
+License text variant 64 of 158 (used by 1 package(s)):
   - function-bind@1.1.2
 
 Copyright (c) 2013 Raynos.
@@ -20755,7 +20783,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 64 of 157 (used by 1 package(s)):
+License text variant 65 of 158 (used by 1 package(s)):
   - merge2@1.4.1
 
 The MIT License (MIT)
@@ -20781,7 +20809,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 65 of 157 (used by 1 package(s)):
+License text variant 66 of 158 (used by 1 package(s)):
   - path-parse@1.0.7
 
 The MIT License (MIT)
@@ -20807,7 +20835,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 66 of 157 (used by 1 package(s)):
+License text variant 67 of 158 (used by 1 package(s)):
   - thenify@3.3.1
 
 
@@ -20834,7 +20862,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 67 of 157 (used by 1 package(s)):
+License text variant 68 of 158 (used by 1 package(s)):
   - any-promise@1.3.0
 
 Copyright (C) 2014-2016 Kevin Beaty
@@ -20858,7 +20886,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 68 of 157 (used by 1 package(s)):
+License text variant 69 of 158 (used by 1 package(s)):
   - js-tokens@4.0.0
 
 The MIT License (MIT)
@@ -20884,7 +20912,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 69 of 157 (used by 2 package(s)):
+License text variant 70 of 158 (used by 2 package(s)):
   - @tanstack/react-table@8.20.5
   - @tanstack/table-core@8.20.5
 
@@ -20911,7 +20939,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 70 of 157 (used by 1 package(s)):
+License text variant 71 of 158 (used by 1 package(s)):
   - babel-plugin-macros@3.1.0
 
 The MIT License (MIT)
@@ -20936,7 +20964,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 71 of 157 (used by 2 package(s)):
+License text variant 72 of 158 (used by 2 package(s)):
   - error-ex@1.3.4
   - is-arrayish@0.2.1
 
@@ -20963,7 +20991,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 72 of 157 (used by 1 package(s)):
+License text variant 73 of 158 (used by 1 package(s)):
   - pngjs@5.0.0
 
 pngjs2 original work Copyright (c) 2015 Luke Page & Original Contributors
@@ -20988,7 +21016,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 73 of 157 (used by 1 package(s)):
+License text variant 74 of 158 (used by 1 package(s)):
   - json-parse-even-better-errors@2.3.1
 
 Copyright 2017 Kat Marchán
@@ -21018,7 +21046,7 @@ This library is a fork of 'better-json-errors' by Kat Marchán, extended and
 distributed under the terms of the MIT license above.
 
 --------------------------------------------------------------------------------
-License text variant 74 of 157 (used by 1 package(s)):
+License text variant 75 of 158 (used by 1 package(s)):
   - vaul@1.1.2
 
 MIT License
@@ -21032,7 +21060,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 75 of 157 (used by 1 package(s)):
+License text variant 76 of 158 (used by 1 package(s)):
   - form-data@4.0.1
 
 Copyright (c) 2012 Felix Geisendörfer (felix@debuggable.com) and contributors
@@ -21056,7 +21084,7 @@ Copyright (c) 2012 Felix Geisendörfer (felix@debuggable.com) and contributors
  THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 76 of 157 (used by 3 package(s)):
+License text variant 77 of 158 (used by 3 package(s)):
   - get-tsconfig@4.8.1
   - resolve-pkg-maps@1.0.0
   - tsx@4.19.2
@@ -21084,7 +21112,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 77 of 157 (used by 1 package(s)):
+License text variant 78 of 158 (used by 1 package(s)):
   - lines-and-columns@1.2.4
 
 The MIT License (MIT)
@@ -21110,7 +21138,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 78 of 157 (used by 9 package(s)):
+License text variant 79 of 158 (used by 9 package(s)):
   - @babel/code-frame@7.26.2
   - @babel/generator@7.26.2
   - @babel/helper-module-imports@7.25.9
@@ -21145,7 +21173,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 79 of 157 (used by 1 package(s)):
+License text variant 80 of 158 (used by 1 package(s)):
   - mime-db@1.52.0
 
 (The MIT License)
@@ -21173,7 +21201,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 80 of 157 (used by 1 package(s)):
+License text variant 81 of 158 (used by 1 package(s)):
   - picomatch@2.3.1
 
 The MIT License (MIT)
@@ -21199,7 +21227,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 81 of 157 (used by 1 package(s)):
+License text variant 82 of 158 (used by 1 package(s)):
   - recharts-scale@0.4.5
 
 The MIT License (MIT)
@@ -21225,7 +21253,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 82 of 157 (used by 1 package(s)):
+License text variant 83 of 158 (used by 1 package(s)):
   - hasown@2.0.2
 
 MIT License
@@ -21251,7 +21279,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 83 of 157 (used by 1 package(s)):
+License text variant 84 of 158 (used by 1 package(s)):
   - cmdk@1.0.4
 
 MIT License
@@ -21277,7 +21305,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 84 of 157 (used by 1 package(s)):
+License text variant 85 of 158 (used by 1 package(s)):
   - recharts@2.14.1
 
 The MIT License (MIT)
@@ -21303,7 +21331,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 85 of 157 (used by 1 package(s)):
+License text variant 86 of 158 (used by 1 package(s)):
   - inline-style-parser@0.2.4
 
 (The MIT License)
@@ -21317,7 +21345,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 86 of 157 (used by 1 package(s)):
+License text variant 87 of 158 (used by 1 package(s)):
   - get-nonce@1.0.1
 
 MIT License
@@ -21343,7 +21371,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 87 of 157 (used by 2 package(s)):
+License text variant 88 of 158 (used by 2 package(s)):
   - i18next@25.6.3
   - react-i18next@16.3.5
 
@@ -21370,7 +21398,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 88 of 157 (used by 1 package(s)):
+License text variant 89 of 158 (used by 1 package(s)):
   - unist-util-is@6.0.0
 
 (The MIT license)
@@ -21397,7 +21425,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 89 of 157 (used by 1 package(s)):
+License text variant 90 of 158 (used by 1 package(s)):
   - mime-types@2.1.35
 
 (The MIT License)
@@ -21425,7 +21453,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 90 of 157 (used by 2 package(s)):
+License text variant 91 of 158 (used by 2 package(s)):
   - @hookform/resolvers@3.9.1
   - react-hook-form@7.54.0
 
@@ -21452,7 +21480,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 91 of 157 (used by 6 package(s)):
+License text variant 92 of 158 (used by 6 package(s)):
   - react-dom@18.3.1
   - react-is@16.13.1
   - react-is@18.3.1
@@ -21483,7 +21511,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 92 of 157 (used by 1 package(s)):
+License text variant 93 of 158 (used by 1 package(s)):
   - reselect@5.1.1
 
 The MIT License (MIT)
@@ -21509,7 +21537,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 93 of 157 (used by 1 package(s)):
+License text variant 94 of 158 (used by 1 package(s)):
   - postcss-import@15.1.0
 
 The MIT License (MIT)
@@ -21534,7 +21562,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 94 of 157 (used by 1 package(s)):
+License text variant 95 of 158 (used by 1 package(s)):
   - postcss@8.4.49
 
 The MIT License (MIT)
@@ -21559,7 +21587,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 95 of 157 (used by 1 package(s)):
+License text variant 96 of 158 (used by 1 package(s)):
   - extend@3.0.2
 
 The MIT License (MIT)
@@ -21586,7 +21614,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 96 of 157 (used by 2 package(s)):
+License text variant 97 of 158 (used by 2 package(s)):
   - tiny-invariant@1.3.3
   - tiny-warning@1.0.3
 
@@ -21613,7 +21641,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 97 of 157 (used by 1 package(s)):
+License text variant 98 of 158 (used by 1 package(s)):
   - tailwind-merge@2.5.5
 
 MIT License
@@ -21639,7 +21667,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 98 of 157 (used by 1 package(s)):
+License text variant 99 of 158 (used by 1 package(s)):
   - reusify@1.0.4
 
 The MIT License (MIT)
@@ -21665,7 +21693,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 99 of 157 (used by 1 package(s)):
+License text variant 100 of 158 (used by 1 package(s)):
   - react-markdown@10.1.0
 
 The MIT License (MIT)
@@ -21691,7 +21719,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 100 of 157 (used by 1 package(s)):
+License text variant 101 of 158 (used by 1 package(s)):
   - @jridgewell/resolve-uri@3.1.2
 
 Copyright 2019 Justin Ridgewell <jridgewell@google.com>
@@ -21715,7 +21743,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 101 of 157 (used by 1 package(s)):
+License text variant 102 of 158 (used by 1 package(s)):
   - void-elements@3.1.0
 
 (The MIT License)
@@ -21742,7 +21770,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 102 of 157 (used by 1 package(s)):
+License text variant 103 of 158 (used by 1 package(s)):
   - arg@5.0.2
 
 The MIT License (MIT)
@@ -21768,7 +21796,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 103 of 157 (used by 1 package(s)):
+License text variant 104 of 158 (used by 1 package(s)):
   - style-to-js@1.1.16
 
 The MIT License (MIT)
@@ -21795,7 +21823,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 104 of 157 (used by 1 package(s)):
+License text variant 105 of 158 (used by 1 package(s)):
   - handlebars@4.7.8
 
 Copyright (C) 2011-2019 by Yehuda Katz
@@ -21819,7 +21847,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 105 of 157 (used by 1 package(s)):
+License text variant 106 of 158 (used by 1 package(s)):
   - pirates@4.0.6
 
 MIT License
@@ -21845,7 +21873,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 106 of 157 (used by 1 package(s)):
+License text variant 107 of 158 (used by 1 package(s)):
   - @jridgewell/trace-mapping@0.3.25
 
 Copyright 2022 Justin Ridgewell <justin@ridgewell.name>
@@ -21869,7 +21897,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 107 of 157 (used by 9 package(s)):
+License text variant 108 of 158 (used by 9 package(s)):
   - bail@2.0.2
   - ccount@2.0.1
   - character-entities-html4@2.1.0
@@ -21904,7 +21932,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 108 of 157 (used by 1 package(s)):
+License text variant 109 of 158 (used by 1 package(s)):
   - find-root@1.1.0
 
 Copyright © 2017 jsdnxx
@@ -21916,7 +21944,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 109 of 157 (used by 1 package(s)):
+License text variant 110 of 158 (used by 1 package(s)):
   - camelcase-css@2.0.1
 
 The MIT License (MIT)
@@ -21942,7 +21970,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 110 of 157 (used by 1 package(s)):
+License text variant 111 of 158 (used by 1 package(s)):
   - react-smooth@4.0.1
 
 The MIT License (MIT)
@@ -21968,7 +21996,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 111 of 157 (used by 2 package(s)):
+License text variant 112 of 158 (used by 2 package(s)):
   - parse-entities@4.0.2
   - property-information@7.0.0
 
@@ -21996,7 +22024,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 112 of 157 (used by 1 package(s)):
+License text variant 113 of 158 (used by 1 package(s)):
   - require-directory@2.1.1
 
 The MIT License (MIT)
@@ -22023,7 +22051,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 113 of 157 (used by 1 package(s)):
+License text variant 114 of 158 (used by 1 package(s)):
   - vfile-message@4.0.2
 
 (The MIT License)
@@ -22050,7 +22078,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 114 of 157 (used by 1 package(s)):
+License text variant 115 of 158 (used by 1 package(s)):
   - resolve@1.22.8
 
 MIT License
@@ -22076,7 +22104,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 115 of 157 (used by 21 package(s)):
+License text variant 116 of 158 (used by 21 package(s)):
   - @alloc/quick-lru@5.2.0
   - ansi-regex@5.0.1
   - ansi-styles@4.3.0
@@ -22110,7 +22138,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 116 of 157 (used by 1 package(s)):
+License text variant 117 of 158 (used by 1 package(s)):
   - follow-redirects@1.15.9
 
 Copyright 2014–present Olivier Lalonde <olalonde@gmail.com>, James Talmage <james@talmage.io>, Ruben Verborgh
@@ -22133,7 +22161,7 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 117 of 157 (used by 1 package(s)):
+License text variant 118 of 158 (used by 1 package(s)):
   - eventemitter3@4.0.7
 
 The MIT License (MIT)
@@ -22159,7 +22187,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 118 of 157 (used by 2 package(s)):
+License text variant 119 of 158 (used by 2 package(s)):
   - @mui/x-internals@8.19.0
   - @mui/x-tree-view@8.19.0
 
@@ -22186,7 +22214,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 119 of 157 (used by 1 package(s)):
+License text variant 120 of 158 (used by 1 package(s)):
   - postcss-nested@6.2.0
 
 The MIT License (MIT)
@@ -22211,7 +22239,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 120 of 157 (used by 2 package(s)):
+License text variant 121 of 158 (used by 2 package(s)):
   - react-is@19.2.0
   - use-sync-external-store@1.6.0
 
@@ -22238,7 +22266,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 121 of 157 (used by 1 package(s)):
+License text variant 122 of 158 (used by 1 package(s)):
   - brace-expansion@2.0.1
 
 MIT License
@@ -22264,7 +22292,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 122 of 157 (used by 1 package(s)):
+License text variant 123 of 158 (used by 1 package(s)):
   - dequal@2.0.3
 
 The MIT License (MIT)
@@ -22290,7 +22318,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 123 of 157 (used by 1 package(s)):
+License text variant 124 of 158 (used by 1 package(s)):
   - thenify-all@1.6.0
 
 
@@ -22317,7 +22345,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 124 of 157 (used by 2 package(s)):
+License text variant 125 of 158 (used by 2 package(s)):
   - combined-stream@1.0.8
   - delayed-stream@1.0.0
 
@@ -22342,7 +22370,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 125 of 157 (used by 2 package(s)):
+License text variant 126 of 158 (used by 2 package(s)):
   - @tanstack/react-store@0.6.1
   - @tanstack/store@0.6.0
 
@@ -22369,7 +22397,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 126 of 157 (used by 1 package(s)):
+License text variant 127 of 158 (used by 1 package(s)):
   - tailwindcss-animate@1.0.7
 
 MIT License
@@ -22395,7 +22423,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 127 of 157 (used by 4 package(s)):
+License text variant 128 of 158 (used by 4 package(s)):
   - braces@3.0.3
   - fill-range@7.1.1
   - is-number@7.0.0
@@ -22424,7 +22452,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 128 of 157 (used by 23 package(s)):
+License text variant 129 of 158 (used by 23 package(s)):
   - @types/d3-array@3.2.1
   - @types/d3-color@3.1.3
   - @types/d3-ease@3.0.2
@@ -22472,7 +22500,7 @@ License text variant 128 of 157 (used by 23 package(s)):
     SOFTWARE
 
 --------------------------------------------------------------------------------
-License text variant 129 of 157 (used by 11 package(s)):
+License text variant 130 of 158 (used by 11 package(s)):
   - comma-separated-tokens@2.0.3
   - hast-util-whitespace@3.0.0
   - is-alphabetical@2.0.1
@@ -22509,7 +22537,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 130 of 157 (used by 1 package(s)):
+License text variant 131 of 158 (used by 1 package(s)):
   - debug@4.3.7
 
 (The MIT License)
@@ -22533,7 +22561,7 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN 
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 131 of 157 (used by 1 package(s)):
+License text variant 132 of 158 (used by 1 package(s)):
   - readdirp@3.6.0
 
 MIT License
@@ -22559,7 +22587,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 132 of 157 (used by 2 package(s)):
+License text variant 133 of 158 (used by 2 package(s)):
   - queue-microtask@1.2.3
   - run-parallel@1.2.0
 
@@ -22585,7 +22613,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 133 of 157 (used by 1 package(s)):
+License text variant 134 of 158 (used by 1 package(s)):
   - is-binary-path@2.1.0
 
 MIT License
@@ -22599,7 +22627,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 134 of 157 (used by 1 package(s)):
+License text variant 135 of 158 (used by 1 package(s)):
   - lilconfig@3.1.3
 
 MIT License
@@ -22625,7 +22653,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 135 of 157 (used by 3 package(s)):
+License text variant 136 of 158 (used by 3 package(s)):
   - date-fns-jalali@4.1.0-0
   - date-fns@3.6.0
   - date-fns@4.1.0
@@ -22653,7 +22681,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 136 of 157 (used by 1 package(s)):
+License text variant 137 of 158 (used by 1 package(s)):
   - mdast-util-phrasing@4.1.0
 
 (The MIT License)
@@ -22681,7 +22709,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 137 of 157 (used by 1 package(s)):
+License text variant 138 of 158 (used by 1 package(s)):
   - axios@1.7.9
 
 # Copyright (c) 2014-present Matt Zabriskie & Collaborators
@@ -22693,7 +22721,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 138 of 157 (used by 1 package(s)):
+License text variant 139 of 158 (used by 1 package(s)):
   - trough@2.2.0
 
 (The MIT License)
@@ -22719,7 +22747,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 139 of 157 (used by 2 package(s)):
+License text variant 140 of 158 (used by 2 package(s)):
   - unified@11.0.5
   - vfile@6.0.3
 
@@ -22746,7 +22774,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 140 of 157 (used by 1 package(s)):
+License text variant 141 of 158 (used by 1 package(s)):
   - qrcode@1.5.4
 
 The MIT License (MIT)
@@ -22760,7 +22788,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 141 of 157 (used by 1 package(s)):
+License text variant 142 of 158 (used by 1 package(s)):
   - is-extglob@2.1.1
 
 The MIT License (MIT)
@@ -22786,7 +22814,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 142 of 157 (used by 4 package(s)):
+License text variant 143 of 158 (used by 4 package(s)):
   - cssesc@3.0.0
   - emoji-regex@8.0.0
   - emoji-regex@9.2.2
@@ -22814,7 +22842,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 143 of 157 (used by 1 package(s)):
+License text variant 144 of 158 (used by 1 package(s)):
   - ms@2.1.3
 
 The MIT License (MIT)
@@ -22840,7 +22868,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 144 of 157 (used by 32 package(s)):
+License text variant 145 of 158 (used by 32 package(s)):
   - decode-named-character-reference@1.1.0
   - hast-util-to-jsx-runtime@2.3.6
   - markdown-table@3.0.4
@@ -22898,7 +22926,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 145 of 157 (used by 2 package(s)):
+License text variant 146 of 158 (used by 2 package(s)):
   - @tabler/icons-react@3.24.0
   - @tabler/icons@3.24.0
 
@@ -22925,7 +22953,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 146 of 157 (used by 1 package(s)):
+License text variant 147 of 158 (used by 1 package(s)):
   - esbuild@0.23.1
 
 MIT License
@@ -22951,7 +22979,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 147 of 157 (used by 1 package(s)):
+License text variant 148 of 158 (used by 1 package(s)):
   - asynckit@0.4.0
 
 The MIT License (MIT)
@@ -22977,7 +23005,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 148 of 157 (used by 1 package(s)):
+License text variant 149 of 158 (used by 1 package(s)):
   - mz@2.7.0
 
 
@@ -23004,7 +23032,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 149 of 157 (used by 1 package(s)):
+License text variant 150 of 158 (used by 1 package(s)):
   - yargs@15.4.1
 
 MIT License
@@ -23030,7 +23058,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 150 of 157 (used by 1 package(s)):
+License text variant 151 of 158 (used by 1 package(s)):
   - to-regex-range@5.0.1
 
 The MIT License (MIT)
@@ -23056,7 +23084,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 151 of 157 (used by 1 package(s)):
+License text variant 152 of 158 (used by 1 package(s)):
   - jiti@1.21.6
 
 MIT License
@@ -23082,7 +23110,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 152 of 157 (used by 2 package(s)):
+License text variant 153 of 158 (used by 2 package(s)):
   - remark-parse@11.0.0
   - remark-stringify@11.0.0
 
@@ -23109,7 +23137,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 153 of 157 (used by 1 package(s)):
+License text variant 154 of 158 (used by 1 package(s)):
   - decimal.js-light@2.5.1
 
 The MIT Expat Licence.
@@ -23136,7 +23164,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 154 of 157 (used by 1 package(s)):
+License text variant 155 of 158 (used by 1 package(s)):
   - @date-fns/tz@1.4.1
 
 MIT License
@@ -23150,7 +23178,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 155 of 157 (used by 1 package(s)):
+License text variant 156 of 158 (used by 1 package(s)):
   - tailwindcss@3.4.16
 
 MIT License
@@ -23176,7 +23204,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 156 of 157 (used by 1 package(s)):
+License text variant 157 of 158 (used by 1 package(s)):
   - neo-async@2.6.2
 
 MIT License
@@ -23203,7 +23231,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-License text variant 157 of 157 (used by 1 package(s)):
+License text variant 158 of 158 (used by 1 package(s)):
   - util-deprecate@1.0.2
 
 (The MIT License)

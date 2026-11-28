@@ -24,6 +24,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
+import { LanguageFlag } from '@/components/language-flag'
 import { Globe } from 'lucide-react'
 
 const LANGUAGES = [
@@ -70,7 +71,8 @@ export function LanguageSwitch() {
             key={lang.code}
             onClick={() => changeLanguage(lang.code)}
           >
-            {lang.label}
+            <LanguageFlag code={lang.code} />
+            <span>{lang.label}</span>
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>

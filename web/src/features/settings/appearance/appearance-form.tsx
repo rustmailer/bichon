@@ -33,6 +33,7 @@ import {
     FormMessage,
 } from '@/components/ui/form'
 import { RadioGroup } from '@/components/ui/radio-group'
+import { LanguageFlag } from '@/components/language-flag'
 import { useTheme, Theme } from '@/context/theme-context'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
@@ -184,9 +185,12 @@ export function AppearanceForm() {
                                                     !field.value && 'text-muted-foreground'
                                                 )}
                                             >
-                                                {field.value
-                                                    ? languages.find((l) => l.value === field.value)?.label
-                                                    : t('settings.appearance.placeholder.select_language')}
+                                                <span className='flex items-center gap-2'>
+                                                    {field.value && <LanguageFlag code={field.value} />}
+                                                    {field.value
+                                                        ? languages.find((l) => l.value === field.value)?.label
+                                                        : t('settings.appearance.placeholder.select_language')}
+                                                </span>
                                                 <CaretSortIcon className='ms-2 h-4 w-4 shrink-0 opacity-50' />
                                             </Button>
                                         </FormControl>
@@ -211,6 +215,7 @@ export function AppearanceForm() {
                                                                     language.value === field.value ? 'opacity-100' : 'opacity-0'
                                                                 )}
                                                             />
+                                                            <LanguageFlag code={language.value} />
                                                             {language.label}
                                                         </CommandItem>
                                                     ))}
