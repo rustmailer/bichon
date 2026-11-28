@@ -132,7 +132,7 @@ export interface DownloadState {
 type Encryption = 'Ssl' | 'StartTls' | 'None';
 type AuthType = 'Password' | 'OAuth2';
 type Unit = 'Days' | 'Months' | 'Years';
-type AccountType = 'IMAP' | 'NoSync' | 'View';
+type AccountType = 'IMAP' | 'NoSync' | 'View' | 'Graph' | 'Gmail';
 
 // Interface definitions
 interface AuthConfig {

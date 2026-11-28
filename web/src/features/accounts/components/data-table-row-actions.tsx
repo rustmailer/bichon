@@ -36,6 +36,7 @@ import { useTranslation } from 'react-i18next'
 import { useCurrentUser } from '@/hooks/use-current-user'
 import { AccountModel, cancel_account_download } from '@/api/account/api'
 import { toast } from '@/hooks/use-toast'
+import { errorMessage } from '@/lib/error'
 import { useNavigate } from '@tanstack/react-router'
 import { StartDownloadDialog } from './start-download-dialog'
 import { CleanupConfigDialog } from './cleanup-config-dialog'
@@ -92,11 +93,11 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
     try {
       await cancel_account_download(row.original.id);
       toast({ title: t('accounts.downloadCancelled') });
-    } catch (error: any) {
+    } catch (error) {
       toast({
         variant: "destructive",
         title: t('accounts.cancelFailed'),
-        description: error.response?.data?.message || error.message
+        description: errorMessage(error)
       });
     }
   }
@@ -114,7 +115,7 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align='end' className='w-[220px]'>
-          {hasPermission && <DropdownMenuItem
+          {hasPermission && account_type !== 'Graph' && account_type !== 'Gmail' && <DropdownMenuItem
             onClick={() => {
               if (account_type === "IMAP") {
                 navigate({ to: '/accounts/$id/settings', params: { id: String(row.original.id) } });

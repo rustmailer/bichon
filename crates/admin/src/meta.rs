@@ -248,6 +248,7 @@ impl From<AccountV3> for AccountModel {
             date_before: value.date_before,
             download_folders: value.sync_folders,
             account_type: value.account_type,
+            connection_id: None,
             download_interval_min: value.sync_interval_min,
             download_batch_size: value.sync_batch_size,
             max_email_size_bytes: None,

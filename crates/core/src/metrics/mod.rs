@@ -738,6 +738,8 @@ fn refresh_account_metrics(
     let mut imap = 0usize;
     let mut nosync = 0usize;
     let mut view = 0usize;
+    let mut graph = 0usize;
+    let mut gmail = 0usize;
     let mut folders = 0usize;
 
     for account in accounts {
@@ -745,6 +747,8 @@ fn refresh_account_metrics(
             AccountType::IMAP => imap += 1,
             AccountType::NoSync => nosync += 1,
             AccountType::View => view += 1,
+            AccountType::Graph => graph += 1,
+            AccountType::Gmail => gmail += 1,
         }
         folders += account.known_folders.as_ref().map_or(0, |f| f.len());
 
@@ -790,6 +794,8 @@ fn refresh_account_metrics(
         .with_label_values(&["nosync"])
         .set(nosync as f64);
     ACCOUNTS_TOTAL.with_label_values(&["view"]).set(view as f64);
+    ACCOUNTS_TOTAL.with_label_values(&["graph"]).set(graph as f64);
+    ACCOUNTS_TOTAL.with_label_values(&["gmail"]).set(gmail as f64);
     ACCOUNT_MAILBOX_FOLDERS_TOTAL.set(folders as f64);
 }
 
@@ -903,6 +909,8 @@ fn account_type_label(account_type: &AccountType) -> &'static str {
         AccountType::IMAP => "imap",
         AccountType::NoSync => "nosync",
         AccountType::View => "view",
+        AccountType::Graph => "graph",
+        AccountType::Gmail => "gmail",
     }
 }
 

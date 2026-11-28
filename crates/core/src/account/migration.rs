@@ -19,7 +19,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::str::FromStr;
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::{
     account::{
@@ -63,6 +63,25 @@ pub enum AccountType {
     /// without remembering a special case. Its sources and filters live in
     /// [`Account::view`].
     View,
+    /// A remote mailbox synced through the Microsoft Graph API.
+    ///
+    /// Credentials live either on a tenant-level provider connection
+    /// ([`Account::connection_id`] is `Some`) or, for a delegated
+    /// single-mailbox account, in the account's own OAuth2 token
+    /// (`connection_id` is `None`).
+    Graph,
+    /// A remote mailbox synced through the Gmail API.
+    ///
+    /// Same credential split as [`AccountType::Graph`].
+    Gmail,
+}
+
+/// The provider API behind a synced account. Deliberately excludes IMAP:
+/// IMAP is the generic transport, not a provider integration.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Deserialize, Serialize)]
+pub enum ProviderKind {
+    Graph,
+    Gmail,
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Deserialize, Serialize)]
@@ -576,6 +595,15 @@ pub struct Account {
     pub date_before: Option<RelativeDate>,
     pub download_folders: Option<Vec<String>>,
     pub account_type: AccountType,
+    /// Tenant-level provider connection this account belongs to.
+    ///
+    /// `Some` for a `Graph`/`Gmail` mailbox that authenticates through a
+    /// shared tenant connection (client credentials / service account).
+    /// `None` for IMAP accounts and for delegated provider accounts, whose
+    /// credentials live on the account itself. Stored on the account row so
+    /// the association survives backups and account edits.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub connection_id: Option<u64>,
     pub download_interval_min: Option<i64>,
     pub download_batch_size: Option<u32>,
     #[serde(default)]
@@ -712,6 +740,35 @@ impl Account {
         matches!(self.account_type, AccountType::View)
     }
 
+    /// A remote mailbox synced through a provider API (Graph or Gmail).
+    pub fn is_provider_account(&self) -> bool {
+        matches!(
+            self.account_type,
+            AccountType::Graph | AccountType::Gmail
+        )
+    }
+
+    /// The provider API behind this account, if any. IMAP accounts have no
+    /// provider kind: their transport is the generic IMAP client.
+    pub fn provider_kind(&self) -> Option<ProviderKind> {
+        match self.account_type {
+            AccountType::Graph => Some(ProviderKind::Graph),
+            AccountType::Gmail => Some(ProviderKind::Gmail),
+            _ => None,
+        }
+    }
+
+    /// Whether the account pulls mail from a remote server, over IMAP or a
+    /// provider API. This is the "is synced" predicate: it deliberately
+    /// includes IMAP so callers can replace `matches!(account_type, IMAP)`
+    /// without changing IMAP behaviour.
+    pub fn is_remote_synced(&self) -> bool {
+        matches!(
+            self.account_type,
+            AccountType::IMAP | AccountType::Graph | AccountType::Gmail
+        )
+    }
+
     /// Whether the account stores mail of its own (as opposed to a view).
     pub fn stores_mail(&self) -> bool {
         !self.is_view_account()
@@ -730,6 +787,7 @@ impl Account {
             download_folders: None,
             known_folders: None,
             account_type: request.account_type,
+            connection_id: request.connection_id,
             download_interval_min: request.download_interval_min,
             created_at: utc_now!(),
             updated_at: utc_now!(),
@@ -865,6 +923,14 @@ impl Account {
                 .trigger_schedule(cloned.id, cloned.email.clone())
                 .await;
         }
+        if cloned.is_provider_account() {
+            if let Err(e) = crate::ext::provider::try_start_account_sync(&cloned) {
+                warn!(
+                    "Account {}: provider connector failed to start after creation: {:#?}",
+                    cloned.id, e
+                );
+            }
+        }
         Ok(cloned)
     }
 
@@ -888,6 +954,8 @@ impl Account {
     ) -> BichonResult<()> {
         let account = AccountModel::get(account_id)?;
         request.validate_update_request(&account)?;
+        let was_enabled = account.enabled;
+        let requested_enabled = request.enabled;
         if let Some(view) = &request.view {
             let old_sources = account
                 .view
@@ -905,6 +973,31 @@ impl Account {
             &account_id.to_string(),
             move |current: Account| Self::apply_update_fields(&current, request),
         )?;
+
+        // Provider connectors follow the account's enabled flag. IMAP keeps
+        // its existing scheduler path untouched.
+        if account.is_provider_account() {
+            match requested_enabled {
+                Some(false) => {
+                    if let Err(e) = crate::ext::provider::stop_account_sync(&account) {
+                        warn!(
+                            "Account {}: provider connector failed to stop sync after disable: {:#?}",
+                            account_id, e
+                        );
+                    }
+                }
+                Some(true) if !was_enabled => match AccountModel::get(account_id)
+                    .and_then(|updated| crate::ext::provider::try_start_account_sync(&updated))
+                {
+                    Ok(_) => {}
+                    Err(e) => warn!(
+                        "Account {}: provider connector failed to start sync after enable: {:#?}",
+                        account_id, e
+                    ),
+                },
+                _ => {}
+            }
+        }
 
         Ok(())
     }
@@ -1028,6 +1121,14 @@ impl Account {
         if matches!(account.account_type, AccountType::IMAP) {
             SYNC_TASKS.stop(account.id).await?;
         }
+        // Provider connectors own their own scheduler. Stop it best-effort:
+        // a connector that cannot stop must not block the archive cleanup.
+        if let Err(e) = crate::ext::provider::stop_account_sync(&account) {
+            warn!(
+                "Account {}: provider connector failed to stop sync during deletion: {:#?}",
+                account.id, e
+            );
+        }
 
         // Mark as deleting and disabled so frontend shows status and download tasks skip it
         update_impl(
@@ -1078,6 +1179,15 @@ impl Account {
         ATTACHMENT_MANAGER
             .delete_account_attachments(account.id)
             .await?;
+        // Provider cursors, message mappings and error ledgers live in the
+        // connector's own store. Best-effort: the archive data is already
+        // gone, and a stale row is preferable to a failed deletion.
+        if let Err(e) = crate::ext::provider::delete_account_state(account) {
+            warn!(
+                "Account {}: provider connector failed to delete its state: {:#?}",
+                account.id, e
+            );
+        }
         Self::delete_account(account)?;
         info!("Sequential cleanup completed for account: {}", account.id);
         Ok(())
@@ -1325,6 +1435,12 @@ impl Account {
             new.account_name = normalize_optional_name(Some(account_name));
         }
 
+        // Only provider accounts may carry a connection; the request
+        // validator has already rejected it everywhere else.
+        if let Some(connection_id) = request.connection_id {
+            new.connection_id = Some(connection_id);
+        }
+
         if matches!(old.account_type, AccountType::IMAP) {
             if let Some(imap) = &request.imap {
                 if let Some(current_imap) = &mut new.imap {
@@ -1351,6 +1467,21 @@ impl Account {
                 new.download_batch_size = Some(*download_batch_size);
             }
 
+            if let Some(max_email_size_bytes) = request.max_email_size_bytes {
+                new.max_email_size_bytes = Some(max_email_size_bytes);
+            }
+        }
+
+        // Provider accounts keep the same per-account cadence knobs as IMAP;
+        // only the transport differs. Folder selection for providers is a
+        // separate field added with the connector implementation.
+        if old.is_provider_account() {
+            if let Some(sync_interval_min) = &request.download_interval_min {
+                new.download_interval_min = Some(*sync_interval_min);
+            }
+            if let Some(download_batch_size) = &request.download_batch_size {
+                new.download_batch_size = Some(*download_batch_size);
+            }
             if let Some(max_email_size_bytes) = request.max_email_size_bytes {
                 new.max_email_size_bytes = Some(max_email_size_bytes);
             }
@@ -1996,6 +2127,7 @@ mod tests {
             date_since: None,
             date_before: None,
             account_type: AccountType::NoSync,
+            connection_id: None,
             download_interval_min: None,
             download_batch_size: None,
             max_email_size_bytes: None,

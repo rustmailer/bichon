@@ -65,7 +65,11 @@ function TypeBadge({ type }: { type?: string }) {
   const { t } = useTranslation()
   return (
     <Badge variant='outline'>
-      {type === 'NoSync' ? t('accounts.noSyncAccount', 'Local account') : t('accounts.imap', 'IMAP')}
+      {type === 'NoSync'
+        ? t('accounts.noSyncAccount', 'Local account')
+        : type === 'IMAP'
+          ? t('accounts.imap', 'IMAP')
+          : (type ?? '')}
     </Badge>
   )
 }
@@ -116,9 +120,16 @@ function mb(bytes?: number): string {
 
 export function AccountDetailDrawer({ open, onOpenChange, currentRow }: Props) {
   const { t } = useTranslation()
-  const { isPro, isEnterprise } = useEdition()
+  const { isPro, isEnterprise, isLoading: editionLoading } = useEdition()
   const { getUrlById } = useProxyList()
   const row = currentRow
+  // Provider accounts exist in the shared account model, but only a Pro /
+  // Enterprise build has a connector for them. A community build (or a Pro
+  // build whose licence lapsed) starts fine and leaves the archive intact;
+  // this notice is the only explanation the operator gets (R-BC-05 / R-ED-04).
+  const isProviderAccount =
+    row.account_type === 'Graph' || row.account_type === 'Gmail'
+  const showProviderNotice = !editionLoading && !isPro && isProviderAccount
 
   const unitLabel = (unit?: string) =>
     unit ? t(`accounts.${unit.toLowerCase()}`, unit.toLowerCase()) : ''
@@ -181,6 +192,14 @@ export function AccountDetailDrawer({ open, onOpenChange, currentRow }: Props) {
             {t('accounts.accountDetails', 'Account details')}
           </DialogDescription>
         </DialogHeader>
+        {showProviderNotice && (
+          <div className='rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900'>
+            {t(
+              'accounts.providerRequiresPro',
+              'Microsoft 365 and Google Workspace accounts require Bichon Pro or Enterprise. Syncing is paused; mail already archived stays available.'
+            )}
+          </div>
+        )}
         <ScrollArea className='h-[34rem] w-full pr-4 -mr-4 py-1'>
           <div className='space-y-4'>
             <Card>

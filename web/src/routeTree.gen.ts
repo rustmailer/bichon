@@ -29,6 +29,9 @@ import { Route as AuthenticatedAttachmentIndexImport } from './routes/_authentic
 const AuthenticatedTimestampAnchorLazyImport = createFileRoute(
   '/_authenticated/timestamp-anchor',
 )()
+const AuthenticatedProvidersLazyImport = createFileRoute(
+  '/_authenticated/providers',
+)()
 const AuthenticatedLegalHoldLazyImport = createFileRoute(
   '/_authenticated/legal-hold',
 )()
@@ -160,6 +163,16 @@ const AuthenticatedTimestampAnchorLazyRoute =
       (d) => d.Route,
     ),
   )
+
+const AuthenticatedProvidersLazyRoute = AuthenticatedProvidersLazyImport.update(
+  {
+    id: '/providers',
+    path: '/providers',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any,
+).lazy(() =>
+  import('./routes/_authenticated/providers.lazy').then((d) => d.Route),
+)
 
 const AuthenticatedLegalHoldLazyRoute = AuthenticatedLegalHoldLazyImport.update(
   {
@@ -717,6 +730,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedLegalHoldLazyImport
       parentRoute: typeof AuthenticatedRouteImport
     }
+    '/_authenticated/providers': {
+      id: '/_authenticated/providers'
+      path: '/providers'
+      fullPath: '/providers'
+      preLoaderRoute: typeof AuthenticatedProvidersLazyImport
+      parentRoute: typeof AuthenticatedRouteImport
+    }
     '/_authenticated/timestamp-anchor': {
       id: '/_authenticated/timestamp-anchor'
       path: '/timestamp-anchor'
@@ -1028,6 +1048,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedConfigurationLazyRoute: typeof AuthenticatedConfigurationLazyRoute
   AuthenticatedIntegrityLazyRoute: typeof AuthenticatedIntegrityLazyRoute
   AuthenticatedLegalHoldLazyRoute: typeof AuthenticatedLegalHoldLazyRoute
+  AuthenticatedProvidersLazyRoute: typeof AuthenticatedProvidersLazyRoute
   AuthenticatedTimestampAnchorLazyRoute: typeof AuthenticatedTimestampAnchorLazyRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
   AuthenticatedAccountsNewLazyRoute: typeof AuthenticatedAccountsNewLazyRoute
@@ -1058,6 +1079,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedConfigurationLazyRoute: AuthenticatedConfigurationLazyRoute,
   AuthenticatedIntegrityLazyRoute: AuthenticatedIntegrityLazyRoute,
   AuthenticatedLegalHoldLazyRoute: AuthenticatedLegalHoldLazyRoute,
+  AuthenticatedProvidersLazyRoute: AuthenticatedProvidersLazyRoute,
   AuthenticatedTimestampAnchorLazyRoute: AuthenticatedTimestampAnchorLazyRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
   AuthenticatedAccountsNewLazyRoute: AuthenticatedAccountsNewLazyRoute,
@@ -1096,6 +1118,7 @@ export interface FileRoutesByFullPath {
   '/configuration': typeof AuthenticatedConfigurationLazyRoute
   '/integrity': typeof AuthenticatedIntegrityLazyRoute
   '/legal-hold': typeof AuthenticatedLegalHoldLazyRoute
+  '/providers': typeof AuthenticatedProvidersLazyRoute
   '/timestamp-anchor': typeof AuthenticatedTimestampAnchorLazyRoute
   '/': typeof AuthenticatedIndexRoute
   '/accounts/new': typeof AuthenticatedAccountsNewLazyRoute
@@ -1145,6 +1168,7 @@ export interface FileRoutesByTo {
   '/configuration': typeof AuthenticatedConfigurationLazyRoute
   '/integrity': typeof AuthenticatedIntegrityLazyRoute
   '/legal-hold': typeof AuthenticatedLegalHoldLazyRoute
+  '/providers': typeof AuthenticatedProvidersLazyRoute
   '/timestamp-anchor': typeof AuthenticatedTimestampAnchorLazyRoute
   '/': typeof AuthenticatedIndexRoute
   '/accounts/new': typeof AuthenticatedAccountsNewLazyRoute
@@ -1199,6 +1223,7 @@ export interface FileRoutesById {
   '/_authenticated/configuration': typeof AuthenticatedConfigurationLazyRoute
   '/_authenticated/integrity': typeof AuthenticatedIntegrityLazyRoute
   '/_authenticated/legal-hold': typeof AuthenticatedLegalHoldLazyRoute
+  '/_authenticated/providers': typeof AuthenticatedProvidersLazyRoute
   '/_authenticated/timestamp-anchor': typeof AuthenticatedTimestampAnchorLazyRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/accounts/new': typeof AuthenticatedAccountsNewLazyRoute
@@ -1253,6 +1278,7 @@ export interface FileRouteTypes {
     | '/configuration'
     | '/integrity'
     | '/legal-hold'
+    | '/providers'
     | '/timestamp-anchor'
     | '/'
     | '/accounts/new'
@@ -1301,6 +1327,7 @@ export interface FileRouteTypes {
     | '/configuration'
     | '/integrity'
     | '/legal-hold'
+    | '/providers'
     | '/timestamp-anchor'
     | '/'
     | '/accounts/new'
@@ -1353,6 +1380,7 @@ export interface FileRouteTypes {
     | '/_authenticated/configuration'
     | '/_authenticated/integrity'
     | '/_authenticated/legal-hold'
+    | '/_authenticated/providers'
     | '/_authenticated/timestamp-anchor'
     | '/_authenticated/'
     | '/_authenticated/accounts/new'
@@ -1443,6 +1471,7 @@ export const routeTree = rootRoute
         "/_authenticated/configuration",
         "/_authenticated/integrity",
         "/_authenticated/legal-hold",
+        "/_authenticated/providers",
         "/_authenticated/timestamp-anchor",
         "/_authenticated/",
         "/_authenticated/accounts/new",
@@ -1540,6 +1569,10 @@ export const routeTree = rootRoute
     },
     "/_authenticated/legal-hold": {
       "filePath": "_authenticated/legal-hold.lazy.tsx",
+      "parent": "/_authenticated"
+    },
+    "/_authenticated/providers": {
+      "filePath": "_authenticated/providers.lazy.tsx",
       "parent": "/_authenticated"
     },
     "/_authenticated/timestamp-anchor": {

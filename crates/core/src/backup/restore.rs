@@ -79,6 +79,8 @@ pub(crate) const APPROVAL_DETAILS_DIR: &str = "approval-details";
 pub(crate) const INTEGRITY_DB_FILE: &str = "integrity.db";
 pub(crate) const TIMESTAMP_DIR: &str = "timestamp";
 pub(crate) const ANCHOR_DB_FILE: &str = "anchor.db";
+pub(crate) const PROVIDERS_DIR: &str = "providers";
+pub(crate) const PROVIDERS_DB_FILE: &str = "providers.db";
 pub(crate) const INDICES_DIR: &str = "bichon-indices";
 pub(crate) const ENVELOPE_INDEX_DIR: &str = "mail_metadata";
 pub(crate) const ATTACHMENT_INDEX_DIR: &str = "attachment_metadata";
@@ -214,6 +216,9 @@ pub struct RestoreReport {
     pub audit_deltas_copied: usize,
     pub integrity_restored: bool,
     pub timestamp_restored: bool,
+    /// Pro provider-connection database was restored (connections, cursors,
+    /// message mappings, error ledger).
+    pub provider_restored: bool,
     /// Source-UID tombstones were restored, so gap-fill in the restored
     /// archive will not re-download locally deleted messages.
     pub tombstones_restored: bool,
@@ -963,6 +968,11 @@ async fn restore_into(
         download(engine, obj, &dest, report).await?;
         report.timestamp_restored = true;
     }
+    if let Some(obj) = &manifest.objects.provider {
+        let dest = targets.root.join(PROVIDERS_DIR).join(PROVIDERS_DB_FILE);
+        download(engine, obj, &dest, report).await?;
+        report.provider_restored = true;
+    }
 
     // Source-UID tombstones: a packaged directory of compressed bitmaps.
     if let Some(obj) = &manifest.objects.tombstones {
@@ -1040,6 +1050,7 @@ fn manifest_refs(m: &Manifest) -> Vec<(&str, &str, u64)> {
         &m.objects.tombstones,
         &m.objects.approval_details,
         &m.objects.timestamp,
+        &m.objects.provider,
         &m.objects.deployment,
     ]
     .into_iter()
@@ -1134,6 +1145,7 @@ fn assert_sufficient_space(targets: &RestoreTargets, m: &Manifest) -> BichonResu
         + m.objects.tombstones.as_ref().map_or(0, |o| o.bytes)
         + m.objects.approval_details.as_ref().map_or(0, |o| o.bytes)
         + m.objects.timestamp.as_ref().map_or(0, |o| o.bytes)
+        + m.objects.provider.as_ref().map_or(0, |o| o.bytes)
         + m.objects.deployment.as_ref().map_or(0, |o| o.bytes)
         + m.objects.audit.as_ref().map_or(0, |a| {
             a.base.bytes + a.deltas.iter().map(|d| d.obj.bytes).sum::<u64>()
@@ -1217,6 +1229,10 @@ pub fn format_restore_report(report: &RestoreReport) -> String {
         out.push_str(&format!(
             "  timestamp anchor: {}\n",
             yes(report.timestamp_restored)
+        ));
+        out.push_str(&format!(
+            "  provider conns  : {}\n",
+            yes(report.provider_restored)
         ));
         out.push_str(&format!(
             "  tombstones      : {}\n",
@@ -1369,6 +1385,7 @@ mod tests {
             }),
             integrity: Some(obj.clone()),
             timestamp: Some(obj.clone()),
+            provider: None,
             deployment: None,
             tantivy: vec![TantivyRef {
                 name: "envelope".to_string(),
@@ -1772,6 +1789,57 @@ mod tests {
         );
         assert!(!into.join("bichon-storage").exists());
         assert!(!into.join("bichon-indices").exists());
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[tokio::test]
+    async fn provider_artifact_restores_into_the_provider_directory() {
+        // A backup taken by a build that knows the Pro provider store must
+        // land it at `<root>/providers/providers.db`, where the Pro open path
+        // expects it (old backup → new restore is the supported direction).
+        init_test_env();
+        let _run_guard = RUN_REPLAY_TESTS.lock().await;
+        let root = test_root("provider-artifact");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        {
+            let mut guard = AUDIT_REPLAYERS.lock().unwrap();
+            guard.clear();
+        }
+        let into = root.join("restored");
+
+        let store = BackupEngine::local_store_for_test(&root.join("store")).unwrap();
+        let engine = BackupEngine::new(store, "test");
+        let hello = engine.upload_bytes_for_test(b"hello").await.unwrap();
+        let mut manifest = sample_manifest(&engine, &root).await;
+        manifest.objects.provider = Some(crate::backup::manifest::ObjectRef {
+            key: hello,
+            sha256: hex::encode(ring::digest::digest(&ring::digest::SHA256, b"hello").as_ref()),
+            bytes: 5,
+        });
+        engine.commit(&manifest).await.unwrap();
+
+        let opts = RestoreOptions {
+            s3_uri: "s3://x/y/z".to_string(),
+            point: None,
+            into: into.clone(),
+            index_dir: None,
+            data_dir: None,
+            verify_only: false,
+            access_key: None,
+            secret_key: None,
+            region: None,
+            live_root: None,
+            ..Default::default()
+        };
+
+        let report = restore_with_engine(&opts, &engine).await.unwrap();
+        assert!(report.provider_restored);
+        assert_eq!(
+            std::fs::read(into.join("providers/providers.db")).unwrap(),
+            b"hello"
+        );
 
         let _ = std::fs::remove_dir_all(&root);
     }

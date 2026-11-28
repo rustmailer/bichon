@@ -99,6 +99,7 @@ pub async fn extract_envelope_and_store_it(
             account_id,
             mailbox_id,
             None,
+            &[],
         )
         .await,
     )
@@ -113,7 +114,64 @@ pub async fn extract_envelope_from_eml(
     record_ingest_outcome(
         account_id,
         "import",
-        extract_envelope_core(body, 0, body.len() as u32, 0, account_id, mailbox_id, None).await,
+        extract_envelope_core(body, 0, body.len() as u32, 0, account_id, mailbox_id, None, &[])
+            .await,
+    )
+}
+
+/// Archive one message fetched from a provider API (Graph/Gmail).
+///
+/// Same pipeline as [`extract_envelope_from_eml`] — the community extractor
+/// owns hashing, archive rules, dedup, attachment/blob storage and the stable
+/// UID — but the caller supplies the source receive time and the metric
+/// source, so provider ingests are distinguishable from local EML imports.
+pub async fn extract_envelope_from_provider(
+    body: &[u8],
+    account_id: u64,
+    mailbox_id: u64,
+    internal_date: i64,
+    source: &str,
+) -> BichonResult<ExtractOutcome> {
+    extract_envelope_from_provider_with_tags(
+        body,
+        account_id,
+        mailbox_id,
+        internal_date,
+        source,
+        &[],
+    )
+    .await
+}
+
+/// Like [`extract_envelope_from_provider`], but stores provider-owned tags
+/// (Gmail custom labels) on the new envelope.
+///
+/// Tags are facets and must be validated exactly like the `X-Bichon-Metadata`
+/// path. Only additive use is supported here: label removal and user-tag
+/// ownership belong to the label pass (P19), so this never overwrites tags.
+pub async fn extract_envelope_from_provider_with_tags(
+    body: &[u8],
+    account_id: u64,
+    mailbox_id: u64,
+    internal_date: i64,
+    source: &str,
+    provider_tags: &[String],
+) -> BichonResult<ExtractOutcome> {
+    let _write_guard = WRITE_GATE.acquire(BACKUP_ACQUIRE_TIMEOUT).await?;
+    record_ingest_outcome(
+        account_id,
+        source,
+        extract_envelope_core(
+            body,
+            0,
+            body.len() as u32,
+            internal_date,
+            account_id,
+            mailbox_id,
+            None,
+            provider_tags,
+        )
+        .await,
     )
 }
 
@@ -134,6 +192,7 @@ pub async fn extract_envelope_from_smtp(
             account_id,
             mailbox_id,
             None,
+            &[],
         )
         .await,
     )
@@ -173,6 +232,7 @@ pub async fn extract_envelope_from_journal(
             account_id,
             mailbox_id,
             report,
+            &[],
         )
         .await,
     )
@@ -566,6 +626,7 @@ async fn extract_envelope_core(
     account_id: u64,
     mailbox_id: u64,
     journal_report: Option<&[u8]>,
+    provider_tags: &[String],
 ) -> BichonResult<ExtractOutcome> {
     // The content hash of the original raw EML
     let email_content_hash = compute_content_hash(body);
@@ -722,6 +783,15 @@ async fn extract_envelope_core(
                     }
                 }
             }
+        }
+    }
+
+    // Provider labels (Gmail custom labels) join any metadata tags. The merge
+    // is additive; label removal and user-tag ownership belong to the label
+    // pass (P19), so this never drops a tag the caller already stored.
+    for tag in provider_tags {
+        if Facet::from_text(tag).is_ok() && !final_tags.contains(tag) {
+            final_tags.push(tag.clone());
         }
     }
 

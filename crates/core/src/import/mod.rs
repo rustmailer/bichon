@@ -134,6 +134,14 @@ impl ImportEmls {
                     ErrorCode::InvalidParameter
                 ));
             }
+            // Provider accounts are fed by their own sync connector; local
+            // import into them is not a supported path.
+            AccountType::Graph | AccountType::Gmail => {
+                return Err(raise_error!(
+                    "Import is not allowed into a Graph or Gmail account.".into(),
+                    ErrorCode::InvalidParameter
+                ));
+            }
             AccountType::NoSync => {
                 let mailbox = MailBox {
                     id: create_hash(request.account_id, &request.mail_folder),
@@ -442,6 +450,10 @@ pub(super) fn resolve_mailbox(account: &AccountModel, folder: &str) -> BichonRes
     match account.account_type {
         AccountType::View => Err(raise_error!(
             "Import is not allowed into a view account.".into(),
+            ErrorCode::InvalidParameter
+        )),
+        AccountType::Graph | AccountType::Gmail => Err(raise_error!(
+            "Import is not allowed into a Graph or Gmail account.".into(),
             ErrorCode::InvalidParameter
         )),
         AccountType::IMAP => {

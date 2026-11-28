@@ -116,6 +116,9 @@ pub struct SourceRef {
     pub envelope_id: String,
     pub mailbox_id: u64,
     pub uid: u32,
+    /// Original-EML content hash. Provider-sourced messages (uid == 0) are
+    /// suppressed by this identity after a local delete.
+    pub content_hash: String,
     /// RFC 5322 Date header, epoch millis (0 = unknown).
     pub date: i64,
     /// IMAP INTERNALDATE / import time, epoch millis (0 = unknown).
@@ -129,6 +132,9 @@ pub struct RetentionDeletedRow {
     pub envelope_id: String,
     pub mailbox_id: u64,
     pub uid: u32,
+    /// Original-EML content hash; provider-sourced rows record it so a later
+    /// re-scan cannot resurrect the purged message.
+    pub content_hash: String,
     pub date: i64,
     pub internal_date: i64,
 }
@@ -685,6 +691,11 @@ impl IndexManager {
                     .get_first(fields.f_uid)
                     .and_then(|v| v.as_u64())
                     .unwrap_or(0) as u32,
+                content_hash: doc
+                    .get_first(fields.f_content_hash)
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
                 date: doc
                     .get_first(fields.f_date)
                     .and_then(|v| v.as_i64())
@@ -1436,6 +1447,56 @@ impl IndexManager {
         }
     }
 
+    /// Resolve an envelope id from its RFC `Message-ID` within one account.
+    ///
+    /// Provider label changes arrive keyed by the provider's message id, which
+    /// is deliberately not persisted (D-03); metadata supplies the
+    /// `Message-ID`, and this lookup turns it into the archive document that
+    /// owns the tags. The stored id is the extractor's bracket-free form.
+    pub fn find_envelope_id_by_message_id(
+        &self,
+        account_id: u64,
+        message_id: &str,
+    ) -> BichonResult<Option<String>> {
+        let searcher = self.create_searcher()?;
+        let f = SchemaTools::email_fields();
+
+        let query = BooleanQuery::new(vec![
+            (
+                Occur::Must,
+                Box::new(TermQuery::new(
+                    Term::from_field_u64(f.f_account_id, account_id),
+                    IndexRecordOption::Basic,
+                )),
+            ),
+            (
+                Occur::Must,
+                Box::new(TermQuery::new(
+                    Term::from_field_text(f.f_message_id, message_id),
+                    IndexRecordOption::Basic,
+                )),
+            ),
+        ]);
+
+        let docs: Vec<(f32, DocAddress)> = searcher
+            .search(&query, &TopDocs::with_limit(1).order_by_score())
+            .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;
+
+        if let Some((_, doc_address)) = docs.first() {
+            let doc: TantivyDocument = searcher
+                .doc(*doc_address)
+                .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;
+            let id = doc
+                .get_first(f.f_id)
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            Ok((!id.is_empty()).then_some(id))
+        } else {
+            Ok(None)
+        }
+    }
+
     pub fn top_10_largest_emails(
         &self,
         accounts: &Option<HashSet<u64>>,
@@ -1838,6 +1899,27 @@ impl IndexManager {
         }
         crate::message::delete::record_tombstones_by_mailbox(account_id, by_mailbox).await?;
 
+        // Provider-sourced rows have no source UID; suppress them by content
+        // hash so a later re-scan cannot resurrect the purge. No-op unless a
+        // Pro sink is registered and the account is a provider account.
+        let provider_hashes: Vec<String> = rows
+            .iter()
+            .filter(|row| row.uid == 0 && !row.content_hash.is_empty())
+            .map(|row| row.content_hash.clone())
+            .collect();
+        if !provider_hashes.is_empty() {
+            let is_provider = crate::account::migration::AccountModel::get(account_id)
+                .map(|account| account.is_provider_account())
+                .unwrap_or(false);
+            if is_provider {
+                crate::ext::provider::record_deleted_identities(
+                    account_id,
+                    &provider_hashes,
+                    crate::ext::provider::DeletionReason::Retention,
+                )?;
+            }
+        }
+
         let _write_guard = WRITE_GATE.acquire(BACKUP_ACQUIRE_TIMEOUT).await?;
 
         let (eml_hashes_with_mailbox, attachments_content_hashes, leafs) = self
@@ -1915,6 +1997,11 @@ impl IndexManager {
                     .get_first(fields.f_uid)
                     .and_then(|v| v.as_u64())
                     .unwrap_or(0) as u32,
+                content_hash: doc
+                    .get_first(fields.f_content_hash)
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
                 date: doc
                     .get_first(fields.f_date)
                     .and_then(|v| v.as_i64())
@@ -2321,10 +2408,17 @@ impl IndexManager {
                         .doc(*doc_address)
                         .map_err(|e| raise_error!(format!("{:#?}", e), ErrorCode::InternalError))?;
 
+                    // `as_facet()` yields the encoded form (no leading `/`);
+                    // feeding it back into `add_facet` panics, so decode it
+                    // into a display path first.
                     let mut current_tags: HashSet<String> = old_doc
                         .get_all(f_tags)
                         .filter_map(|val| val.as_facet())
-                        .map(|facet| facet.to_string())
+                        .filter_map(|encoded| {
+                            Facet::from_encoded(encoded.as_bytes().to_vec())
+                                .ok()
+                                .map(|facet| facet.to_string())
+                        })
                         .collect();
 
                     match request.action {
@@ -2524,10 +2618,15 @@ impl IndexManager {
 
             // Tags are re-added from the old document by the rebuild; passing
             // an empty iterator would drop them, so carry them explicitly.
+            // Decode the encoded facet form into a display path.
             let tags: Vec<String> = old_doc
                 .get_all(f.f_tags)
                 .filter_map(|val| val.as_facet())
-                .map(|facet| facet.to_string())
+                .filter_map(|encoded| {
+                    Facet::from_encoded(encoded.as_bytes().to_vec())
+                        .ok()
+                        .map(|facet| facet.to_string())
+                })
                 .collect();
 
             let new_doc = rebuild_envelope_doc(
@@ -4771,6 +4870,7 @@ mod tests {
             date_since: None,
             date_before: None,
             account_type: AccountType::NoSync,
+            connection_id: None,
             download_interval_min: None,
             download_batch_size: None,
             max_email_size_bytes: None,

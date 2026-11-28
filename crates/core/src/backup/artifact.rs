@@ -49,6 +49,10 @@ pub enum ArtifactKey {
     Integrity,
     /// Full timestamp anchor database copy.
     TimestampAnchor,
+    /// Pro provider-connection database (connections, sync cursors, provider
+    /// message mappings, error ledger). Without it a restored archive keeps
+    /// its accounts but loses the credentials and cursors behind them.
+    Provider,
     /// Source-UID tombstones (`tombstones/` packaged as one artifact). Without
     /// them a restored archive would re-download messages the operator had
     /// deleted.
@@ -80,6 +84,7 @@ impl ArtifactKey {
             ArtifactKey::ApprovalDetails => "approval-details",
             ArtifactKey::Integrity => "integrity",
             ArtifactKey::TimestampAnchor => "timestamp",
+            ArtifactKey::Provider => "providers",
             ArtifactKey::DeploymentIdentity => "deployment",
         }
     }

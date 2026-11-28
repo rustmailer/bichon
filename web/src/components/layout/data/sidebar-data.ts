@@ -19,6 +19,7 @@ import { IconLayoutDashboard, IconSettings } from '@tabler/icons-react'
 import {
   Archive,
   BarChart3,
+  Cloud,
   Download,
   FileCheck2,
   Fingerprint,
@@ -127,6 +128,18 @@ export function useSidebarData(): SidebarData {
             title: t('navigation.oauth2'),
             url: '/oauth2',
             icon: IdCard,
+          },
+          {
+            // Provider connections are tenant-level credentials (client
+            // secrets / service-account keys), so they belong with the other
+            // auth configuration rather than under day-to-day accounts. Only
+            // an administrator can create, rotate or delete them.
+            title: t('navigation.providers', 'Cloud providers'),
+            url: '/providers',
+            icon: Cloud,
+            visible:
+              isPro &&
+              require_any_permission(['system:root', 'user:manage']),
           },
         ],
       },

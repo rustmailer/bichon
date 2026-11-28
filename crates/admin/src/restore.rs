@@ -276,6 +276,15 @@ fn diagnose_connection_error(e: &impl std::fmt::Debug) -> String {
              make sure a backup has actually run.\nDetails: {e:?}"
         );
     }
+    // The target is fine; the restore point itself is from a newer release.
+    // Re-prompting for S3 settings would never fix that, so say it plainly.
+    if msg.contains("newer version of bichon") {
+        return format!(
+            "The backup point was written by a newer version of Bichon than this tool. \
+             Run the restore with the same or a newer Bichon release; downgrading does \
+             not restore points that contain data this build cannot read.\nDetails: {e:?}"
+        );
+    }
     // Local target: the failures are filesystem ones, and the actionable
     // question behind each is "is the mount attached, writable, and not
     // full?" — none of which the S3 branches below would say.

@@ -621,6 +621,86 @@ pub enum Event {
     /// integrity schedule and retention, TSP anchoring interval) was changed
     /// by an admin from the WebUI.
     ComplianceConfigUpdated { user: String },
+    /// Pro/Enterprise: a tenant-level cloud provider connection (Microsoft
+    /// Graph or Gmail credentials) was created. The credentials themselves are
+    /// never part of the event — only who created it and what it is called.
+    ProviderConnectionCreated {
+        user: String,
+        connection_id: u64,
+        name: String,
+        /// `graph` or `gmail`; a string so the core does not need to know the
+        /// Pro-side enum.
+        provider: String,
+    },
+    /// Pro/Enterprise: a provider connection was updated. `changed` names the
+    /// fields (e.g. `credentials`, `cloud`), never their values.
+    ProviderConnectionUpdated {
+        user: String,
+        connection_id: u64,
+        name: String,
+        changed: Vec<String>,
+    },
+    /// Pro/Enterprise: a provider connection was deleted. Only possible when
+    /// no account still references it.
+    ProviderConnectionRemoved {
+        user: String,
+        connection_id: u64,
+        name: String,
+    },
+    /// Pro/Enterprise: an admin ran a connection test. Records the outcome and
+    /// the classified error kind, never the provider's response body.
+    ProviderConnectionTested {
+        user: String,
+        connection_id: u64,
+        name: String,
+        ok: bool,
+        kind: Option<String>,
+    },
+    /// Pro/Enterprise: the tenant directory was enumerated (or the attempt
+    /// failed). Counts only — directory entries never reach the audit trail.
+    ProviderDiscoveryRefreshed {
+        user: String,
+        connection_id: u64,
+        name: String,
+        ok: bool,
+        total: u64,
+        archivable: u64,
+        kind: Option<String>,
+    },
+    /// Pro/Enterprise: mailboxes were imported from a connection's discovered
+    /// directory as synced accounts. Counts and the connection id only; the
+    /// individual addresses are already recorded by the `account.created`
+    /// event emitted for each account that was actually created.
+    ProviderAccountsImported {
+        user: String,
+        connection_id: u64,
+        name: String,
+        /// `graph` or `gmail`; a string so the core does not need to know the
+        /// Pro-side enum.
+        provider: String,
+        /// Addresses the operator asked for.
+        requested: u64,
+        created: u64,
+        /// Not created because the address was already archived or the
+        /// directory entry was not importable.
+        skipped: u64,
+        /// Creation failed for this address; the account does not exist.
+        failed: u64,
+    },
+    /// Pro/Enterprise: an operator started a manual gap-fill sweep on a
+    /// provider account. Progress and outcome live in the account's gap-fill
+    /// state; this records who asked for the sweep.
+    ProviderGapFillStarted {
+        user: String,
+        account_id: u64,
+        /// `Some` for a tenant connection, `None` for a delegated account.
+        connection_id: Option<u64>,
+    },
+    /// Pro/Enterprise: an operator paused provider syncing for one account.
+    /// The pause is operator intent and survives restarts until resumed.
+    ProviderAccountPaused { user: String, account_id: u64 },
+    /// Pro/Enterprise: an operator resumed a paused provider account.
+    ProviderAccountResumed { user: String, account_id: u64 },
     /// Pro/Enterprise: the audit trail itself was queried or its hash chain
     /// verified. Reading the compliance evidence is itself security-relevant —
     /// an operator who can inspect the trail without leaving a trace of their

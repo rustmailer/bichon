@@ -23,6 +23,7 @@ use crate::ext::audit_detail::{
     decide_batch, load_deleted_snapshot, BatchAuditDecision, DetailRef,
 };
 use crate::ext::event_bus::{emit, Event};
+use crate::ext::provider::{record_deleted_identities, DeletionReason};
 use crate::raise_error;
 use crate::store::tantivy::attachment::ATTACHMENT_MANAGER;
 use crate::store::tantivy::envelope::ENVELOPE_MANAGER;
@@ -131,20 +132,40 @@ pub fn emit_delete_audit_scoped(
 /// Written *before* the delete: a crash can leave a tombstone for a message
 /// that still exists locally (harmless — gap-fill only consults it when the
 /// message is missing), but never a committed deletion without one.
-async fn record_source_tombstones(request: &HashMap<u64, Vec<String>>) -> BichonResult<()> {
+async fn record_source_tombstones(
+    request: &HashMap<u64, Vec<String>>,
+    reason: DeletionReason,
+) -> BichonResult<()> {
     for (account_id, ids) in request {
         let mut by_mailbox: HashMap<u64, Vec<u32>> = HashMap::new();
+        // Messages whose source has no UID (provider accounts) are suppressed
+        // by content hash instead; the sink is a no-op in community builds.
+        let mut provider_hashes: Vec<String> = Vec::new();
         // One term per id: chunk large REST batches so the query stays bounded.
         for chunk in ids.chunks(500) {
             let refs = ENVELOPE_MANAGER.get_source_refs(*account_id, chunk)?;
             for r in refs {
-                if r.uid == 0 || r.mailbox_id == 0 {
+                if r.uid == 0 {
+                    if !r.content_hash.is_empty() {
+                        provider_hashes.push(r.content_hash);
+                    }
+                    continue;
+                }
+                if r.mailbox_id == 0 {
                     continue;
                 }
                 by_mailbox.entry(r.mailbox_id).or_default().push(r.uid);
             }
         }
         record_tombstones_by_mailbox(*account_id, by_mailbox).await?;
+        if !provider_hashes.is_empty() {
+            let is_provider = AccountModel::get(*account_id)
+                .map(|account| account.is_provider_account())
+                .unwrap_or(false);
+            if is_provider {
+                record_deleted_identities(*account_id, &provider_hashes, reason)?;
+            }
+        }
     }
     Ok(())
 }
@@ -242,7 +263,12 @@ pub async fn delete_messages_impl_with(
         }
     }
 
-    record_source_tombstones(&request).await?;
+    let reason = if allow_min_retention_override {
+        DeletionReason::Gdpr
+    } else {
+        DeletionReason::Manual
+    };
+    record_source_tombstones(&request, reason).await?;
     ENVELOPE_MANAGER
         .delete_envelopes_multi_account(request.clone())
         .await?;
@@ -298,6 +324,7 @@ mod tests {
             date_since: None,
             date_before: None,
             account_type: AccountType::NoSync,
+            connection_id: None,
             download_interval_min: None,
             download_batch_size: None,
             max_email_size_bytes: None,

@@ -1022,6 +1022,7 @@ mod tests {
             date_since: None,
             date_before: None,
             account_type: AccountType::NoSync,
+            connection_id: None,
             download_interval_min: None,
             download_batch_size: None,
             max_email_size_bytes: None,

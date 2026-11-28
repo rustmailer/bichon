@@ -21,7 +21,7 @@ use std::str::FromStr;
 use crate::account::entity::{AuthType, ImapConfig};
 use crate::account::migration::{
     AccountKind, AccountKindRole, AccountModel, AccountType, ArchiveRules, ExtractionRules,
-    QuotaWindow, RemoteCleanupConfig, ViewConfig, REMOTE_CLEANUP_FOLDER,
+    ProviderKind, QuotaWindow, RemoteCleanupConfig, ViewConfig, REMOTE_CLEANUP_FOLDER,
 };
 use crate::account::since::{DateSince, RelativeDate};
 use crate::error::code::ErrorCode;
@@ -44,6 +44,13 @@ pub struct AccountCreateRequest {
     pub date_since: Option<DateSince>,
     pub date_before: Option<RelativeDate>,
     pub account_type: AccountType,
+    /// Tenant-level provider connection for `Graph`/`Gmail` accounts.
+    ///
+    /// `None` means account-level credentials: IMAP password/OAuth2, or a
+    /// delegated single-mailbox provider token. IMAP, `NoSync` and `View`
+    /// accounts must leave this unset.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub connection_id: Option<u64>,
     #[cfg_attr(feature = "web-api", oai(validator(minimum(value = "1"))))]
     pub download_interval_min: Option<i64>,
     #[cfg_attr(
@@ -128,6 +135,18 @@ impl AccountCreateRequest {
             })?;
         }
 
+        if self.connection_id.is_some()
+            && !matches!(
+                self.account_type,
+                AccountType::Graph | AccountType::Gmail
+            )
+        {
+            return Err(raise_error!(
+                "connection_id is only valid for Graph or Gmail accounts".into(),
+                ErrorCode::InvalidParameter
+            ));
+        }
+
         match self.account_type {
             AccountType::IMAP => {
                 match &self.imap {
@@ -149,9 +168,43 @@ impl AccountCreateRequest {
                     validate_cron_expression(schedule)?;
                 }
             }
+            // Provider accounts never carry an IMAP server config. The
+            // connection (or, for delegated accounts, the per-account OAuth2
+            // token) supplies credentials; sync cadence is still per account.
+            AccountType::Graph | AccountType::Gmail => {
+                validate_email!(&self.email)?;
+                if self.imap.is_some() {
+                    return Err(raise_error!(
+                        "IMAP configuration must not be set for Graph or Gmail accounts".into(),
+                        ErrorCode::InvalidParameter
+                    ));
+                }
+                if self.download_interval_min.is_none() && self.download_schedule.is_none() {
+                    return Err(raise_error!(
+                        "`sync_interval_min` or `download_schedule` is required for provider accounts".into(),
+                        ErrorCode::InvalidParameter
+                    ));
+                }
+                if let Some(ref schedule) = self.download_schedule {
+                    validate_cron_expression(schedule)?;
+                }
+            }
             // A view stores nothing and must not carry sync configuration;
             // its validation happens below.
             AccountType::View | AccountType::NoSync => {}
+        }
+
+        // A build without the connector must not accept an account it can
+        // never sync. The type and field still exist so Pro data stays
+        // readable; creation is what is gated.
+        if let Some(kind) = match self.account_type {
+            AccountType::Graph => Some(ProviderKind::Graph),
+            AccountType::Gmail => Some(ProviderKind::Gmail),
+            _ => None,
+        } {
+            if !crate::ext::provider::is_available(kind) {
+                return Err(crate::ext::provider::unavailable_error(kind));
+            }
         }
 
         // The journal role is created by the journaling configuration, never
@@ -224,6 +277,10 @@ pub struct AccountUpdateRequest {
     pub account_name: Option<String>,
     /// IMAP server configuration
     pub imap: Option<ImapConfig>,
+    /// Tenant-level provider connection for a `Graph`/`Gmail` account.
+    /// `None` = no change. Only valid on an existing provider account.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub connection_id: Option<u64>,
     /// Controls initial synchronization time range
     ///
     /// When dealing with large mailboxes, this restricts scanning to:
@@ -484,6 +541,30 @@ impl AccountUpdateRequest {
                 raise_error!(format!("remote_cleanup: {e}"), ErrorCode::InvalidParameter)
             })?;
         }
+
+        if self.connection_id.is_some()
+            && !matches!(
+                account.account_type,
+                AccountType::Graph | AccountType::Gmail
+            )
+        {
+            return Err(raise_error!(
+                "connection_id is only valid for Graph or Gmail accounts".into(),
+                ErrorCode::InvalidParameter
+            ));
+        }
+        if self.imap.is_some()
+            && matches!(
+                account.account_type,
+                AccountType::Graph | AccountType::Gmail
+            )
+        {
+            return Err(raise_error!(
+                "IMAP configuration must not be set for Graph or Gmail accounts".into(),
+                ErrorCode::InvalidParameter
+            ));
+        }
+
         if let Some(date_since) = self.date_since.as_ref() {
             date_since.validate()?;
         }
@@ -777,6 +858,141 @@ mod test {
         let account: MinimalAccount =
             serde_json::from_str(r#"{"id":8,"email":"b@example.com","auth_type":null,"account_type":"NoSync"}"#).unwrap();
         assert_eq!(account.auth_type, None);
+    }
+
+    // ---- provider account model / validation --------------------------------
+
+    use super::{AccountCreateRequest, AccountUpdateRequest, AccountType, ProviderKind};
+    use crate::account::migration::{Account, ProviderKind as MigrationProviderKind};
+    use crate::ext::provider::{is_available, register_connector, ProviderConnector};
+    use std::sync::Arc;
+
+    struct NoopConnector(ProviderKind);
+
+    impl ProviderConnector for NoopConnector {
+        fn kind(&self) -> ProviderKind {
+            self.0
+        }
+        fn start_account_sync(&self, _account: &Account) -> crate::error::BichonResult<()> {
+            Ok(())
+        }
+    }
+
+    /// Provider creation is gated on a registered connector. Tests that need a
+    /// provider account to pass that gate register a no-op implementation.
+    fn ensure_provider_connectors() {
+        for kind in [ProviderKind::Graph, ProviderKind::Gmail] {
+            if !is_available(kind) {
+                register_connector(Arc::new(NoopConnector(kind)));
+            }
+        }
+    }
+
+    fn graph_request() -> AccountCreateRequest {
+        AccountCreateRequest {
+            email: "user@example.com".into(),
+            account_type: AccountType::Graph,
+            connection_id: Some(7),
+            download_interval_min: Some(15),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn connection_id_is_only_for_provider_accounts() {
+        for account_type in [AccountType::NoSync, AccountType::View] {
+            let request = AccountCreateRequest {
+                email: "user@example.com".into(),
+                account_type,
+                connection_id: Some(7),
+                ..Default::default()
+            };
+            let err = request.create_entity(1).unwrap_err();
+            assert!(format!("{err:?}").contains("connection_id is only valid"));
+        }
+    }
+
+    #[test]
+    fn provider_account_rejects_imap_config() {
+        ensure_provider_connectors();
+        let mut request = graph_request();
+        request.imap = Some(crate::account::entity::ImapConfig::default());
+        let err = request.create_entity(1).unwrap_err();
+        assert!(format!("{err:?}").contains("IMAP configuration must not be set"));
+    }
+
+    #[test]
+    fn provider_account_requires_sync_cadence() {
+        ensure_provider_connectors();
+        let mut request = graph_request();
+        request.download_interval_min = None;
+        let err = request.create_entity(1).unwrap_err();
+        assert!(format!("{err:?}").contains("sync_interval_min"));
+    }
+
+    #[test]
+    fn provider_account_accepts_tenant_connection_and_delegated_auth() {
+        ensure_provider_connectors();
+
+        let tenant = graph_request().create_entity(1).unwrap();
+        assert_eq!(tenant.account_type, AccountType::Graph);
+        assert_eq!(tenant.connection_id, Some(7));
+        assert!(tenant.imap.is_none());
+        assert!(tenant.is_provider_account());
+        assert_eq!(
+            tenant.provider_kind(),
+            Some(MigrationProviderKind::Graph)
+        );
+
+        let mut delegated = graph_request();
+        delegated.connection_id = None;
+        let delegated = delegated.create_entity(1).unwrap();
+        assert_eq!(delegated.connection_id, None);
+        assert_eq!(delegated.account_type, AccountType::Graph);
+    }
+
+    #[test]
+    fn update_rejects_connection_id_for_imap_and_allows_it_for_provider() {
+        let imap = Account {
+            id: 1,
+            email: "user@example.com".into(),
+            account_type: AccountType::IMAP,
+            ..Default::default()
+        };
+        let request = AccountUpdateRequest {
+            connection_id: Some(9),
+            ..Default::default()
+        };
+        assert!(request.validate_update_request(&imap).is_err());
+
+        let graph = Account {
+            id: 2,
+            email: "user@example.com".into(),
+            account_type: AccountType::Graph,
+            connection_id: Some(7),
+            ..Default::default()
+        };
+        let request = AccountUpdateRequest {
+            connection_id: Some(9),
+            ..Default::default()
+        };
+        assert!(request.validate_update_request(&graph).is_ok());
+    }
+
+    #[test]
+    fn account_type_and_connection_id_serialise_additively() {
+        ensure_provider_connectors();
+        let account = graph_request().create_entity(1).unwrap();
+        let mut value = serde_json::to_value(&account).unwrap();
+        assert_eq!(value["account_type"], "Graph");
+        assert_eq!(value["connection_id"], 7);
+
+        // Older rows have no `connection_id`; deserialising them must yield
+        // `None` rather than fail.
+        value.as_object_mut().unwrap().remove("connection_id");
+        let restored: Account = serde_json::from_value(value).unwrap();
+        assert_eq!(restored.connection_id, None);
+        assert_eq!(restored.account_type, AccountType::Graph);
     }
 }
 

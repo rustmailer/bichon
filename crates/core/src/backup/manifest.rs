@@ -44,7 +44,15 @@ use crate::error::BichonResult;
 use crate::raise_error;
 
 /// Schema version of the manifest. Bump on incompatible changes.
-pub const MANIFEST_VERSION: u32 = 1;
+///
+/// - v1 — memdb, blob segments, audit, integrity, timestamp, tombstones,
+///   approval details and deployment identity.
+/// - v2 — adds the Pro `provider` artifact (provider cursors, error ledger
+///   and deletion tombstones). A v1-era reader can still *parse* a v2
+///   manifest, but it would restore the archive without that state, so
+///   builds only know how to restore manifests up to their own version and
+///   [`Manifest::decode_gz`] refuses anything newer (R-BC-04).
+pub const MANIFEST_VERSION: u32 = 2;
 
 /// Name of the pointer object under `meta/`.
 pub const LATEST_NAME: &str = "LATEST";
@@ -125,6 +133,10 @@ pub struct ManifestObjects {
     pub approval_details: Option<ObjectRef>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub timestamp: Option<ObjectRef>,
+    /// Pro provider-connection database. Absent in backups written before
+    /// this artifact existed and on installs without provider connections.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider: Option<ObjectRef>,
     /// Deployment identity package (`instance-id` + optional `license.txt`).
     /// Absent in backups written before this artifact existed.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -212,6 +224,7 @@ impl Manifest {
             ArtifactKey::Tombstones => self.objects.tombstones = Some(obj),
             ArtifactKey::ApprovalDetails => self.objects.approval_details = Some(obj),
             ArtifactKey::TimestampAnchor => self.objects.timestamp = Some(obj),
+            ArtifactKey::Provider => self.objects.provider = Some(obj),
             ArtifactKey::DeploymentIdentity => self.objects.deployment = Some(obj),
         }
         Ok(())
@@ -241,6 +254,7 @@ impl Manifest {
             &self.objects.tombstones,
             &self.objects.approval_details,
             &self.objects.timestamp,
+            &self.objects.provider,
             &self.objects.deployment,
         ]
         .into_iter()
@@ -272,6 +286,7 @@ impl Manifest {
             &self.objects.tombstones,
             &self.objects.approval_details,
             &self.objects.timestamp,
+            &self.objects.provider,
             &self.objects.deployment,
         ]
         .into_iter()
@@ -318,6 +333,11 @@ impl Manifest {
     }
 
     /// Decode from gzip + JSON.
+    ///
+    /// A manifest written by a newer build is refused up front: continuing
+    /// would restore the artifacts this build knows about and silently drop
+    /// the rest (the Pro provider store, for example). `version` is a
+    /// forward-only gate, so this also covers artifact kinds added later.
     pub fn decode_gz(bytes: &[u8]) -> BichonResult<Self> {
         let mut dec = flate2::read::GzDecoder::new(bytes);
         let mut json = Vec::new();
@@ -327,12 +347,24 @@ impl Manifest {
                 ErrorCode::InternalError
             )
         })?;
-        serde_json::from_slice(&json).map_err(|e| {
+        let manifest: Self = serde_json::from_slice(&json).map_err(|e| {
             raise_error!(
                 format!("backup: manifest decode failed: {e}"),
                 ErrorCode::InternalError
             )
-        })
+        })?;
+        if manifest.version > MANIFEST_VERSION {
+            return Err(raise_error!(
+                format!(
+                    "backup: this restore point was written by a newer version of Bichon \
+                     (manifest v{}, this build supports up to v{}); upgrade Bichon before \
+                     restoring it",
+                    manifest.version, MANIFEST_VERSION
+                ),
+                ErrorCode::Incompatible
+            ));
+        }
+        Ok(manifest)
     }
 }
 
@@ -427,6 +459,36 @@ mod tests {
         let audit = m.objects.audit.unwrap();
         assert_eq!(audit.cursor, 7);
         assert_eq!(audit.cumulative_delta_bytes, 0);
+    }
+
+    fn gzip(json: &[u8]) -> Vec<u8> {
+        let mut enc = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        std::io::Write::write_all(&mut enc, json).unwrap();
+        enc.finish().unwrap()
+    }
+
+    #[test]
+    fn a_manifest_from_a_newer_build_is_refused() {
+        // Restoring one would drop every artifact this build does not know
+        // about, so the version gate must stop it before any data is touched.
+        let json = format!(
+            r#"{{"version":{},"id":"m-future","created":"2027-01-01T00:00:00.000Z","trigger":"manual","objects":{{}}}}"#,
+            MANIFEST_VERSION + 1
+        );
+        let err = Manifest::decode_gz(&gzip(json.as_bytes())).expect_err("must refuse");
+        let text = format!("{err:?}");
+        assert!(text.contains("newer version of Bichon"), "{text}");
+        assert_eq!(err.code(), ErrorCode::Incompatible);
+    }
+
+    #[test]
+    fn a_v1_manifest_without_the_provider_slot_still_decodes() {
+        // Backups written before the provider artifact existed must keep
+        // restoring on this build (old backup → new binary, R-BC-04).
+        let legacy = br#"{"version":1,"id":"m-v1","created":"2026-06-01T00:00:00.000Z","trigger":"manual","objects":{}}"#;
+        let m = Manifest::decode_gz(&gzip(legacy)).expect("v1 manifest must decode");
+        assert_eq!(m.version, 1);
+        assert!(m.objects.provider.is_none());
     }
 
     #[test]

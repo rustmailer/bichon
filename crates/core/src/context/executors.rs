@@ -67,19 +67,19 @@ impl BichonContext {
     pub async fn start_account_downloader(&self) -> BichonResult<()> {
         let accounts = AccountModel::list_all()?;
         let active_accounts: Vec<AccountModel> = accounts
-            .into_iter()
+            .iter()
             .filter(|a| a.enabled && matches!(a.account_type, AccountType::IMAP))
+            .cloned()
             .collect();
 
         if active_accounts.is_empty() {
-            info!("No active accounts found for account initialization.");
-            return Ok(());
-        }
-        info!(
-            "System has {} active IMAP accounts to initialize.",
-            active_accounts.len()
-        );
-        for account in active_accounts {
+            info!("No active IMAP accounts found for account initialization.");
+        } else {
+            info!(
+                "System has {} active IMAP accounts to initialize.",
+                active_accounts.len()
+            );
+            for account in active_accounts {
             // A Running session surviving startup is a leftover from a previous
             // interrupted run; nothing is downloading yet at this point. Mark it
             // Cancelled so the UI doesn't show a phantom "syncing" state. The
@@ -140,6 +140,34 @@ impl BichonContext {
             DOWNLOAD_CONTROLLER
                 .trigger_schedule(account.id, account.email)
                 .await
+            }
+        }
+
+        // Provider accounts run after the IMAP initialisation, which is left
+        // structurally unchanged. A community build has no connector
+        // registered: accounts are skipped with a warning, never deleted.
+        let provider_accounts: Vec<&AccountModel> = accounts
+            .iter()
+            .filter(|a| a.enabled && a.is_provider_account())
+            .collect();
+        if !provider_accounts.is_empty() {
+            info!(
+                "System has {} active provider accounts to initialize.",
+                provider_accounts.len()
+            );
+            for account in provider_accounts {
+                match crate::ext::provider::try_start_account_sync(account) {
+                    Ok(true) => {}
+                    Ok(false) => warn!(
+                        "Account {}: provider connector is not available in this build; sync stays paused.",
+                        account.id
+                    ),
+                    Err(e) => warn!(
+                        "Failed to initialize provider sync for account {}: {:#?}",
+                        account.id, e
+                    ),
+                }
+            }
         }
 
         Ok(())

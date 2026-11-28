@@ -37,7 +37,9 @@ export function OAuth2Action({ row }: DataTableRowActionsProps) {
   const account_type = mailer.account_type;
   const hasPermission = require_any_permission(['system:root', 'account:manage'], row.original.id)
 
-  if (account_type === "NoSync") {
+  // Local accounts have no server auth; provider accounts authenticate through
+  // their connection (credentials are rotated there, never per account).
+  if (account_type === "NoSync" || account_type === "Graph" || account_type === "Gmail") {
     return <Button variant={"ghost"} className="text-xs text-muted-foreground">n/a</Button>
   }
 
