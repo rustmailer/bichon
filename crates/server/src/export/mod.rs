@@ -43,7 +43,7 @@ use bichon_core::account::migration::AccountModel;
 use bichon_core::envelope::meta::BichonMetadata;
 use bichon_core::error::{code::ErrorCode, BichonResult};
 use bichon_core::export::{
-    ExportAccount, ExportFormat, ExportJobView, ExportPreviewView, ExportSource,
+    escape_from_lines, ExportAccount, ExportFormat, ExportJobView, ExportPreviewView, ExportSource,
     ExportVerifyMismatch, ExportVerifyProgressView, ExportVerifyView,
 };
 use bichon_core::ext::event_bus::{emit, Event};
@@ -1691,6 +1691,7 @@ async fn export_one(
             ErrorCode::InternalError
         )
     })?;
+    let raw = escape_from_lines(&raw);
     mbox.write_all(&raw).await.map_err(|e| {
         raise_error!(
             format!("Failed to write message body: {e}"),

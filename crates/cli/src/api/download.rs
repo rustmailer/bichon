@@ -1,5 +1,8 @@
 use crate::BichonCliConfig;
-use bichon_core::{base64_encode, envelope::meta::BichonMetadata, store::envelope::Envelope};
+use bichon_core::{
+    base64_encode, envelope::meta::BichonMetadata, export::escape_from_lines,
+    store::envelope::Envelope,
+};
 use chrono::{TimeZone, Utc};
 use reqwest::Client;
 use tokio::io::AsyncWriteExt;
@@ -63,7 +66,7 @@ pub async fn download_and_export_with_json_header(
         Vec::with_capacity(from_line.len() + custom_header.len() + email_bytes.len() + 2);
     final_buffer.extend_from_slice(from_line.as_bytes());
     final_buffer.extend_from_slice(custom_header.as_bytes());
-    final_buffer.extend_from_slice(&email_bytes);
+    final_buffer.extend_from_slice(&escape_from_lines(&email_bytes));
     final_buffer.extend_from_slice(b"\n\n");
 
     if let Err(e) = file.write_all(&final_buffer).await {

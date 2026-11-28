@@ -260,6 +260,25 @@ pub struct ExportVerifyProgressView {
     pub finished_at: Option<i64>,
 }
 
+/// Escapes body lines that start with "From " the mboxrd way (one more `>`,
+/// also on lines already starting with `>From `), so a reader does not take
+/// them for the start of the next message.
+pub fn escape_from_lines(raw: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(raw.len());
+    let mut line_start = true;
+    for (i, &byte) in raw.iter().enumerate() {
+        if line_start {
+            let quotes = raw[i..].iter().take_while(|&&c| c == b'>').count();
+            if raw[i + quotes..].starts_with(b"From ") {
+                out.push(b'>');
+            }
+        }
+        out.push(byte);
+        line_start = byte == b'\n';
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
