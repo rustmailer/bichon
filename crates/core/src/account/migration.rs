@@ -850,6 +850,7 @@ impl Account {
                 email: None,
                 password: None,
                 avatar_base64: None,
+                clear_avatar: None,
                 global_roles: None,
                 account_access_map: Some(updated_map),
                 acl: None,

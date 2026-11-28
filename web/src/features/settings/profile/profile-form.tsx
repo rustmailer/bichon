@@ -64,6 +64,11 @@ export function UserProfileForm({ user }: UserProfileFormProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [avatarFile, setAvatarFile] = useState<FileWithPreview | null>(null)
+  const [avatarCleared, setAvatarCleared] = useState(false)
+  // Bumped after a successful save: remounting AvatarUpload drops the file it
+  // is still holding, so the next X acts on the saved avatar instead of
+  // merely discarding that now-stale selection.
+  const [avatarUploadKey, setAvatarUploadKey] = useState(0)
 
   const [permissionsOpen, setPermissionsOpen] = useState(false)
   const [permissionsAccountId, setPermissionsAccountId] = useState<number | undefined>(undefined)
@@ -78,7 +83,7 @@ export function UserProfileForm({ user }: UserProfileFormProps) {
     },
   })
 
-  const avatarSrc = avatarDataUrl(user.avatar)
+  const avatarSrc = avatarCleared ? undefined : avatarDataUrl(user.avatar)
 
   const mutation = useMutation({
     mutationFn: async (values: ProfileFormValues) => {
@@ -94,9 +99,15 @@ export function UserProfileForm({ user }: UserProfileFormProps) {
       return update_user(user.id, {
         ...values,
         avatar_base64,
+        // The server treats a missing `avatar_base64` as "leave it alone",
+        // so clearing a stored picture has to be said explicitly.
+        clear_avatar: !avatar_base64 && avatarCleared ? true : undefined,
       })
     },
     onSuccess: () => {
+      setAvatarFile(null)
+      setAvatarCleared(false)
+      setAvatarUploadKey((key) => key + 1)
       queryClient.invalidateQueries({ queryKey: ['current-user'] })
       toast({ title: t('settings.profile.toast.updated') })
     },
@@ -122,7 +133,15 @@ export function UserProfileForm({ user }: UserProfileFormProps) {
             <div className="space-y-6">
               <div className="flex justify-center">
                 <AvatarUpload
-                  onFileChange={setAvatarFile}
+                  key={avatarUploadKey}
+                  onFileChange={(file) => {
+                    setAvatarCleared(false)
+                    setAvatarFile(file)
+                  }}
+                  onClear={() => {
+                    setAvatarFile(null)
+                    setAvatarCleared(true)
+                  }}
                   defaultAvatar={avatarSrc}
                   disabled={mutation.isPending}
                 />

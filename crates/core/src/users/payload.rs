@@ -363,6 +363,9 @@ pub struct UserUpdateRequest {
     pub email: Option<String>,
     pub password: Option<String>,
     pub avatar_base64: Option<String>,
+    /// Remove the stored avatar and fall back to the default one. Mutually
+    /// exclusive with `avatar_base64`; absent or `false` leaves it untouched.
+    pub clear_avatar: Option<bool>,
     pub global_roles: Option<Vec<u64>>,
     /// Scoped Access
     pub account_access_map: Option<BTreeMap<u64, u64>>,
@@ -373,7 +376,21 @@ pub struct UserUpdateRequest {
 }
 
 impl UserUpdateRequest {
+    /// `avatar_base64` and `clear_avatar` express opposite intents; a request
+    /// carrying both is a caller bug, not a preference to arbitrate.
+    fn check_avatar_update(&self) -> BichonResult<()> {
+        if self.avatar_base64.is_some() && self.clear_avatar.unwrap_or(false) {
+            return Err(raise_error!(
+                "Avatar cannot be set and cleared in the same request.".into(),
+                ErrorCode::InvalidParameter
+            ));
+        }
+        Ok(())
+    }
+
     pub fn validate(&self) -> BichonResult<()> {
+        self.check_avatar_update()?;
+
         if let Some(username) = &self.username {
             let len = username.len();
             if len < 3 || len > 32 {
@@ -474,5 +491,43 @@ impl UserUpdateRequest {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn avatar_set_and_clear_are_mutually_exclusive() {
+        let request = UserUpdateRequest {
+            avatar_base64: Some("aGVsbG8=".into()),
+            clear_avatar: Some(true),
+            ..Default::default()
+        };
+        let err = request.check_avatar_update().unwrap_err();
+        assert!(
+            err.to_string().contains("set and cleared"),
+            "got: {err}"
+        );
+    }
+
+    #[test]
+    fn avatar_clear_alone_is_allowed() {
+        let request = UserUpdateRequest {
+            clear_avatar: Some(true),
+            ..Default::default()
+        };
+        assert!(request.check_avatar_update().is_ok());
+    }
+
+    #[test]
+    fn avatar_clear_false_is_a_noop() {
+        let request = UserUpdateRequest {
+            avatar_base64: Some("aGVsbG8=".into()),
+            clear_avatar: Some(false),
+            ..Default::default()
+        };
+        assert!(request.check_avatar_update().is_ok());
     }
 }

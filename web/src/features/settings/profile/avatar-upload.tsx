@@ -28,6 +28,8 @@ interface AvatarUploadProps {
     maxSize?: number;
     className?: string;
     onFileChange?: (file: FileWithPreview | null) => void;
+    /** Called when the saved avatar should be removed (not a pending file). */
+    onClear?: () => void;
     defaultAvatar?: string;
     disabled: boolean;
 }
@@ -36,6 +38,7 @@ export default function AvatarUpload({
     maxSize = AVATAR_PICKER_MAX_BYTES,
     className,
     onFileChange,
+    onClear,
     defaultAvatar,
     disabled
 }: AvatarUploadProps) {
@@ -57,11 +60,17 @@ export default function AvatarUpload({
     const currentFile = files[0];
     const previewUrl = currentFile?.preview || defaultAvatar;
 
+    // Something is removable in two cases: a freshly picked file (drop the
+    // selection) or a stored avatar with no pending file (clear it).
+    const canRemove = !!currentFile || (!!defaultAvatar && !!onClear);
+
     const handleRemove = (e: React.MouseEvent) => {
         e.stopPropagation();
         if (currentFile) {
             removeFile(currentFile.id);
+            return;
         }
+        onClear?.();
     };
 
     return (
@@ -92,8 +101,9 @@ export default function AvatarUpload({
                         </div>
                     )}
                 </div>
-                {currentFile && (
+                {canRemove && (
                     <Button
+                        type="button"
                         size="icon"
                         variant="outline"
                         onClick={handleRemove}

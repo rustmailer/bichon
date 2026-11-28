@@ -964,6 +964,12 @@ impl BichonUserV2 {
                     .retain(|account_id, _| scoped.contains_key(account_id));
             }
 
+            // `check_avatar_update` rejects a request carrying both, so this
+            // order only matters if that guard is ever relaxed.
+            if request.clear_avatar.unwrap_or(false) {
+                updated.avatar = None;
+            }
+
             if let Some(avatar_base64) = request.avatar_base64 {
                 updated.avatar = Some(avatar_base64);
             }
