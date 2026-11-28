@@ -2819,6 +2819,7 @@
         "id": "帳戶 ID：{{id}}"
       },
       "avatarAlt": "頭像",
+      "avatarResizeHint": "大尺寸圖片會自動縮小。",
       "button": {
         "permissions": "權限",
         "update_profile": "更新個人資料",

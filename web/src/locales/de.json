@@ -2819,6 +2819,7 @@
         "id": "Konto-ID: {{id}}"
       },
       "avatarAlt": "Avatar",
+      "avatarResizeHint": "Große Bilder werden automatisch verkleinert.",
       "button": {
         "permissions": "Berechtigungen",
         "update_profile": "Profil aktualisieren",

@@ -2819,6 +2819,7 @@
         "id": "Tilin tunnus: {{id}}"
       },
       "avatarAlt": "Avatar",
+      "avatarResizeHint": "Suuret kuvat pienennetään automaattisesti.",
       "button": {
         "permissions": "Oikeudet",
         "update_profile": "Päivitä profiili",

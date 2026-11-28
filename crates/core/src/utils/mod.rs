@@ -345,6 +345,25 @@ pub fn get_total_size(path: &PathBuf) -> io::Result<u64> {
 
 const MAX_AVATAR_BYTES: usize = 128 * 1024;
 
+/// Sniff the leading magic bytes of the supported raster formats.
+///
+/// The avatar is stored as opaque base64 text in the in-memory database and
+/// later rendered by the web UI, so anything that is not a real picture is
+/// rejected up front instead of being kept (and backed up) forever.
+fn detect_avatar_mime(bytes: &[u8]) -> Option<&'static str> {
+    if bytes.starts_with(&[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A]) {
+        Some("image/png")
+    } else if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
+        Some("image/jpeg")
+    } else if bytes.len() >= 12 && &bytes[0..4] == b"RIFF" && &bytes[8..12] == b"WEBP" {
+        Some("image/webp")
+    } else if bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a") {
+        Some("image/gif")
+    } else {
+        None
+    }
+}
+
 pub fn decode_avatar_bytes(base64_str: &str) -> BichonResult<Vec<u8>> {
     let bytes = STANDARD.decode(base64_str).map_err(|e| {
         raise_error!(
@@ -359,6 +378,13 @@ pub fn decode_avatar_bytes(base64_str: &str) -> BichonResult<Vec<u8>> {
                 "Avatar image exceeds maximum size ({} KB).",
                 MAX_AVATAR_BYTES / 1024
             ),
+            ErrorCode::InvalidParameter
+        ));
+    }
+
+    if detect_avatar_mime(&bytes).is_none() {
+        return Err(raise_error!(
+            "Avatar must be a PNG, JPEG, WebP or GIF image.".into(),
             ErrorCode::InvalidParameter
         ));
     }
@@ -512,11 +538,36 @@ mod tests {
 
     // ── decode_avatar_bytes ───────────────────────────────────────────
 
+    const PNG_SIGNATURE: [u8; 8] = [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
+
     #[test]
     fn decode_avatar_bytes_valid() {
-        // "avatar" in base64 = "YXZhdGFy"
-        let result = decode_avatar_bytes("YXZhdGFy").unwrap();
-        assert_eq!(result, b"avatar");
+        let result = decode_avatar_bytes(&base64_encode!(&PNG_SIGNATURE)).unwrap();
+        assert_eq!(result, PNG_SIGNATURE);
+    }
+
+    #[test]
+    fn decode_avatar_bytes_accepts_supported_formats() {
+        let jpeg_header: &[u8] = &[0xFF, 0xD8, 0xFF, 0xE0];
+        let webp_header: &[u8] = b"RIFF\x24\x00\x00\x00WEBP";
+        let gif_header: &[u8] = b"GIF89a";
+
+        for header in [jpeg_header, webp_header, gif_header] {
+            assert!(
+                decode_avatar_bytes(&base64_encode!(header)).is_ok(),
+                "header {header:?} should be accepted"
+            );
+        }
+    }
+
+    #[test]
+    fn decode_avatar_bytes_rejects_non_image() {
+        // The same base64 the server used to accept: the bytes "avatar".
+        let err = decode_avatar_bytes("YXZhdGFy").unwrap_err();
+        assert!(
+            err.to_string().contains("PNG, JPEG, WebP or GIF"),
+            "got: {err}"
+        );
     }
 
     #[test]

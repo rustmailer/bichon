@@ -23,6 +23,7 @@ import { DataTableColumnHeader } from './data-table-column-header'
 import { DataTableRowActions } from './data-table-row-actions'
 import { format } from 'date-fns'
 import { Badge } from '@/components/ui/badge'
+import { avatarDataUrl } from '@/lib/avatar'
 import { User, UserRole } from '@/api/users/api'
 import { ClockIcon, LockIcon } from 'lucide-react'
 
@@ -46,7 +47,7 @@ export const getColumns = (t: (key: string) => string, roles: UserRole[]): Colum
     ),
     cell: ({ row }) => {
       if (row.original.avatar) {
-        let avatarSrc = `data:image/png;base64,${row.original.avatar}`;
+        const avatarSrc = avatarDataUrl(row.original.avatar);
         return <div className="flex justify-center">
           <img
             src={avatarSrc}

@@ -37,6 +37,7 @@ import { Button } from '@/components/ui/button'
 import { toast } from '@/hooks/use-toast'
 import { PasswordInput } from '@/components/password-input'
 import { update_user, User } from '@/api/users/api'
+import { avatarDataUrl, compressAvatar } from '@/lib/avatar'
 import { Badge } from '@/components/ui/badge'
 import { FileWithPreview } from '@/hooks/use-file-upload'
 import AvatarUpload from './avatar-upload'
@@ -77,16 +78,17 @@ export function UserProfileForm({ user }: UserProfileFormProps) {
     },
   })
 
-  const avatarSrc = user.avatar
-    ? `data:image/png;base64,${user.avatar}`
-    : undefined
+  const avatarSrc = avatarDataUrl(user.avatar)
 
   const mutation = useMutation({
     mutationFn: async (values: ProfileFormValues) => {
       let avatar_base64: string | undefined
 
       if (avatarFile?.file instanceof File) {
-        avatar_base64 = await fileToBase64(avatarFile.file)
+        // Avatar bytes live in the in-memory database, so shrink the picture
+        // here instead of letting a multi-megabyte original through.
+        const compressed = await compressAvatar(avatarFile.file)
+        avatar_base64 = await fileToBase64(compressed)
       }
 
       return update_user(user.id, {

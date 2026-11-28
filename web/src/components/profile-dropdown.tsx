@@ -32,7 +32,7 @@ import {
 import { useCurrentUser } from '@/hooks/use-current-user';
 import useDialogState from '@/hooks/use-dialog-state';
 
-import { useMemo } from 'react';
+import { avatarDataUrl } from '@/lib/avatar';
 import { SignOutDialog } from './sign-out-dialog';
 import { Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
@@ -43,11 +43,7 @@ export function ProfileDropdown() {
 
   const { data: user } = useCurrentUser()
 
-  const avatarSrc = useMemo(() => {
-    const base64 = user?.avatar;
-    if (!base64 || base64.length === 0) return null;
-    return `data:image/png;base64,${base64}`;
-  }, [user]);
+  const avatarSrc = avatarDataUrl(user?.avatar);
 
   const fallbackName = user?.username ? user.username.charAt(0).toUpperCase() : 'U';
 

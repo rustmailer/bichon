@@ -2819,6 +2819,7 @@
         "id": "계정 ID: {{id}}"
       },
       "avatarAlt": "아바타",
+      "avatarResizeHint": "큰 이미지는 자동으로 크기가 조정됩니다.",
       "button": {
         "permissions": "권한",
         "update_profile": "프로필 업데이트",

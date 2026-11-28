@@ -2819,6 +2819,7 @@
         "id": "Konto-ID: {{id}}"
       },
       "avatarAlt": "Avatar",
+      "avatarResizeHint": "Store billeder skaleres automatisk ned.",
       "button": {
         "permissions": "Tilladelser",
         "update_profile": "Opdater profil",

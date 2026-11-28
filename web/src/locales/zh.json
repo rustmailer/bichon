@@ -2819,6 +2819,7 @@
         "id": "账户 ID：{{id}}"
       },
       "avatarAlt": "头像",
+      "avatarResizeHint": "大尺寸图片会自动缩小。",
       "button": {
         "permissions": "权限",
         "update_profile": "更新资料",

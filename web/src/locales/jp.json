@@ -2819,6 +2819,7 @@
         "id": "アカウントID：{{id}}"
       },
       "avatarAlt": "アバター",
+      "avatarResizeHint": "大きな画像は自動的に縮小されます。",
       "button": {
         "permissions": "権限",
         "update_profile": "プロフィールを更新",

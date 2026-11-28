@@ -44,6 +44,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
+import { avatarDataUrl } from '@/lib/avatar'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
@@ -226,7 +227,7 @@ export function UserActionDialog({ currentRow, open, onOpenChange }: Props) {
         <DialogHeader className="p-6 pb-0 shrink-0">
           <div className="flex items-center gap-4 mb-4">
             {isEdit && currentRow?.avatar ? (
-              <img src={`data:image/png;base64,${currentRow.avatar}`} className="h-12 w-12 rounded-full border shadow-sm object-cover" alt="" />
+              <img src={avatarDataUrl(currentRow.avatar)} className="h-12 w-12 rounded-full border shadow-sm object-cover" alt="" />
             ) : (
               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
                 <UserIcon className="h-6 w-6" />

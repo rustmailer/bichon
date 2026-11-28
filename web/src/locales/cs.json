@@ -2819,6 +2819,7 @@
         "id": "ID účtu: {{id}}"
       },
       "avatarAlt": "Avatar",
+      "avatarResizeHint": "Velké obrázky se automaticky zmenšují.",
       "button": {
         "permissions": "Oprávnění",
         "update_profile": "Aktualizovat profil",

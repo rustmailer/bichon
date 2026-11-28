@@ -20,6 +20,7 @@ import { formatBytes, useFileUpload, type FileWithPreview } from '@/hooks/use-fi
 import { Button } from '@/components/ui/button';
 import { TriangleAlert, User, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { AVATAR_ACCEPT, AVATAR_PICKER_MAX_BYTES } from '@/lib/avatar';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useTranslation } from 'react-i18next';
 
@@ -32,7 +33,7 @@ interface AvatarUploadProps {
 }
 
 export default function AvatarUpload({
-    maxSize = 128 * 1024,
+    maxSize = AVATAR_PICKER_MAX_BYTES,
     className,
     onFileChange,
     defaultAvatar,
@@ -46,7 +47,7 @@ export default function AvatarUpload({
     ] = useFileUpload({
         maxFiles: 1,
         maxSize,
-        accept: 'image/*',
+        accept: AVATAR_ACCEPT,
         multiple: false,
         onFilesChange: (files) => {
             onFileChange?.(files[0] || null);
@@ -108,6 +109,9 @@ export default function AvatarUpload({
                 <p className="text-sm font-medium">{t('settings.profile.uploadTitle')}</p>
                 <p className="text-xs text-muted-foreground">
                     {t('settings.profile.maxSize', { size: formatBytes(maxSize) })}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                    {t('settings.profile.avatarResizeHint')}
                 </p>
             </div>
 
