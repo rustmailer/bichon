@@ -27,7 +27,7 @@ import {
 } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { cn, toSearchParams } from '@/lib/utils'
+import { cn } from '@/lib/utils'
 import { getFormSchema, type LoginFormValues } from './schema'
 import {
   Form,
@@ -40,12 +40,13 @@ import {
 import { Input } from '@/components/ui/input'
 import { PasswordInput } from '@/components/password-input'
 import { OtpInput } from '@/components/otp-input'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { setToken } from '@/stores/authStore'
+import { clearSessionState } from '@/lib/session'
 import { toast } from '@/hooks/use-toast'
 import { AxiosError } from 'axios'
 import { ToastAction } from '@/components/ui/toast'
-import { useLocation, useNavigate } from '@tanstack/react-router'
+import { useNavigate } from '@tanstack/react-router'
 import { Button } from '@/components/button'
 import { useTranslation } from 'react-i18next'
 import i18n from '@/i18n'
@@ -127,10 +128,9 @@ export function UserAuthForm({
   const [isLoading, setIsLoading] = useState(false)
   const [mfaChallenge, setMfaChallenge] = useState<string | null>(null)
   const { setTheme } = useTheme();
+  const queryClient = useQueryClient()
   const navigate = useNavigate()
   const { t } = useTranslation()
-  const { search } = useLocation();
-  const redirect = toSearchParams(search).get('redirect') || '/';
 
   const { isPro, ssoEnabled, ldapEnabled } = useEdition()
 
@@ -221,6 +221,8 @@ export function UserAuthForm({
     }
 
     if (result.success && result.access_token) {
+      // A new login must never inherit the previous account's cached data.
+      clearSessionState(queryClient)
       setToken(result);
 
       if (isTheme(result.theme)) {
@@ -231,7 +233,7 @@ export function UserAuthForm({
         i18n.changeLanguage(result.language);
       }
 
-      navigate({ to: redirect });
+      navigate({ to: '/' });
     }
   }
 

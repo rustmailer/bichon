@@ -26,7 +26,8 @@ import {
   QueryClientProvider,
 } from '@tanstack/react-query'
 import { RouterProvider, createRouter } from '@tanstack/react-router'
-import { resetToken, setToken } from '@/stores/authStore'
+import { setToken, WEBUITOKEN } from '@/stores/authStore'
+import { clearSessionState, clearSessionStorage } from '@/lib/session'
 import { toast } from '@/hooks/use-toast'
 import { ThemeProvider } from './context/theme-context'
 import './index.css'
@@ -42,11 +43,13 @@ const handleAxiosError = (error: any) => {
 
   switch (error.response?.status) {
     case 401:
-      resetToken();
-      const currentPath = router.history.location.pathname;
-      if (currentPath !== '/sign-in') {
-        const redirect = `${router.history.location.href}`;
-        router.navigate({ to: '/sign-in', search: { redirect } });
+      // The token expired: drop everything the previous session cached so a
+      // different account signing in here cannot see it (even via Back).
+      clearSessionState(queryClient);
+      // No `redirect` back to the expired session's page: whoever signs in
+      // next starts at the default page instead of inheriting that URL.
+      if (router.history.location.pathname !== '/sign-in') {
+        router.navigate({ to: '/sign-in' });
       }
       break;
     case 403:
@@ -118,10 +121,27 @@ const queryClient = new QueryClient({
 const basepath = (window as any).__BICHON_BASE__ || '/';
 console.log('Current Basepath:', basepath);
 
+// Back-forward cache: a restored page is a frozen snapshot of whoever was
+// signed in when it was left. Reload so the current token — possibly a
+// different account — decides what is rendered.
+window.addEventListener('pageshow', (event) => {
+  if (event.persisted) window.location.reload();
+});
+
+// Another tab signing in or out swaps the shared token; this tab's rendered
+// state and query cache belong to the previous account, so start over.
+window.addEventListener('storage', (event) => {
+  if (event.key === null || event.key === WEBUITOKEN) {
+    window.location.reload();
+  }
+});
+
 // OIDC SSO callback: the Pro server redirects back with ?access_token=.
 // Store it and strip it from the URL before the router/auth flow runs.
 const ssoToken = new URLSearchParams(window.location.search).get('access_token');
 if (ssoToken) {
+  clearSessionStorage();
+  queryClient.removeQueries();
   setToken({ success: true, access_token: ssoToken });
   const clean = `${window.location.pathname}${window.location.hash}`;
   window.history.replaceState(null, '', clean);

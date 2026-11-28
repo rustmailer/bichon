@@ -19,9 +19,9 @@
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { useLocation, useNavigate } from '@tanstack/react-router'
+import { useNavigate } from '@tanstack/react-router'
 import { AxiosError } from 'axios'
 import { Loader2, KeyRound } from 'lucide-react'
 import {
@@ -36,10 +36,10 @@ import { PasswordInput } from '@/components/password-input'
 import { Button } from '@/components/button'
 import { toast } from '@/hooks/use-toast'
 import { setToken } from '@/stores/authStore'
+import { clearSessionState } from '@/lib/session'
 import { changePassword } from '@/api/users/api'
 import { useTheme } from '@/context/theme-context'
 import { isTheme } from '@/lib/theme'
-import { toSearchParams } from '@/lib/utils'
 import i18n from '@/i18n'
 
 function getSchema(t: (key: string) => string) {
@@ -72,11 +72,10 @@ type ChangePasswordFormProps = {
  * password). The server issued no session token, only a one-time ticket.
  */
 export function ChangePasswordForm({ ticket, onCancel }: ChangePasswordFormProps) {
+  const queryClient = useQueryClient()
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const { search } = useLocation()
   const { setTheme } = useTheme()
-  const redirect = toSearchParams(search).get('redirect') || '/'
 
   const form = useForm<ChangePasswordValues>({
     resolver: zodResolver(getSchema(t)),
@@ -93,6 +92,8 @@ export function ChangePasswordForm({ ticket, onCancel }: ChangePasswordFormProps
     mutation.mutate(values, {
       onSuccess: (result) => {
         if (result.success && result.access_token) {
+          // A new login must never inherit the previous account's cached data.
+          clearSessionState(queryClient)
           setToken(result)
           if (isTheme(result.theme)) {
             setTheme(result.theme)
@@ -100,7 +101,7 @@ export function ChangePasswordForm({ ticket, onCancel }: ChangePasswordFormProps
           if (result.language) {
             i18n.changeLanguage(result.language)
           }
-          navigate({ to: redirect })
+          navigate({ to: '/' })
           return
         }
         toast({

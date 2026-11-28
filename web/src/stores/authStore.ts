@@ -19,7 +19,7 @@
 import { LoginResult } from "@/api/users/api";
 
 
-const WEBUITOKEN = 'f4d3e92d7b1241a8a0b3e7cdb5c5d19d';
+export const WEBUITOKEN = 'f4d3e92d7b1241a8a0b3e7cdb5c5d19d';
 
 export interface StoredToken {
   accessToken: string;

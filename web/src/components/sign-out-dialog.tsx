@@ -17,9 +17,10 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-import { useNavigate, useLocation } from '@tanstack/react-router'
+import { useNavigate } from '@tanstack/react-router'
 import { ConfirmDialog } from '@/components/confirm-dialog'
-import { resetToken } from '@/stores/authStore'
+import { useQueryClient } from '@tanstack/react-query'
+import { clearSessionState } from '@/lib/session'
 import { logout as revokeSessionOnServer } from '@/api/users/api'
 import { useTranslation } from 'react-i18next'
 import { useCurrentUser } from '@/hooks/use-current-user'
@@ -33,7 +34,7 @@ interface SignOutDialogProps {
 
 export function SignOutDialog({ open, onOpenChange }: SignOutDialogProps) {
   const navigate = useNavigate()
-  const location = useLocation()
+  const queryClient = useQueryClient()
   const { t } = useTranslation()
   const { user } = useCurrentUser()
   const { isPro } = useEdition()
@@ -42,17 +43,11 @@ export function SignOutDialog({ open, onOpenChange }: SignOutDialogProps) {
   const isSsoUser =
     isPro && !!user?.sso_provider && user.sso_provider !== ''
 
-  const goToSignIn = (currentPath: string) => {
-    navigate({
-      to: '/sign-in',
-      search: { redirect: currentPath },
-      replace: true,
-    })
-  }
-
   const localSignOut = () => {
-    resetToken()
-    goToSignIn(location.href)
+    // A deliberate sign-out starts a fresh session: no redirect back to the
+    // page the previous account was reading, and no cached data either.
+    clearSessionState(queryClient)
+    navigate({ to: '/sign-in', replace: true })
   }
 
   // Deleting the server-side record is best-effort: if the request fails
@@ -120,7 +115,7 @@ export function SignOutDialog({ open, onOpenChange }: SignOutDialogProps) {
               // Keep the bichon_webui_token cookie until the redirect: the
               // OIDC logout handler reads it for the id_token_hint.
               await revokeServerSession()
-              resetToken()
+              clearSessionState(queryClient)
               window.location.href = '/api/auth/oidc/logout'
             }}
           >
