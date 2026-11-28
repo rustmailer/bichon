@@ -98,7 +98,10 @@ export function RolesTable({ columns, data }: DataTableProps) {
     <div className='space-y-4'>
       <DataTableToolbar table={table} />
       <div className='rounded-md border'>
-        <Table>
+        {/* Fixed layout: widths come from the header percentages in
+            columns.tsx, so long role names truncate instead of widening the
+            table. */}
+        <Table className='table-fixed'>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id} className='group/row'>

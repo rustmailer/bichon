@@ -2238,6 +2238,7 @@
       "identity": "Identität & Verwaltung"
     },
     "columns": {
+      "actions": "Aktionen",
       "created_at": "Erstellt am",
       "id": "ID",
       "name": "Name",

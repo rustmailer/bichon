@@ -2238,6 +2238,7 @@
       "identity": "身份與管理"
     },
     "columns": {
+      "actions": "操作",
       "created_at": "建立時間",
       "id": "ID",
       "name": "名稱",

@@ -23,6 +23,12 @@ import { DataTableColumnHeader } from './data-table-column-header'
 import { DataTableRowActions } from './data-table-row-actions'
 import { format } from 'date-fns'
 import { Badge } from '@/components/ui/badge'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { avatarDataUrl } from '@/lib/avatar'
 import { User, UserRole } from '@/api/users/api'
 import { ClockIcon, LockIcon } from 'lucide-react'
@@ -34,10 +40,10 @@ export const getColumns = (t: (key: string) => string, roles: UserRole[]): Colum
       <DataTableColumnHeader column={column} title={t('users.columns.id')} className="justify-center" />
     ),
     cell: ({ row }) => (
-      <LongText className='max-w-18 text-center'>{`${row.original.id}`}</LongText>
+      <LongText className='text-center'>{`${row.original.id}`}</LongText>
     ),
     enableHiding: false,
-    meta: { className: 'w-18' },
+    meta: { className: 'w-[7%]' },
     enableSorting: false
   },
   {
@@ -59,7 +65,7 @@ export const getColumns = (t: (key: string) => string, roles: UserRole[]): Colum
         return <LongText>{t('common.na')}</LongText>
       }
     },
-    meta: { className: 'w-18 text-center' },
+    meta: { className: 'w-[6%] text-center' },
   },
   {
     accessorKey: "username",
@@ -67,9 +73,9 @@ export const getColumns = (t: (key: string) => string, roles: UserRole[]): Colum
       <DataTableColumnHeader column={column} title={t('users.columns.username')} className="justify-center" />
     ),
     cell: ({ row }) => {
-      return <LongText>{row.original.username}</LongText>
+      return <LongText className='text-center'>{row.original.username}</LongText>
     },
-    meta: { className: 'text-center' },
+    meta: { className: 'w-[13%] text-center' },
   },
   {
     accessorKey: "email",
@@ -77,9 +83,9 @@ export const getColumns = (t: (key: string) => string, roles: UserRole[]): Colum
       <DataTableColumnHeader column={column} title={t('users.columns.email')} className="justify-center" />
     ),
     cell: ({ row }) => {
-      return <LongText>{row.original.email}</LongText>
+      return <LongText className='text-center'>{row.original.email}</LongText>
     },
-    meta: { className: 'text-center' },
+    meta: { className: 'w-[19%] text-center' },
   },
   {
     id: 'roles',
@@ -108,7 +114,7 @@ export const getColumns = (t: (key: string) => string, roles: UserRole[]): Colum
       }
 
       return (
-        <div className="flex flex-wrap gap-1 justify-center">
+        <div className="flex w-full flex-col items-center gap-1">
           {mapped.map((role) => {
             // A deadline is shown on the role itself rather than in a
             // separate column: "Manager" and "Manager until 31 Dec" are the
@@ -119,27 +125,37 @@ export const getColumns = (t: (key: string) => string, roles: UserRole[]): Colum
               <Badge
                 key={role.id}
                 variant="outline"
-                title={
-                  expiresAt !== undefined
-                    ? t('users.delegation.expiresOn')
-                    : undefined
-                }
+                className="min-w-0 max-w-full"
               >
-                {role.name}
+                {/* The table is table-fixed, so the badge cannot widen its
+                    column. The trigger is the truncating element itself —
+                    wrapping it in LongText would put a min-width:auto block
+                    between the flex item and the ellipsis, which stops the
+                    shrink. Hovering the name shows it in full. */}
+                <TooltipProvider delayDuration={0}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="min-w-0 truncate">{role.name}</span>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-sm break-words">
+                      {role.name}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
                 {expiresAt !== undefined && (
-                  <span className="ml-1 inline-flex items-center gap-0.5 font-normal">
+                  <span className="ml-1 inline-flex shrink-0 items-center gap-0.5 font-normal">
                     <ClockIcon className="h-3 w-3" />
                     {format(new Date(expiresAt), 'yyyy-MM-dd')}
                   </span>
                 )}
-                {user.id === 100000000000000 && <LockIcon className="ml-1 h-3 w-3 text-muted-foreground" />}
+                {user.id === 100000000000000 && <LockIcon className="ml-1 h-3 w-3 shrink-0 text-muted-foreground" />}
               </Badge>
             )
           })}
         </div>
       )
     },
-    meta: { className: 'w-36 text-center' },
+    meta: { className: 'w-[21%] text-center' },
     enableHiding: false,
   },
   {
@@ -150,9 +166,9 @@ export const getColumns = (t: (key: string) => string, roles: UserRole[]): Colum
     cell: ({ row }) => {
       const created_at = row.original.created_at;
       const date = format(new Date(created_at), 'yyyy-MM-dd HH:mm:ss');
-      return <LongText>{date}</LongText>;
+      return <LongText className='text-center'>{date}</LongText>;
     },
-    meta: { className: 'text-center' },
+    meta: { className: 'w-[13%] text-center' },
     enableHiding: false,
   },
   {
@@ -163,16 +179,21 @@ export const getColumns = (t: (key: string) => string, roles: UserRole[]): Colum
     cell: ({ row }) => {
       const updated_at = row.original.updated_at;
       const date = format(new Date(updated_at), 'yyyy-MM-dd HH:mm:ss');
-      return <LongText>{date}</LongText>;
+      return <LongText className='text-center'>{date}</LongText>;
     },
-    meta: { className: 'text-center' },
+    meta: { className: 'w-[13%] text-center' },
     enableHiding: false,
   },
   {
     id: 'actions',
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title={t('users.columns.actions')} className="justify-center" />
+      <DataTableColumnHeader column={column} title={t('users.columns.actions')} className="text-right" />
     ),
-    cell: DataTableRowActions,
+    cell: ({ row }) => (
+      <div className='flex justify-end'>
+        <DataTableRowActions row={row} />
+      </div>
+    ),
+    meta: { className: 'w-[8%] text-center' },
   },
 ]

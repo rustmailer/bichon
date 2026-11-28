@@ -2238,6 +2238,7 @@
       "identity": "身份与管理"
     },
     "columns": {
+      "actions": "操作",
       "created_at": "创建时间",
       "id": "ID",
       "name": "名称",

@@ -2238,6 +2238,7 @@
       "identity": "Identitet og administrasjon"
     },
     "columns": {
+      "actions": "Handlinger",
       "created_at": "Opprettet",
       "id": "ID",
       "name": "Navn",

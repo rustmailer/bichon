@@ -2238,6 +2238,7 @@
       "identity": "Identiteetti & Hallinta"
     },
     "columns": {
+      "actions": "Toiminnot",
       "created_at": "Luotu",
       "id": "ID",
       "name": "Nimi",

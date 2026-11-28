@@ -98,7 +98,10 @@ export function UsersTable({ columns, data }: DataTableProps) {
     <div className='space-y-4'>
       <DataTableToolbar table={table} />
       <div className='rounded-md border'>
-        <Table>
+        {/* Fixed layout: column widths come from the header percentages in
+            columns.tsx, so long cell content truncates instead of widening
+            the table and forcing a horizontal scrollbar. */}
+        <Table className='table-fixed'>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id} className='group/row'>

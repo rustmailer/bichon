@@ -2238,6 +2238,7 @@
       "identity": "ID 및 관리"
     },
     "columns": {
+      "actions": "작업",
       "created_at": "생성일",
       "id": "ID",
       "name": "이름",

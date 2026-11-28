@@ -2238,6 +2238,7 @@
       "identity": "Identity a správa"
     },
     "columns": {
+      "actions": "Akce",
       "created_at": "Vytvořeno",
       "id": "ID",
       "name": "Název",

@@ -2238,6 +2238,7 @@
       "identity": "Identitet och hantering"
     },
     "columns": {
+      "actions": "Åtgärder",
       "created_at": "Skapad",
       "id": "ID",
       "name": "Namn",

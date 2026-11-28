@@ -2238,6 +2238,7 @@
       "identity": "Identitet & Administration"
     },
     "columns": {
+      "actions": "Handlinger",
       "created_at": "Oprettet",
       "id": "ID",
       "name": "Navn",

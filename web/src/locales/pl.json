@@ -2238,6 +2238,7 @@
       "identity": "Tożsamość i Zarządzanie"
     },
     "columns": {
+      "actions": "Akcje",
       "created_at": "Utworzono",
       "id": "ID",
       "name": "Nazwa",

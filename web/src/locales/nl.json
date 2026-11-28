@@ -2238,6 +2238,7 @@
       "identity": "Identiteit & Beheer"
     },
     "columns": {
+      "actions": "Acties",
       "created_at": "Gemaakt op",
       "id": "ID",
       "name": "Naam",

@@ -34,10 +34,10 @@ export const getColumns = (t: (key: string) => string): ColumnDef<UserRole>[] =>
       <DataTableColumnHeader column={column} title={t('roles.columns.id')} className="justify-center" />
     ),
     cell: ({ row }) => (
-      <LongText className='max-w-18 text-center'>{`${row.original.id}`}</LongText>
+      <LongText className='text-center'>{`${row.original.id}`}</LongText>
     ),
     enableHiding: false,
-    meta: { className: 'text-center' },
+    meta: { className: 'w-[8%] text-center' },
     enableSorting: false
   },
   {
@@ -46,9 +46,9 @@ export const getColumns = (t: (key: string) => string): ColumnDef<UserRole>[] =>
       <DataTableColumnHeader column={column} title={t('roles.columns.name')} className="justify-center" />
     ),
     cell: ({ row }) => {
-      return <LongText>{row.original.name}</LongText>
+      return <LongText className='text-center'>{row.original.name}</LongText>
     },
-    meta: { className: 'text-center' },
+    meta: { className: 'w-[28%] text-center' },
   },
   {
     accessorKey: 'role_type',
@@ -68,7 +68,7 @@ export const getColumns = (t: (key: string) => string): ColumnDef<UserRole>[] =>
         </div>
       );
     },
-    meta: { className: 'text-center' },
+    meta: { className: 'w-[15%] text-center' },
   },
   {
     id: 'permissions',
@@ -76,7 +76,7 @@ export const getColumns = (t: (key: string) => string): ColumnDef<UserRole>[] =>
       <DataTableColumnHeader column={column} title={t('roles.columns.permissions')} className="justify-center" />
     ),
     cell: PermissionsCellAction,
-    meta: { className: 'w-36 text-center' },
+    meta: { className: 'w-[13%] text-center' },
     enableHiding: false,
   },
   {
@@ -87,9 +87,9 @@ export const getColumns = (t: (key: string) => string): ColumnDef<UserRole>[] =>
     cell: ({ row }) => {
       const created_at = row.original.created_at;
       const date = format(new Date(created_at), 'yyyy-MM-dd HH:mm:ss');
-      return <LongText>{date}</LongText>;
+      return <LongText className='text-center'>{date}</LongText>;
     },
-    meta: { className: 'text-center' },
+    meta: { className: 'w-[14%] text-center' },
     enableHiding: false,
   },
   {
@@ -100,13 +100,21 @@ export const getColumns = (t: (key: string) => string): ColumnDef<UserRole>[] =>
     cell: ({ row }) => {
       const updated_at = row.original.updated_at;
       const date = format(new Date(updated_at), 'yyyy-MM-dd HH:mm:ss');
-      return <LongText>{date}</LongText>;
+      return <LongText className='text-center'>{date}</LongText>;
     },
-    meta: { className: 'text-center' },
+    meta: { className: 'w-[14%] text-center' },
     enableHiding: false,
   },
   {
     id: 'actions',
-    cell: DataTableRowActions,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title={t('roles.columns.actions')} className='text-right' />
+    ),
+    cell: ({ row }) => (
+      <div className='flex justify-end'>
+        <DataTableRowActions row={row} />
+      </div>
+    ),
+    meta: { className: 'w-[8%] text-center' },
   },
 ]

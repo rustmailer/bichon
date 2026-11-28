@@ -2238,6 +2238,7 @@
       "identity": "ID と管理"
     },
     "columns": {
+      "actions": "操作",
       "created_at": "作成日時",
       "id": "ID",
       "name": "名前",

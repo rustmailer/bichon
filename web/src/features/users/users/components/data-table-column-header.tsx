@@ -26,6 +26,12 @@ import { Column } from '@tanstack/react-table'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -44,20 +50,39 @@ export function DataTableColumnHeader<TData, TValue>({
   title,
   className,
 }: DataTableColumnHeaderProps<TData, TValue>) {
-  if (!column.getCanSort()) {
-    return <div className={cn(className)}>{title}</div>
-  }
   const { t } = useTranslation()
+  // The users table is `table-fixed`, so a narrow column must ellipsize its
+  // header instead of spilling the title into the next column. Translated
+  // titles vary a lot in length, hence the tooltip with the full text.
+  if (!column.getCanSort()) {
+    return (
+      <TooltipProvider delayDuration={0}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className={cn('min-w-0 truncate', className)}>{title}</div>
+          </TooltipTrigger>
+          <TooltipContent className='max-w-xs'>{title}</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    )
+  }
   return (
-    <div className={cn('flex items-center space-x-2', className)}>
+    <div className={cn('flex min-w-0 items-center space-x-2', className)}>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
             variant='ghost'
             size='sm'
-            className=' h-8 data-[state=open]:bg-accent'
+            className=' h-8 min-w-0 data-[state=open]:bg-accent'
           >
-            <span>{title}</span>
+            <TooltipProvider delayDuration={0}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className='min-w-0 truncate'>{title}</span>
+                </TooltipTrigger>
+                <TooltipContent className='max-w-xs'>{title}</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
             {column.getIsSorted() === 'desc' ? (
               <ArrowDownIcon className='ml-2 h-4 w-4' />
             ) : column.getIsSorted() === 'asc' ? (
